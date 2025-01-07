@@ -11,3 +11,15 @@ add_source = true
 dev_guilds = []
 # the bot token
 token = "..."
+
+[database]
+# db host
+host = "localhost"
+# db user
+user= "postgres"
+# db password
+password = "password"
+# db name
+name = "garrixbot"
+# db port
+port = 5432

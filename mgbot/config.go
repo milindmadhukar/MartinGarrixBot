@@ -23,8 +23,9 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	Log LogConfig `toml:"log"`
-	Bot BotConfig `toml:"bot"`
+	Log LogConfig      `toml:"log"`
+	Bot BotConfig      `toml:"bot"`
+	DB  DatabaseConfig `toml:"database"`
 }
 
 type BotConfig struct {
@@ -36,4 +37,17 @@ type LogConfig struct {
 	Level     slog.Level `toml:"level"`
 	Format    string     `toml:"format"`
 	AddSource bool       `toml:"add_source"`
+}
+
+type DatabaseConfig struct {
+	Host     string `toml:"host"`
+	User     string `toml:"user"`
+	Password string `toml:"password"`
+	Name     string `toml:"name"`
+	Port     int    `toml:"port"`
+}
+
+func (d *DatabaseConfig) URI() string {
+	uri := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", d.User, d.Password, d.Host, d.Port, d.Name)
+	return uri
 }
