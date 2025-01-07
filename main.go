@@ -40,10 +40,16 @@ func main() {
 	b := mgbot.New(*cfg, Version, Commit)
 
 	h := handler.New()
+
 	h.Command("/test", commands.TestHandler)
 	h.Autocomplete("/test", commands.TestAutocompleteHandler)
 	h.Command("/version", commands.VersionHandler(b))
 	h.Component("/test-button", components.TestComponent)
+
+	if err = b.SetupDB(); err != nil {
+		slog.Error("Failed to setup db", slog.Any("err", err))
+		os.Exit(-1)
+	}
 
 	if err = b.SetupBot(h, bot.NewListenerFunc(b.OnReady), handlers.MessageHandler(b)); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
@@ -51,7 +57,7 @@ func main() {
 	}
 
 	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		b.Client.Close(ctx)
 	}()

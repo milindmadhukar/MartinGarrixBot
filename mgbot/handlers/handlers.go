@@ -6,7 +6,7 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 )
 
-func MessageHandler(b *mgbot.Bot) bot.EventListener {
+func MessageHandler(b *mgbot.MartinGarrixBot) bot.EventListener {
 	return bot.NewListenerFunc(func(e *events.MessageCreate) {
 		// TODO: handle message
 	})
