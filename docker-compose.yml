@@ -1,13 +1,6 @@
 services:
   bot:
-    image: ghcr.io/disgoorg/bot-template
-    restart: unless-stopped
+    build: .
     volumes:
       - ./config.toml:/var/lib/config.toml
     command: -config=/var/lib/config.toml --sync-commands=true
-    networks:
-      - bot
-
-networks:
-  bot:
-    name: bot

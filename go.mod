@@ -1,4 +1,4 @@
-module github.com/disgoorg/bot-template
+module github.com/milindmadhukar/MartinGarrixBot
 
 go 1.22
 

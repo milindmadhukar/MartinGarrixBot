@@ -3,11 +3,10 @@ package handlers
 import (
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/events"
-
-	"github.com/disgoorg/bot-template/bottemplate"
+	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 )
 
-func MessageHandler(b *bottemplate.Bot) bot.EventListener {
+func MessageHandler(b *mgbot.Bot) bot.EventListener {
 	return bot.NewListenerFunc(func(e *events.MessageCreate) {
 		// TODO: handle message
 	})

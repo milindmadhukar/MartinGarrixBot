@@ -1,4 +1,4 @@
-package bottemplate
+package mgbot
 
 import (
 	"fmt"
