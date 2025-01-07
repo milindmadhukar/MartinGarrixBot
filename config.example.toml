@@ -5,6 +5,14 @@ level = "info"
 format = "text"
 # whether to add the log source to the log message
 add_source = true
+# log file name
+file = "garrixbot.log"
+# max size in megabytes before log rotation
+max_size = 500
+# max age in days before log rotation
+max_age = 30
+# max number of log files to keep
+max_backups = 3
 
 [bot]
 # add guild ids the commands should sync to, leave empty to sync globally

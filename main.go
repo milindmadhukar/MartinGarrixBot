@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/commands"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/components"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/handlers"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
@@ -57,7 +59,7 @@ func main() {
 	}
 
 	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		b.Client.Close(ctx)
 	}()
@@ -89,15 +91,26 @@ func setupLogger(cfg mgbot.LogConfig) {
 		Level:     cfg.Level,
 	}
 
+	fileWriter := &lumberjack.Logger{
+		Filename:   cfg.File,
+		MaxSize:    cfg.MaxSize,
+		MaxBackups: cfg.MaxBackups,
+		MaxAge:     cfg.MaxAge,
+		Compress:   true,
+	}
+
+	multiWriter := io.MultiWriter(os.Stdout, fileWriter)
+
 	var sHandler slog.Handler
 	switch cfg.Format {
 	case "json":
-		sHandler = slog.NewJSONHandler(os.Stdout, opts)
+		sHandler = slog.NewJSONHandler(multiWriter, opts)
 	case "text":
-		sHandler = slog.NewTextHandler(os.Stdout, opts)
+		sHandler = slog.NewTextHandler(multiWriter, opts)
 	default:
 		slog.Error("Unknown log format", slog.String("format", cfg.Format))
 		os.Exit(-1)
 	}
+
 	slog.SetDefault(slog.New(sHandler))
 }

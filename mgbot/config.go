@@ -34,9 +34,13 @@ type BotConfig struct {
 }
 
 type LogConfig struct {
-	Level     slog.Level `toml:"level"`
-	Format    string     `toml:"format"`
-	AddSource bool       `toml:"add_source"`
+	Level      slog.Level `toml:"level"`
+	Format     string     `toml:"format"`
+	AddSource  bool       `toml:"add_source"`
+	File       string     `toml:"file"`
+	MaxSize    int        `toml:"max_size"`
+	MaxAge     int        `toml:"max_age"`
+	MaxBackups int        `toml:"max_backups"`
 }
 
 type DatabaseConfig struct {

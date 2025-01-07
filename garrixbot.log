@@ -1,0 +1,15 @@
+time=2025-01-07T19:00:07.390+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/main.go:39 msg="Starting Martin Garrix Bot.." version=dev commit=unknown
+time=2025-01-07T19:00:07.390+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/main.go:40 msg="Syncing commands" sync=false
+time=2025-01-07T19:00:07.394+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/mgbot/bot.go:69 msg="Attempting to make a connection to the garrixbot database..."
+time=2025-01-07T19:00:07.394+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/mgbot/bot.go:79 msg="Connection to the garrixbot database established."
+time=2025-01-07T19:00:07.404+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/mgbot/bot.go:100 msg="Database migrated to latest migration."
+time=2025-01-07T19:00:08.019+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/main.go:81 msg="Bot is running. Press CTRL-C to exit."
+time=2025-01-07T19:00:08.410+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/mgbot/bot.go:108 msg="Martin Garrix Bot ready"
+time=2025-01-07T19:01:36.160+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/main.go:85 msg="Shutting down bot..."
+time=2025-01-07T19:02:08.823+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/main.go:39 msg="Starting Martin Garrix Bot.." version=dev commit=unknown
+time=2025-01-07T19:02:08.823+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/main.go:40 msg="Syncing commands" sync=false
+time=2025-01-07T19:02:08.827+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/mgbot/bot.go:69 msg="Attempting to make a connection to the garrixbot database..."
+time=2025-01-07T19:02:08.827+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/mgbot/bot.go:79 msg="Connection to the garrixbot database established."
+time=2025-01-07T19:02:08.837+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/mgbot/bot.go:100 msg="Database migrated to latest migration."
+time=2025-01-07T19:02:09.469+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/main.go:81 msg="Bot is running. Press CTRL-C to exit."
+time=2025-01-07T19:02:09.873+05:30 level=INFO source=/home/milind/Desktop/Code/MartinGarrixBot/mgbot/bot.go:108 msg="Martin Garrix Bot ready"
