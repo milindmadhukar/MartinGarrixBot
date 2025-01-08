@@ -3,6 +3,7 @@ package mgbot
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -104,10 +105,14 @@ func (b *MartinGarrixBot) SetupDB() error {
 	return errors.New("Could not make a connection to the database.")
 }
 
-func (b *MartinGarrixBot) OnReady(_ *events.Ready) {
+func (b *MartinGarrixBot) OnReady(e *events.Ready) {
 	slog.Info("Martin Garrix Bot ready")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	slog.Info("Bot Name: " + e.User.Username)
+	slog.Info("Bot ID: " + e.User.ID.String())
+	slog.Info(fmt.Sprintf("Total Guilds: %d", len(e.Guilds)))
 
 	// TODO: Update presence
 	if err := b.Client.SetPresence(ctx, gateway.WithListeningActivity("you"), gateway.WithOnlineStatus(discord.OnlineStatusOnline)); err != nil {

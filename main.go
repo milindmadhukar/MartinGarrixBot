@@ -43,8 +43,7 @@ func main() {
 
 	h := handler.New()
 
-	h.Command("/test", commands.TestHandler)
-	h.Autocomplete("/test", commands.TestAutocompleteHandler)
+	h.Command("/ping", commands.PingHandler)
 	h.Command("/version", commands.VersionHandler(b))
 	h.Component("/test-button", components.TestComponent)
 

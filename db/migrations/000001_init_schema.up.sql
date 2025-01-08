@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS tags (
     name character varying(200) NOT NULL
 );
 
+-- TODO: Make total xp, messages_sent, last_xp_added, garrix_coins, in_hand columns default to 0 and not null
 CREATE TABLE IF NOT EXISTS users (
     id bigint NOT NULL UNIQUE,
     messages_sent integer DEFAULT 0,
