@@ -9,6 +9,7 @@ var Commands = []discord.ApplicationCommandCreate{
 	avatar,
 	eightball,
 	lyrics,
+	quiz,
 	//whois,
 	version,
 }
