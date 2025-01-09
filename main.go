@@ -14,7 +14,6 @@ import (
 	"github.com/disgoorg/disgo/handler"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/commands"
-	"github.com/milindmadhukar/MartinGarrixBot/mgbot/components"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/handlers"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -44,8 +43,8 @@ func main() {
 	h := handler.New()
 
 	h.Command("/ping", commands.PingHandler)
+	h.Command("/avatar", commands.AvatarHandler)
 	h.Command("/version", commands.VersionHandler(b))
-	h.Component("/test-button", components.TestComponent)
 
 	if err = b.SetupDB(); err != nil {
 		slog.Error("Failed to setup db", slog.Any("err", err))
