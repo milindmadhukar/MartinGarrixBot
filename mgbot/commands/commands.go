@@ -7,5 +7,8 @@ import (
 var Commands = []discord.ApplicationCommandCreate{
 	ping,
 	avatar,
+	eightball,
+	lyrics,
+	//whois,
 	version,
 }

@@ -18,6 +18,12 @@ import (
 
 func MessageHandler(b *mgbot.MartinGarrixBot) bot.EventListener {
 	return bot.NewListenerFunc(func(e *events.MessageCreate) {
+
+		if e.Message.Author.Bot || e.Message.Author.System {
+			return 
+		}
+
+
 		// TODO: Update message in bots channel for level change
 		// True garrixer role add if crosses level 13 // check from config
 		// Handler to prompt users to do slash commands if they are not using prefix commands
