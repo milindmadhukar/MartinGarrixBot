@@ -44,6 +44,10 @@ func main() {
 
 	h.Command("/ping", commands.PingHandler)
 	h.Command("/avatar", commands.AvatarHandler)
+	h.Command("/8ball", commands.EightBallHandler)
+	h.Command("/lyrics", commands.LyricsHandler(b))
+	h.Autocomplete("/lyrics", commands.LyricsAutocompleteHandler(b))
+	// h.Command("/whois", commands.WhoisHandler)
 	h.Command("/version", commands.VersionHandler(b))
 
 	if err = b.SetupDB(); err != nil {
