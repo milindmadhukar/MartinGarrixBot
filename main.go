@@ -23,6 +23,7 @@ var (
 	Commit  = "unknown"
 )
 
+// TODO: Error handling for the bot?
 func main() {
 	shouldSyncCommands := flag.Bool("sync-commands", false, "Whether to sync commands to discord")
 	path := flag.String("config", "config.toml", "path to config")
@@ -47,6 +48,7 @@ func main() {
 	h.Command("/8ball", commands.EightBallHandler)
 	h.Command("/lyrics", commands.LyricsHandler(b))
 	h.Autocomplete("/lyrics", commands.LyricsAutocompleteHandler(b))
+	h.Command("/quiz", commands.QuizHandler(b))
 	// h.Command("/whois", commands.WhoisHandler)
 	h.Command("/version", commands.VersionHandler(b))
 

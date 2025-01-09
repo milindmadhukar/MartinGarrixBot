@@ -41,7 +41,9 @@ func (q *Queries) GetAllSongNames(ctx context.Context) ([]GetAllSongNamesRow, er
 }
 
 const getAllSongNamesWithLyrics = `-- name: GetAllSongNamesWithLyrics :many
-SELECT name, alias FROM songs WHERE lyrics IS NOT NULL
+SELECT name, alias FROM songs
+WHERE lyrics IS NOT NULL
+LIMIT 20
 `
 
 type GetAllSongNamesWithLyricsRow struct {
@@ -67,6 +69,45 @@ func (q *Queries) GetAllSongNamesWithLyrics(ctx context.Context) ([]GetAllSongNa
 		return nil, err
 	}
 	return items, nil
+}
+
+const getRandomSongWithLyrics = `-- name: GetRandomSongWithLyrics :one
+SELECT alias, name, lyrics, thumbnail_url FROM songs
+WHERE lyrics IS NOT NULL
+ORDER BY RANDOM()
+LIMIT 1
+`
+
+func (q *Queries) GetRandomSongWithLyrics(ctx context.Context) (Song, error) {
+	row := q.db.QueryRow(ctx, getRandomSongWithLyrics)
+	var i Song
+	err := row.Scan(
+		&i.Alias,
+		&i.Name,
+		&i.Lyrics,
+		&i.ThumbnailUrl,
+	)
+	return i, err
+}
+
+const getRandomSongWithLyricsEasy = `-- name: GetRandomSongWithLyricsEasy :one
+SELECT alias, name, lyrics, thumbnail_url FROM songs
+WHERE lyrics IS NOT NULL
+AND alias = 'Martin Garrix'
+ORDER BY RANDOM()
+LIMIT 1
+`
+
+func (q *Queries) GetRandomSongWithLyricsEasy(ctx context.Context) (Song, error) {
+	row := q.db.QueryRow(ctx, getRandomSongWithLyricsEasy)
+	var i Song
+	err := row.Scan(
+		&i.Alias,
+		&i.Name,
+		&i.Lyrics,
+		&i.ThumbnailUrl,
+	)
+	return i, err
 }
 
 const getSongLyrics = `-- name: GetSongLyrics :one
@@ -115,7 +156,9 @@ func (q *Queries) GetSongsLike(ctx context.Context, name string) ([]GetSongsLike
 }
 
 const getSongsWithLyricsLike = `-- name: GetSongsWithLyricsLike :many
-SELECT name, alias FROM songs WHERE lyrics IS NOT NULL AND name LIKE $1
+SELECT name, alias FROM songs
+WHERE lyrics IS NOT NULL AND name LIKE $1
+LIMIT 20
 `
 
 type GetSongsWithLyricsLikeRow struct {
