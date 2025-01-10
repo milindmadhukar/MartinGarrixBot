@@ -47,6 +47,22 @@ func (q *Queries) CreateUser(ctx context.Context, id int64) (User, error) {
 	return i, err
 }
 
+const getBalance = `-- name: GetBalance :one
+SELECT garrix_coins, in_hand FROM users WHERE id = $1
+`
+
+type GetBalanceRow struct {
+	GarrixCoins pgtype.Int8 `json:"garrixCoins"`
+	InHand      pgtype.Int8 `json:"inHand"`
+}
+
+func (q *Queries) GetBalance(ctx context.Context, id int64) (GetBalanceRow, error) {
+	row := q.db.QueryRow(ctx, getBalance, id)
+	var i GetBalanceRow
+	err := row.Scan(&i.GarrixCoins, &i.InHand)
+	return i, err
+}
+
 const getUser = `-- name: GetUser :one
 SELECT id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand FROM users WHERE id = $1
 `

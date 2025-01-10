@@ -63,9 +63,9 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		var song db.Song
 		var err error
 		if difficulty == "easy" {
-			song, err = b.Queries.GetRandomSongWithLyricsEasy(context.Background())
+			song, err = b.Queries.GetRandomSongWithLyricsEasy(e.Ctx)
 		} else {
-			song, err = b.Queries.GetRandomSongWithLyrics(context.Background())
+			song, err = b.Queries.GetRandomSongWithLyrics(e.Ctx)
 		}
 		if err != nil {
 			return err

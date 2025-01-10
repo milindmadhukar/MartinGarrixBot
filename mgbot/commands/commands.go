@@ -10,6 +10,7 @@ var Commands = []discord.ApplicationCommandCreate{
 	eightball,
 	lyrics,
 	quiz,
+	balance,
 	//whois,
 	version,
 }
