@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/disgoorg/disgo/discord"
@@ -34,7 +33,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 		var songChoices []Song
 		autocompleteInput := e.Data.String("song")
 		if autocompleteInput == "" {
-			songs, err := b.Queries.GetAllSongNamesWithLyrics(context.Background())
+			songs, err := b.Queries.GetAllSongNamesWithLyrics(e.Ctx)
 			if err != nil {
 				return err
 			}
@@ -47,7 +46,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 			}
 
 		} else {
-			songs, err := b.Queries.GetSongsWithLyricsLike(context.Background(), "%"+e.Data.String("song")+"%")
+			songs, err := b.Queries.GetSongsWithLyricsLike(e.Ctx, "%"+e.Data.String("song")+"%")
 			if err != nil {
 				return err
 			}
@@ -75,7 +74,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
 		songName := e.SlashCommandInteractionData().String("song")
-		song, err := b.Queries.GetSongLyrics(context.Background(), songName)
+		song, err := b.Queries.GetSongLyrics(e.Ctx, songName)
 		if err != nil {
 			return err
 		}

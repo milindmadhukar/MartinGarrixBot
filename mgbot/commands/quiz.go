@@ -14,6 +14,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/handler"
+	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
@@ -116,8 +117,19 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 						"extreme": 200,
 					}
 					earnings := earningsForDifficulty[difficulty]
-					// TODO: Add to the user.
-					fmt.Println(earnings)
+
+					err := b.Queries.AddCoins(e.Ctx, db.AddCoinsParams{
+						ID: int64(e.Member().User.ID),
+						InHand: pgtype.Int8{
+							Int64: int64(earnings),
+							Valid: true,
+						},
+					})
+
+					if err != nil {
+						slog.Error("Could not add earnings to user for quiz", slog.Any("err", err))
+						return
+					}
 
 					followUpResponseEmbed = discord.NewEmbedBuilder().
 						SetTitle(fmt.Sprintf("<a:tick:810462879374770186> Your guess is correct and you earned %d coins.", earnings)).
@@ -145,7 +157,7 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 				}
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+			ctx, cancel := context.WithTimeout(e.Ctx, 45*time.Second)
 			defer cancel()
 			bot.WaitForEvent(b.Client, ctx, filterAuthorMessagesFunc, answerCheckFunc, func() {
 				_, err := b.Client.Rest().CreateFollowupMessage(e.ApplicationID(), e.Token(),
