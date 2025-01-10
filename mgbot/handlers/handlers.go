@@ -10,6 +10,7 @@ import (
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/disgo/rest"
 	"github.com/jackc/pgx/v5"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
@@ -20,9 +21,8 @@ func MessageHandler(b *mgbot.MartinGarrixBot) bot.EventListener {
 	return bot.NewListenerFunc(func(e *events.MessageCreate) {
 
 		if e.Message.Author.Bot || e.Message.Author.System {
-			return 
+			return
 		}
-
 
 		// TODO: Update message in bots channel for level change
 		// True garrixer role add if crosses level 13 // check from config
@@ -31,6 +31,8 @@ func MessageHandler(b *mgbot.MartinGarrixBot) bot.EventListener {
 		if strings.HasPrefix(strings.ToLower(e.Message.Content), "mg.") {
 			replyMessageContent := "Prefix commands are deprecated. Please use slash commands instead. Type `/` to see available commands."
 			utils.ReplyToMessageDeleteAfter(b.Client, e.ChannelID, e.Message, replyMessageContent, 10)
+			b.Client.Rest().DeleteMessage(e.ChannelID, e.Message.ID, rest.WithDelay(10))
+			return
 		}
 
 		user, err := b.Queries.GetUser(context.Background(), int64(e.Message.Author.ID))

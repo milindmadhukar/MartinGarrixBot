@@ -49,6 +49,7 @@ func main() {
 	h.Command("/lyrics", commands.LyricsHandler(b))
 	h.Autocomplete("/lyrics", commands.LyricsAutocompleteHandler(b))
 	h.Command("/quiz", commands.QuizHandler(b))
+	h.Command("/balance", commands.BalanceHandler(b))
 	// h.Command("/whois", commands.WhoisHandler)
 	h.Command("/version", commands.VersionHandler(b))
 
@@ -63,7 +64,7 @@ func main() {
 	}
 
 	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		b.Client.Close(ctx)
 	}()
@@ -75,7 +76,7 @@ func main() {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	if err = b.Client.OpenGateway(ctx); err != nil {
 		slog.Error("Failed to open gateway", slog.Any("err", err))
