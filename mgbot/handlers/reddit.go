@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
+	"regexp"
+	"slices"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -13,6 +16,8 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
+
+var imageRegex = regexp.MustCompile(`https://.*\.(?:jpg|jpeg|gif|png)`)
 
 // TODO: Maybe some logic to restart if it returns / fails?
 func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
@@ -40,36 +45,42 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			continue
 		}
 
-		for _, post := range data.Data.Children[:5] {
+		posts := data.Data.Children[:5]
+		slices.Reverse(posts)
+
+		for _, post := range posts {
 			err := b.Queries.InsertRedditPost(context.Background(), post.Data.ID)
 			if err != nil {
 				continue
 			}
 
 			redditPostEmbed := discord.NewEmbedBuilder().
-				SetTitle(post.Data.Title).
-				SetURL("https://www.reddit.com" + post.Data.Permalink).
+				SetTitle(utils.CutString(post.Data.Title, 256)).
+				SetURL("https://www.reddit.com"+post.Data.Permalink).
+				SetTimestamp(time.Unix(int64(post.Data.CreatedUtc), 0)).
+				SetDescription(utils.CutString(html.UnescapeString(post.Data.Selftext), 2048)).
+				SetFooter(fmt.Sprintf("Author u/%s on Subreddit %s", post.Data.Author, post.Data.SubredditNamePrefixed), "").
 				// TODO: Change to reddit orange
 				SetColor(utils.ColorSuccess)
 
-			if post.Data.Selftext != "" {
-				redditPostEmbed = redditPostEmbed.SetDescription(post.Data.Selftext)
+			if imageRegex.MatchString(post.Data.URL) {
+				redditPostEmbed.Image = &discord.EmbedResource{
+					URL: post.Data.URL,
+				}
 			}
-
-			if len(post.Data.Preview.Images) > 0 {
-				imageUrl := post.Data.Preview.Images[0].Source.URL
-				redditPostEmbed = redditPostEmbed.SetImage(imageUrl)
-			}
-
-			redditPostEmbed = redditPostEmbed.SetFooter(fmt.Sprintf("Author u/%s on Subreddit %s", post.Data.Author, post.Data.SubredditNamePrefixed), "")
 
 			// TODO: Remove hardcoded channel ID, and use configuration
 			testChannelID := 864063260915662868
 
-			// TODO: Ping the reddit role
 			_, err = b.Client.Rest().CreateMessage(
 				snowflake.ID(testChannelID),
 				discord.NewMessageCreateBuilder().
+					// TODO: Ping the reddit role
+					SetContentf(
+						"<%s>, New post on %s",
+						"@GarrixReddit",
+						post.Data.SubredditNamePrefixed,
+					).
 					SetEmbeds(redditPostEmbed.Build()).
 					Build())
 			if err != nil {

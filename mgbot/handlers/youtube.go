@@ -44,7 +44,7 @@ func GetYoutubeVideos(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 						// TODO: Mention Garrix news role,
 						SetContentf(
 							"Hey <%s>, %s just posted a new video. Go check it out!\n%s",
-							"GarrixNews",
+							"@GarrixNews",
 							channelTitle,
 							"https://www.youtube.com/watch?v="+videoId,
 						).
