@@ -18,9 +18,9 @@ var whois = discord.SlashCommandCreate{
 }
 
 func WhoisHandler(e *handler.CommandEvent) error {
-	member := e.SlashCommandInteractionData().Member("user")
+	member, ok := e.SlashCommandInteractionData().OptMember("user")
 	// TODO: Check if it can't resolve a member
-	if member.Member.User.ID == 0 {
+	if !ok {
 		member = *e.Member()
 	}
 
