@@ -15,6 +15,8 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/commands"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/handlers"
+	"google.golang.org/api/option"
+	"google.golang.org/api/youtube/v3"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -58,10 +60,21 @@ func main() {
 		os.Exit(-1)
 	}
 
+	service, err := youtube.NewService(context.Background(), option.WithAPIKey(b.Cfg.Bot.YoutubeAPIKey), option.WithCredentialsFile("./mgbot-google-service.json"))
+	if err != nil {
+		slog.Error("Failed to create youtube service", slog.Any("err", err))
+		os.Exit(-1)
+	}
+	b.YoutubeService = service
+
 	if err = b.SetupBot(h, bot.NewListenerFunc(b.OnReady), handlers.MessageHandler(b)); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
 		os.Exit(-1)
 	}
+
+	// TODO: Seems out of place, place somwehere more appropriate
+	go handlers.GetRedditPosts(b, time.NewTicker(3*time.Minute))
+	go handlers.GetYoutubeVideos(b, time.NewTicker(3*time.Minute))
 
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

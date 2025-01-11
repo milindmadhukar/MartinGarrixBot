@@ -29,8 +29,9 @@ type Config struct {
 }
 
 type BotConfig struct {
-	DevGuilds []snowflake.ID `toml:"dev_guilds"`
-	Token     string         `toml:"token"`
+	DevGuilds     []snowflake.ID `toml:"dev_guilds"`
+	Token         string         `toml:"token"`
+	YoutubeAPIKey string         `toml:"youtube_api_key"`
 }
 
 type LogConfig struct {

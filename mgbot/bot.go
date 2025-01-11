@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	pgxStdlib "github.com/jackc/pgx/v5/stdlib"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	"google.golang.org/api/youtube/v3"
 )
 
 func New(cfg Config, version string, commit string) *MartinGarrixBot {
@@ -41,6 +42,7 @@ type MartinGarrixBot struct {
 	// TODO: Add the db here
 	DB      *pgx.Conn
 	Queries *db.Queries
+	YoutubeService *youtube.Service
 }
 
 func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
@@ -55,6 +57,7 @@ func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
 	}
 
 	b.Client = client
+	
 	return nil
 }
 
