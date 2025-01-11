@@ -6,7 +6,6 @@ toolchain go1.23.4
 
 require (
 	github.com/disgoorg/disgo v0.18.14
-	github.com/disgoorg/json v1.2.0
 	github.com/disgoorg/paginator v0.0.0-20240725182907-1bdf780b5586
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/golang-migrate/migrate/v4 v4.18.1
@@ -19,6 +18,7 @@ require (
 require (
 	cloud.google.com/go/compute v1.25.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	github.com/disgoorg/json v1.2.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

@@ -60,7 +60,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	service, err := youtube.NewService(context.Background(), option.WithAPIKey(b.Cfg.Bot.YoutubeAPIKey), option.WithCredentialsFile("./mgbot-google-service.json"))
+	service, err := youtube.NewService(context.Background(), option.WithAPIKey(b.Cfg.Bot.YoutubeAPIKey), option.WithCredentialsFile(b.Cfg.Bot.GoogleServiceFile))
 	if err != nil {
 		slog.Error("Failed to create youtube service", slog.Any("err", err))
 		os.Exit(-1)
