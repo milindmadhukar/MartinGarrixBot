@@ -22,8 +22,11 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 FROM alpine
 
-COPY --from=build /build/bot /bin/bot
+WORKDIR /bot
 
-ENTRYPOINT ["/bin/bot"]
+COPY --from=build /build/bot /bot/mgbot
+COPY --from=build /build/db/ /bot/db/
+
+ENTRYPOINT ["/bot/mgbot"]
 
 CMD ["-config", "/var/lib/config.toml"]
