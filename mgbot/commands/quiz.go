@@ -20,11 +20,6 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
 
-// TODO: Make failure embed and use that
-var timerExpiredEmbed = discord.NewEmbedBuilder().
-	SetTitle("<a:cross:810462920810561556> Oops, you ran out of time").
-	SetColor(utils.ColorError).Build()
-
 var quiz = discord.SlashCommandCreate{
 	Name:        "quiz",
 	Description: "Guess the name of the song from the lyrics!",
@@ -160,6 +155,9 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			ctx, cancel := context.WithTimeout(e.Ctx, 45*time.Second)
 			defer cancel()
 			bot.WaitForEvent(b.Client, ctx, filterAuthorMessagesFunc, answerCheckFunc, func() {
+
+				timerExpiredEmbed := utils.FailureEmbed("Time's up!", "You took too long to answer the quiz.")
+
 				_, err := b.Client.Rest().CreateFollowupMessage(e.ApplicationID(), e.Token(),
 					discord.NewMessageCreateBuilder().
 						SetEmbeds(timerExpiredEmbed).

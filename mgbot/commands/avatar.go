@@ -19,8 +19,8 @@ var avatar = discord.SlashCommandCreate{
 }
 
 func AvatarHandler(e *handler.CommandEvent) error {
-	user := e.SlashCommandInteractionData().User("user")
-	if user.ID == 0 {
+	user, ok := e.SlashCommandInteractionData().OptUser("user")
+	if !ok {
 		user = e.Member().User
 	}
 	avatarURL := user.AvatarURL(discord.WithFormat(discord.FileFormatJPEG), discord.WithSize(1024))

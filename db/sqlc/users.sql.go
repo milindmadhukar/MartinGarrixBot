@@ -7,25 +7,7 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
-
-const addCoins = `-- name: AddCoins :exec
-
-UPDATE users SET in_hand=in_hand + $2 WHERE id = $1
-`
-
-type AddCoinsParams struct {
-	ID     int64       `json:"id"`
-	InHand pgtype.Int8 `json:"inHand"`
-}
-
-// Either of them seems redundant
-func (q *Queries) AddCoins(ctx context.Context, arg AddCoinsParams) error {
-	_, err := q.db.Exec(ctx, addCoins, arg.ID, arg.InHand)
-	return err
-}
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users(id)
@@ -47,22 +29,6 @@ func (q *Queries) CreateUser(ctx context.Context, id int64) (User, error) {
 	return i, err
 }
 
-const getBalance = `-- name: GetBalance :one
-SELECT garrix_coins, in_hand FROM users WHERE id = $1
-`
-
-type GetBalanceRow struct {
-	GarrixCoins pgtype.Int8 `json:"garrixCoins"`
-	InHand      pgtype.Int8 `json:"inHand"`
-}
-
-func (q *Queries) GetBalance(ctx context.Context, id int64) (GetBalanceRow, error) {
-	row := q.db.QueryRow(ctx, getBalance, id)
-	var i GetBalanceRow
-	err := row.Scan(&i.GarrixCoins, &i.InHand)
-	return i, err
-}
-
 const getUser = `-- name: GetUser :one
 SELECT id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand FROM users WHERE id = $1
 `
@@ -79,18 +45,4 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.InHand,
 	)
 	return i, err
-}
-
-const updateCoins = `-- name: UpdateCoins :exec
-UPDATE users SET in_hand=$2 WHERE id = $1
-`
-
-type UpdateCoinsParams struct {
-	ID     int64       `json:"id"`
-	InHand pgtype.Int8 `json:"inHand"`
-}
-
-func (q *Queries) UpdateCoins(ctx context.Context, arg UpdateCoinsParams) error {
-	_, err := q.db.Exec(ctx, updateCoins, arg.ID, arg.InHand)
-	return err
 }

@@ -11,6 +11,8 @@ var Commands = []discord.ApplicationCommandCreate{
 	lyrics,
 	quiz,
 	balance,
+	withdraw,
+	deposit,
 	//whois,
 	version,
 }

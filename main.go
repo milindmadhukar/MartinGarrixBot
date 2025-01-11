@@ -52,6 +52,8 @@ func main() {
 	h.Autocomplete("/lyrics", commands.LyricsAutocompleteHandler(b))
 	h.Command("/quiz", commands.QuizHandler(b))
 	h.Command("/balance", commands.BalanceHandler(b))
+	h.Command("/withdraw", commands.WithdrawHandler(b))
+	h.Command("/deposit", commands.DepositHandler(b))
 	// h.Command("/whois", commands.WhoisHandler)
 	h.Command("/version", commands.VersionHandler(b))
 
