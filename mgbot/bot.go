@@ -17,7 +17,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	migratePgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	pgxStdlib "github.com/jackc/pgx/v5/stdlib"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"google.golang.org/api/youtube/v3"
@@ -40,8 +40,8 @@ type MartinGarrixBot struct {
 	Commit    string
 
 	// TODO: Add the db here
-	DB      *pgx.Conn
-	Queries *db.Queries
+	DB             *pgxpool.Pool
+	Queries        *db.Queries
 	YoutubeService *youtube.Service
 }
 
@@ -57,14 +57,14 @@ func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
 	}
 
 	b.Client = client
-	
+
 	return nil
 }
 
 // TODO: Make foreign key constraints on tables
 func (b *MartinGarrixBot) SetupDB() error {
 	tries := 5
-	DBConn, err := pgx.Connect(context.Background(), b.Cfg.DB.URI())
+	DBConn, err := pgxpool.New(context.Background(), b.Cfg.DB.URI())
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (b *MartinGarrixBot) SetupDB() error {
 		slog.Info("Connection to the garrixbot database established.")
 
 		driver, err := migratePgx.WithInstance(
-			pgxStdlib.OpenDB(*DBConn.Config()),
+			pgxStdlib.OpenDBFromPool(DBConn),
 			&migratePgx.Config{},
 		)
 
