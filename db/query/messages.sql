@@ -20,4 +20,4 @@ SELECT 1;
 -- $3 = author_id
 -- $4 = content
 -- $5 = total_xp
--- $6 = last_xp_added-- name: MessageSent :exec
+-- $6 = last_xp_added
