@@ -13,6 +13,7 @@ var Commands = []discord.ApplicationCommandCreate{
 	balance,
 	withdraw,
 	deposit,
+	give,
 	//whois,
 	version,
 }

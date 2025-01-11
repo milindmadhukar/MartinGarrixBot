@@ -55,17 +55,27 @@ func (q *Queries) GetBalance(ctx context.Context, id int64) (GetBalanceRow, erro
 	return i, err
 }
 
-const updateCoins = `-- name: UpdateCoins :exec
-UPDATE users SET in_hand=$2 WHERE id = $1
+const giveCoins = `-- name: GiveCoins :exec
+WITH sender_update AS (
+    UPDATE users AS sender
+    SET in_hand = sender.in_hand - $3
+    WHERE sender.id = $1 AND sender.in_hand >= $3
+    RETURNING sender.id
+)
+UPDATE users AS receiver
+SET in_hand = receiver.in_hand + $3
+WHERE receiver.id = $2 
+AND EXISTS (SELECT 1 FROM sender_update)
 `
 
-type UpdateCoinsParams struct {
+type GiveCoinsParams struct {
 	ID     int64       `json:"id"`
+	ID_2   int64       `json:"id2"`
 	InHand pgtype.Int8 `json:"inHand"`
 }
 
-func (q *Queries) UpdateCoins(ctx context.Context, arg UpdateCoinsParams) error {
-	_, err := q.db.Exec(ctx, updateCoins, arg.ID, arg.InHand)
+func (q *Queries) GiveCoins(ctx context.Context, arg GiveCoinsParams) error {
+	_, err := q.db.Exec(ctx, giveCoins, arg.ID, arg.ID_2, arg.InHand)
 	return err
 }
 

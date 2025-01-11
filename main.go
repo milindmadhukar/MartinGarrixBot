@@ -45,6 +45,7 @@ func main() {
 
 	h := handler.New()
 
+	// TODO: This is getting out of hand, find a better place to store and have something like cog baased loading with load unload commands?
 	h.Command("/ping", commands.PingHandler)
 	h.Command("/avatar", commands.AvatarHandler)
 	h.Command("/8ball", commands.EightBallHandler)
@@ -54,6 +55,7 @@ func main() {
 	h.Command("/balance", commands.BalanceHandler(b))
 	h.Command("/withdraw", commands.WithdrawHandler(b))
 	h.Command("/deposit", commands.DepositHandler(b))
+	h.Command("/give", commands.GiveHandler(b))
 	// h.Command("/whois", commands.WhoisHandler)
 	h.Command("/version", commands.VersionHandler(b))
 
@@ -75,6 +77,7 @@ func main() {
 	}
 
 	// TODO: Seems out of place, place somwehere more appropriate
+	// Also only start this once the bot is ready.
 	go handlers.GetRedditPosts(b, time.NewTicker(3*time.Minute))
 	go handlers.GetYoutubeVideos(b, time.NewTicker(3*time.Minute))
 

@@ -11,30 +11,38 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
 
-var deposit = discord.SlashCommandCreate{
-	Name:        "deposit",
-	Description: "Deposit coins from hand to safe.",
+var give = discord.SlashCommandCreate{
+	Name:        "give",
+	Description: "Give Garrix coins to a member.",
 	Options: []discord.ApplicationCommandOption{
+		discord.ApplicationCommandOptionUser{
+			Name:        "user",
+			Description: "The user you want to give coins to.",
+			Required:    true,
+		},
 		discord.ApplicationCommandOptionInt{
 			Name:        "amount",
-			Description: "Amount of coins to deposit.",
+			Description: "The amount of coins you want to give.",
 			Required:    false,
 		},
 		discord.ApplicationCommandOptionBool{
 			Name:        "all",
-			Description: "Deposit all coins in hand to safe.",
+			Description: "Give all coins in hand to the user.",
 			Required:    false,
 		},
 		discord.ApplicationCommandOptionBool{
 			Name:        "half",
-			Description: "Deposit half coins in hand to safe.",
+			Description: "Give half of the coins in hand to the user.",
 			Required:    false,
 		},
 	},
 }
 
-func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
+func GiveHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
+		member := e.SlashCommandInteractionData().Member("user")
+		// TODO: Check if it can't resolve a member
+
 		amt, amtOk := e.SlashCommandInteractionData().OptInt("amount")
 
 		if amtOk && amt <= 0 {
@@ -51,7 +59,7 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		isHalf := e.SlashCommandInteractionData().Bool("half")
 
 		if !amtOk && !isAll && !isHalf {
-			embed := utils.FailureEmbed("Please provide amount of coins to deposit.", "")
+			embed := utils.FailureEmbed("Please provide amount of coins to give.", "")
 			return e.Respond(
 				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
 					SetEmbeds(embed).
@@ -61,7 +69,7 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		}
 
 		var embed discord.Embed
-		var amtToDeposit int64
+		var amtToGive int64
 
 		balanceInfo, err := b.Queries.GetBalance(e.Ctx, int64(e.Member().User.ID))
 		if err != nil {
@@ -69,12 +77,12 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		}
 
 		if isHalf {
-			amtToDeposit = balanceInfo.InHand.Int64 / 2
+			amtToGive = balanceInfo.InHand.Int64 / 2
 		} else if isAll {
-			amtToDeposit = balanceInfo.InHand.Int64
+			amtToGive = balanceInfo.InHand.Int64
 		} else if amtOk {
 			if int64(amt) > balanceInfo.InHand.Int64 {
-				embed = utils.FailureEmbed("You don't have enough coins in hand to deposit.", "")
+				embed = utils.FailureEmbed("You don't have enough coins in hand to give.", "")
 				return e.Respond(
 					discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
 						SetEmbeds(embed).
@@ -83,13 +91,14 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 				)
 			}
 
-			amtToDeposit = int64(amt)
+			amtToGive = int64(amt)
 		}
 
-		err = b.Queries.DepositAmount(e.Ctx, db.DepositAmountParams{
-			ID: int64(e.Member().User.ID),
+		err = b.Queries.GiveCoins(e.Ctx, db.GiveCoinsParams{
+			ID:   int64(e.Member().User.ID),
+			ID_2: int64(member.User.ID),
 			InHand: pgtype.Int8{
-				Int64: amtToDeposit,
+				Int64: amtToGive,
 				Valid: true,
 			},
 		})
@@ -99,13 +108,12 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		}
 
 		embed = utils.SuccessEmbed(
-			fmt.Sprintf("Successfully deposited %d coins from hand to safe.", amtToDeposit),
+			fmt.Sprintf("Successfully gave %d coins to %s", amtToGive, member.User.EffectiveName()),
 			"",
 		)
 
 		return e.Respond(
-			discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageUpdateBuilder().
+			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
 				SetEmbeds(embed).
 				Build(),
 		)

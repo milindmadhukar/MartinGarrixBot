@@ -65,7 +65,7 @@ func WithdrawHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 		balanceInfo, err := b.Queries.GetBalance(e.Ctx, int64(e.Member().User.ID))
 		if err != nil {
-			return nil
+			return err
 		}
 
 		if isHalf {
