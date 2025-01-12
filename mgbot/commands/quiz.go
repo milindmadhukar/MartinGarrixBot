@@ -132,8 +132,6 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 						return
 					}
 
-					// TODO: Add buttons for song links
-
 					followUpResponseEmbed = discord.NewEmbedBuilder().
 						SetTitle(fmt.Sprintf("<a:tick:810462879374770186> Your guess is correct and you earned %d coins.", earnings)).
 						SetColor(utils.ColorSuccess).
@@ -153,6 +151,9 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 				_, err := b.Client.Rest().CreateFollowupMessage(e.ApplicationID(), e.Token(),
 					discord.NewMessageCreateBuilder().
 						SetEmbeds(followUpResponseEmbed).
+						AddActionRow(
+							utils.GetSongButtons(song)...,
+						).
 						Build(),
 				)
 				if err != nil {
