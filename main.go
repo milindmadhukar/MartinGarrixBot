@@ -76,10 +76,13 @@ func main() {
 		os.Exit(-1)
 	}
 
+	b.SetupColly()
+
 	// TODO: Seems out of place, place somwehere more appropriate
 	// Also only start this once the bot is ready.
 	go handlers.GetRedditPosts(b, time.NewTicker(3*time.Minute))
 	go handlers.GetYoutubeVideos(b, time.NewTicker(3*time.Minute))
+	go handlers.GetAllStmpdReleases(b, time.NewTicker(10*time.Minute))
 
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

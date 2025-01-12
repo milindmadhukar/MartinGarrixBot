@@ -101,7 +101,13 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 			answerCheckFunc := func(messageEvent *events.MessageCreate) {
 				response := messageEvent.Message.Content
-				isClose := utils.IsCloseMatch(song.Name, response, 0.6)
+				var nameToCheck string
+				if song.PureTitle.Valid {
+					nameToCheck = song.PureTitle.String
+				} else {
+					nameToCheck = song.Name
+				}
+				isClose := utils.IsCloseMatch(nameToCheck, response, 0.6)
 				var followUpResponseEmbed discord.Embed
 				if isClose {
 					// TODO: Maybe define it in constants?
@@ -126,10 +132,12 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 						return
 					}
 
+					// TODO: Add buttons for song links
+
 					followUpResponseEmbed = discord.NewEmbedBuilder().
 						SetTitle(fmt.Sprintf("<a:tick:810462879374770186> Your guess is correct and you earned %d coins.", earnings)).
 						SetColor(utils.ColorSuccess).
-						AddField("Song Name", fmt.Sprintf("%s - %s", song.Alias.String, song.Name), false).
+						AddField("Song Name", fmt.Sprintf("%s - %s", song.Artists, song.Name), false).
 						SetThumbnail(song.ThumbnailUrl.String).
 						Build()
 
@@ -137,7 +145,7 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 					followUpResponseEmbed = discord.NewEmbedBuilder().
 						SetTitle("<a:cross:810462920810561556> Your guess is incorrect").
 						SetColor(utils.ColorError).
-						AddField("Song Name", fmt.Sprintf("%s - %s", song.Alias.String, song.Name), false).
+						AddField("Song Name", fmt.Sprintf("%s - %s", song.Artists, song.Name), false).
 						SetThumbnail(song.ThumbnailUrl.String).
 						Build()
 				}
