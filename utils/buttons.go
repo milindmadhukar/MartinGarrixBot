@@ -14,8 +14,9 @@ type buttonConfig struct {
 
 func createButton(config buttonConfig) discord.ButtonComponent {
 	name, id, animated := ExtractEmojiParts(config.emoji)
+
 	return discord.NewLinkButton(
-		"",
+		config.label,
 		config.urlField.String,
 	).WithEmoji(discord.ComponentEmoji{
 		Name:     name,

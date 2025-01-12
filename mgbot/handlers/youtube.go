@@ -50,6 +50,7 @@ func GetYoutubeVideos(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 						).
 						Build())
 
+				// TODO: Add channel ID to the log
 				if err != nil {
 					slog.Error("Failed to send youtube video", slog.Any("err", err))
 					continue

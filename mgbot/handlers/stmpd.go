@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"html"
 	"log/slog"
 	"net/url"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/gocolly/colly/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
@@ -29,6 +32,8 @@ import (
 
 func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 	for ; ; <-ticker.C {
+		slog.Info("Running STMPD RCRDS releases fetcher")
+
 		err := b.Collector.Visit("https://stmpdrcrds.com/archive")
 		if err != nil {
 			slog.Error("Failed to visit stmpdrcrds.com", slog.Any("err", err))
@@ -43,7 +48,7 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 
 				releaseInfoDate, err := strconv.Atoi(cell.ChildText(".release__info__date"))
 				if err == nil {
-					release.Year = releaseInfoDate
+					release.ReleaseYear = releaseInfoDate
 				}
 
 				release.Thumbnail = cell.ChildAttr(".release__figure img", "src")
@@ -88,10 +93,26 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		slices.Reverse(releases)
 
 		for _, release := range releases {
+
+			doesExist, err := b.Queries.DoesSongExist(context.Background(), db.DoesSongExistParams{
+				Name:        release.Name,
+				Artists:     release.Artists,
+				ReleaseYear: int32(release.ReleaseYear),
+			})
+
+			if err != nil {
+				slog.Error("Failed to check if song exists", slog.Any("err", err))
+				continue
+			}
+
+			if doesExist {
+				continue
+			}
+
 			releaseParams := db.InsertReleaseParams{
 				Name:        release.Name,
 				Artists:     release.Artists,
-				ReleaseYear: int32(release.Year),
+				ReleaseYear: int32(release.ReleaseYear),
 			}
 
 			if release.SpotifyURL != "" {
@@ -122,19 +143,46 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				}
 			}
 
-			err := b.Queries.InsertRelease(
+			song, err := b.Queries.InsertRelease(
 				context.Background(), releaseParams,
 			)
 
 			if err != nil {
-				if db.ErrorCode(err) == db.UniqueViolation {
-					continue
-				}
 				slog.Error("Failed to insert release for "+release.Name, slog.Any("err", err))
 				continue
 			}
 
 			// TODO: Send Announcement
+			announcementEmbed := discord.NewEmbedBuilder().
+				SetTitle(fmt.Sprintf("%s - %s", release.Artists, release.Name)).
+				SetImage(release.Thumbnail).
+				SetFooter(fmt.Sprintf("Release Year: %d", release.ReleaseYear), "").
+				Build()
+
+			// TODO: Take ID from config
+			announcementsChannelID := 810462585433882678
+
+			_, err = b.Client.Rest().CreateMessage(
+				snowflake.ID(announcementsChannelID),
+				discord.NewMessageCreateBuilder().
+					// TODO: Ping the reddit role
+					SetContentf(
+						"<%s>, New release on STMPD RCRDS!",
+						"@GarrixNews",
+					).
+					SetEmbeds(announcementEmbed).
+					AddActionRow(
+						utils.GetSongButtons(song)...,
+					).
+					Build())
+
+			// TODO: Add channel ID to the log
+			if err != nil {
+				slog.Error("Failed to send STMPDRCRDS release on the announcement channel", slog.Any("err", err))
+				continue
+			}
+
+			time.Sleep(1 * time.Second)
 		}
 	}
 }
