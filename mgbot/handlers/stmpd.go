@@ -127,7 +127,10 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			)
 
 			if err != nil {
-				slog.Error("Failed to insert release", slog.Any("err", err))
+				if db.ErrorCode(err) == db.UniqueViolation {
+					continue
+				}
+				slog.Error("Failed to insert release for "+release.Name, slog.Any("err", err))
 				continue
 			}
 
