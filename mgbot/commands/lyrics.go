@@ -94,6 +94,9 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		return e.Respond(
 			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
 				SetEmbeds(eb.Build()).
+				AddActionRow(
+					utils.GetSongButtons(song)...,
+				).
 				Build(),
 		)
 	}
