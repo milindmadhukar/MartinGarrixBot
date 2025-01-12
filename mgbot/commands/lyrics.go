@@ -41,7 +41,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 			for _, song := range songs {
 				songChoices = append(songChoices, Song{
 					Name:  song.Name,
-					Alias: song.Alias.String,
+					Alias: song.Artists,
 				})
 			}
 
@@ -54,7 +54,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 			for _, song := range songs {
 				songChoices = append(songChoices, Song{
 					Name:  song.Name,
-					Alias: song.Alias.String,
+					Alias: song.Artists,
 				})
 			}
 		}
@@ -86,7 +86,7 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		}
 
 		eb := discord.NewEmbedBuilder().
-			SetTitle(fmt.Sprintf("%s - %s", song.Alias.String, songName)).
+			SetTitle(fmt.Sprintf("%s - %s", song.Artists, songName)).
 			SetDescription(lyrics).
 			SetColor(utils.ColorSuccess).
 			SetThumbnail(song.ThumbnailUrl.String)

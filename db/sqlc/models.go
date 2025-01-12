@@ -36,10 +36,17 @@ type RedditPost struct {
 }
 
 type Song struct {
-	Alias        pgtype.Text `json:"alias"`
-	Name         string      `json:"name"`
-	Lyrics       pgtype.Text `json:"lyrics"`
-	ThumbnailUrl pgtype.Text `json:"thumbnailUrl"`
+	ID            int64       `json:"id"`
+	Name          string      `json:"name"`
+	Artists       string      `json:"artists"`
+	ReleaseYear   int32       `json:"releaseYear"`
+	ThumbnailUrl  pgtype.Text `json:"thumbnailUrl"`
+	SpotifyUrl    pgtype.Text `json:"spotifyUrl"`
+	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
+	YoutubeUrl    pgtype.Text `json:"youtubeUrl"`
+	Lyrics        pgtype.Text `json:"lyrics"`
+	IsUnreleased  bool        `json:"isUnreleased"`
+	PureTitle     pgtype.Text `json:"pureTitle"`
 }
 
 type Tag struct {

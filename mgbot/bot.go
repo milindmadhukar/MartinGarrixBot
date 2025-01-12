@@ -14,6 +14,7 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/paginator"
+	"github.com/gocolly/colly/v2"
 	"github.com/golang-migrate/migrate/v4"
 	migratePgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -43,6 +44,8 @@ type MartinGarrixBot struct {
 	DB             *pgxpool.Pool
 	Queries        *db.Queries
 	YoutubeService *youtube.Service
+
+	Collector *colly.Collector
 }
 
 func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
@@ -99,13 +102,32 @@ func (b *MartinGarrixBot) SetupDB() error {
 			return err
 		}
 
-		m.Up()
+		if err = m.Up(); err != nil {
+			if errors.Is(err, migrate.ErrNoChange) {
+				slog.Info("Database is already up to date.")
+				return nil
+			}
+
+			return err
+		}
 
 		slog.Info("Database migrated to latest migration.")
-
 		return nil
 	}
 	return errors.New("Could not make a connection to the database.")
+}
+
+func (b *MartinGarrixBot) SetupColly() {
+	b.Collector = colly.NewCollector(
+		colly.AllowedDomains("stmpdrcrds.com"),
+		colly.Async(true),
+		colly.AllowURLRevisit(),
+	)
+
+	b.Collector.Limit(&colly.LimitRule{
+		Parallelism: 2,
+		RandomDelay: 2 * time.Second,
+	})
 }
 
 func (b *MartinGarrixBot) OnReady(e *events.Ready) {

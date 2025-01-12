@@ -129,3 +129,13 @@ type VideoData struct {
 	ThumbnailUrl string `json:"thumbnail_url"`
 	Thumbnail    []byte `json:"-"`
 }
+
+type StmpdRelease struct {
+	Name       string `json:"name"`
+	Artists    string `json:"artists"`
+	Year       int    `json:"year"`
+	Thumbnail  string `json:"thumbnail"`
+	SpotifyURL string `json:"spotify_url,omitempty"`
+	AppleMusicUrl   string `json:"apple_url,omitempty"`
+	YoutubeURL string `json:"youtube_url,omitempty"`
+}
