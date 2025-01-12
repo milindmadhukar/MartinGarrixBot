@@ -11,33 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getAllSongNames = `-- name: GetAllSongNames :many
-SELECT name, artists FROM songs
+const doesSongExist = `-- name: DoesSongExist :one
+SELECT EXISTS(SELECT 1 FROM songs WHERE name = $1 AND artists = $2 AND release_year = $3)
 `
 
-type GetAllSongNamesRow struct {
-	Name    string `json:"name"`
-	Artists string `json:"artists"`
+type DoesSongExistParams struct {
+	Name        string `json:"name"`
+	Artists     string `json:"artists"`
+	ReleaseYear int32  `json:"releaseYear"`
 }
 
-func (q *Queries) GetAllSongNames(ctx context.Context) ([]GetAllSongNamesRow, error) {
-	rows, err := q.db.Query(ctx, getAllSongNames)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetAllSongNamesRow
-	for rows.Next() {
-		var i GetAllSongNamesRow
-		if err := rows.Scan(&i.Name, &i.Artists); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) DoesSongExist(ctx context.Context, arg DoesSongExistParams) (bool, error) {
+	row := q.db.QueryRow(ctx, doesSongExist, arg.Name, arg.Artists, arg.ReleaseYear)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const getAllSongNamesWithLyrics = `-- name: GetAllSongNamesWithLyrics :many
@@ -212,9 +200,10 @@ func (q *Queries) GetSongsWithLyricsLike(ctx context.Context, name string) ([]Ge
 	return items, nil
 }
 
-const insertRelease = `-- name: InsertRelease :exec
+const insertRelease = `-- name: InsertRelease :one
 INSERT INTO songs (name, artists, release_year, thumbnail_url, spotify_url, apple_music_url, youtube_url)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, name, artists, release_year, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, pure_title
 `
 
 type InsertReleaseParams struct {
@@ -227,8 +216,8 @@ type InsertReleaseParams struct {
 	YoutubeUrl    pgtype.Text `json:"youtubeUrl"`
 }
 
-func (q *Queries) InsertRelease(ctx context.Context, arg InsertReleaseParams) error {
-	_, err := q.db.Exec(ctx, insertRelease,
+func (q *Queries) InsertRelease(ctx context.Context, arg InsertReleaseParams) (Song, error) {
+	row := q.db.QueryRow(ctx, insertRelease,
 		arg.Name,
 		arg.Artists,
 		arg.ReleaseYear,
@@ -237,5 +226,19 @@ func (q *Queries) InsertRelease(ctx context.Context, arg InsertReleaseParams) er
 		arg.AppleMusicUrl,
 		arg.YoutubeUrl,
 	)
-	return err
+	var i Song
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Artists,
+		&i.ReleaseYear,
+		&i.ThumbnailUrl,
+		&i.SpotifyUrl,
+		&i.AppleMusicUrl,
+		&i.YoutubeUrl,
+		&i.Lyrics,
+		&i.IsUnreleased,
+		&i.PureTitle,
+	)
+	return i, err
 }

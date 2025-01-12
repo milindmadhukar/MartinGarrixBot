@@ -83,6 +83,8 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 					).
 					SetEmbeds(redditPostEmbed.Build()).
 					Build())
+
+			// TODO: Add channel ID to the log
 			if err != nil {
 				slog.Error("Failed to send reddit post", slog.Any("err", err))
 				continue

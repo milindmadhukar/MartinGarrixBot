@@ -133,7 +133,7 @@ type VideoData struct {
 type StmpdRelease struct {
 	Name       string `json:"name"`
 	Artists    string `json:"artists"`
-	Year       int    `json:"year"`
+	ReleaseYear       int    `json:"year"`
 	Thumbnail  string `json:"thumbnail"`
 	SpotifyURL string `json:"spotify_url,omitempty"`
 	AppleMusicUrl   string `json:"apple_url,omitempty"`
