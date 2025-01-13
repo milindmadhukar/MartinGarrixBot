@@ -12,13 +12,13 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
 
-var lyrics = discord.SlashCommandCreate{
-	Name:        "lyrics",
-	Description: "Get the lyrics of any Martin Garrix, Area 21, GRX or YTRAM song.",
+var links = discord.SlashCommandCreate{
+	Name:        "links",
+	Description: "Get the streaming links to songs",
 	Options: []discord.ApplicationCommandOption{
 		discord.ApplicationCommandOptionString{
 			Name:         "song",
-			Description:  "The name of the song to get the lyrics of.",
+			Description:  "The name of the song to get the links of.",
 			Required:     true,
 			Autocomplete: true,
 		},
@@ -26,12 +26,13 @@ var lyrics = discord.SlashCommandCreate{
 }
 
 // PERF: Implement some sort of caching, we are hitting the database for every autocomplete request.
-func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHandler {
+func LinksAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHandler {
 	return func(e *handler.AutocompleteEvent) error {
 		var songChoices []utils.UniqueSong
 		autocompleteInput := e.Data.String("song")
 		if autocompleteInput == "" {
-			songs, err := b.Queries.GetRandomSongNamesWithLyrics(e.Ctx)
+			// BUG: Says invalid form body on empty input?
+			songs, err := b.Queries.GetRandomSongNames(e.Ctx)
 			if err != nil {
 				slog.Error("Failed to get all song names with lyrics", slog.Any("err", err))
 				return err
@@ -46,7 +47,8 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 			}
 
 		} else {
-			songs, err := b.Queries.GetSongsWithLyricsLike(e.Ctx, "%"+e.Data.String("song")+"%")
+			// BUG: Sometimes goes invalid form body? Even with input, I suspect its the json, also fix the lyrics autocomplete then.
+			songs, err := b.Queries.GetSongsLike(e.Ctx, "%"+e.Data.String("song")+"%")
 			if err != nil {
 				slog.Error("Failed to get songs with lyrics like", slog.Any("err", err))
 				return err
@@ -74,38 +76,29 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 	}
 }
 
-func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
+func LinksHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
-
 		songDataJson := e.SlashCommandInteractionData().String("song")
 		var songData utils.UniqueSong
 		json.Unmarshal([]byte(songDataJson), &songData)
-
 		song, err := b.Queries.GetSong(e.Ctx, db.GetSongParams{
 			Name:        songData.Name,
 			Artists:     songData.Artists,
 			ReleaseYear: songData.ReleaseYear,
 		})
-
 		if err != nil {
 			return err
 		}
 
-		lyrics := song.Lyrics.String
-
-		if len(lyrics) > 2048 {
-			lyrics = lyrics[:2048]
-		}
-
-		eb := discord.NewEmbedBuilder().
+		embed := discord.NewEmbedBuilder().
 			SetTitle(fmt.Sprintf("%s - %s", song.Artists, song.Name)).
-			SetDescription(lyrics).
 			SetColor(utils.ColorSuccess).
-			SetThumbnail(song.ThumbnailUrl.String)
+			SetImage(song.ThumbnailUrl.String).
+			Build()
 
 		return e.Respond(
 			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-				SetEmbeds(eb.Build()).
+				SetEmbeds(embed).
 				AddActionRow(
 					utils.GetSongButtons(song)...,
 				).
