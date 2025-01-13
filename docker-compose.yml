@@ -1,6 +1,6 @@
 services:
   bot:
-    image: ghcr.io/milindmadhukar/martingarrixbot:latest
+    image: ghcr.io/milindmadhukar/martingarrixbot:master
     network_mode: "host"
     volumes:
       - ./config.docker.toml:/var/lib/config.toml
