@@ -2,3 +2,4 @@
 config.toml
 *.log
 mgbot-google-service.json
+config.docker.toml
