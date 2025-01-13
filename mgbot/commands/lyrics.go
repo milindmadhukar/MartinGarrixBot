@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
@@ -35,6 +36,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 		if autocompleteInput == "" {
 			songs, err := b.Queries.GetAllSongNamesWithLyrics(e.Ctx)
 			if err != nil {
+				slog.Error("Failed to get all song names with lyrics", slog.Any("err", err))
 				return err
 			}
 
@@ -48,6 +50,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 		} else {
 			songs, err := b.Queries.GetSongsWithLyricsLike(e.Ctx, "%"+e.Data.String("song")+"%")
 			if err != nil {
+				slog.Error("Failed to get songs with lyrics like", slog.Any("err", err))
 				return err
 			}
 

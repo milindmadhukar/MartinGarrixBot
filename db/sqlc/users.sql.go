@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createUser = `-- name: CreateUser :one
@@ -27,6 +29,127 @@ func (q *Queries) CreateUser(ctx context.Context, id int64) (User, error) {
 		&i.InHand,
 	)
 	return i, err
+}
+
+const getCoinsLeaderboard = `-- name: GetCoinsLeaderboard :many
+SELECT id, garrix_coins, in_hand FROM users
+ORDER BY garrix_coins + in_hand DESC OFFSET $1 LIMIT 10
+`
+
+type GetCoinsLeaderboardRow struct {
+	ID          int64       `json:"id"`
+	GarrixCoins pgtype.Int8 `json:"garrixCoins"`
+	InHand      pgtype.Int8 `json:"inHand"`
+}
+
+func (q *Queries) GetCoinsLeaderboard(ctx context.Context, offset int32) ([]GetCoinsLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, getCoinsLeaderboard, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCoinsLeaderboardRow
+	for rows.Next() {
+		var i GetCoinsLeaderboardRow
+		if err := rows.Scan(&i.ID, &i.GarrixCoins, &i.InHand); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getInHandLeaderboard = `-- name: GetInHandLeaderboard :many
+SELECT id, in_hand FROM users
+ORDER BY in_hand DESC OFFSET $1 LIMIT 10
+`
+
+type GetInHandLeaderboardRow struct {
+	ID     int64       `json:"id"`
+	InHand pgtype.Int8 `json:"inHand"`
+}
+
+func (q *Queries) GetInHandLeaderboard(ctx context.Context, offset int32) ([]GetInHandLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, getInHandLeaderboard, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetInHandLeaderboardRow
+	for rows.Next() {
+		var i GetInHandLeaderboardRow
+		if err := rows.Scan(&i.ID, &i.InHand); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getLevelsLeaderboard = `-- name: GetLevelsLeaderboard :many
+SELECT id, total_xp FROM users
+ORDER BY total_xp DESC OFFSET $1 LIMIT 10
+`
+
+type GetLevelsLeaderboardRow struct {
+	ID      int64       `json:"id"`
+	TotalXp pgtype.Int4 `json:"totalXp"`
+}
+
+func (q *Queries) GetLevelsLeaderboard(ctx context.Context, offset int32) ([]GetLevelsLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, getLevelsLeaderboard, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetLevelsLeaderboardRow
+	for rows.Next() {
+		var i GetLevelsLeaderboardRow
+		if err := rows.Scan(&i.ID, &i.TotalXp); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMessagesSentLeaderboard = `-- name: GetMessagesSentLeaderboard :many
+SELECT id, messages_sent FROM users
+ORDER BY messages_sent DESC OFFSET $1 LIMIT 10
+`
+
+type GetMessagesSentLeaderboardRow struct {
+	ID           int64       `json:"id"`
+	MessagesSent pgtype.Int4 `json:"messagesSent"`
+}
+
+func (q *Queries) GetMessagesSentLeaderboard(ctx context.Context, offset int32) ([]GetMessagesSentLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, getMessagesSentLeaderboard, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMessagesSentLeaderboardRow
+	for rows.Next() {
+		var i GetMessagesSentLeaderboardRow
+		if err := rows.Scan(&i.ID, &i.MessagesSent); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUser = `-- name: GetUser :one
