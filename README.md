@@ -27,10 +27,35 @@ level = "info"
 format = "text"
 # whether to add the log source to the log message
 add_source = true
+# log file name
+file = "garrixbot.log"
+# max size in megabytes before log rotation
+max_size = 500
+# max age in days before log rotation
+max_age = 30
+# max number of log files to keep
+max_backups = 3
+
 
 [bot]
 # add guild ids the commands should sync to, leave empty to sync globally
 dev_guilds = []
 # the bot token
-token = "..."
+token = "your_token_here"
+# youtube api key
+yt_api_key = "yt_api_key_here"
+# google service json file path
+google_service_file = "/path/to/servicefile.json"
+
+[database]
+# db host
+host = "localhost"
+# db user
+user= "postgres"
+# db password
+password = "password"
+# db name
+name = "garrixbot"
+# db port
+port = 5432
 ```
