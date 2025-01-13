@@ -23,9 +23,11 @@ import (
 
 // TODO: Maybe find some way to get the release date of the song?
 // Announce anniversary of the song?
-// Find some way to add lyrics to all stmpd songs
+
+// TODO: Find some way to add lyrics to all stmpd songs
 // Then we can do a stmpd level difficulty quiz lmao
-// Add a way to remove songs manually (say before release remove)
+
+// TODO: Add a way to remove songs manually (say before release remove)
 // Add a way to add songs manually and annouce??
 
 // TODO: All sets kb, when asked AI can query and send link in chat?
@@ -94,6 +96,7 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 
 		for _, release := range releases {
 
+			// PERF: Too many queries. Can I reduce them?
 			doesExist, err := b.Queries.DoesSongExist(context.Background(), db.DoesSongExistParams{
 				Name:        release.Name,
 				Artists:     release.Artists,

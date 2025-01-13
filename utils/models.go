@@ -131,11 +131,18 @@ type VideoData struct {
 }
 
 type StmpdRelease struct {
-	Name       string `json:"name"`
-	Artists    string `json:"artists"`
-	ReleaseYear       int    `json:"year"`
-	Thumbnail  string `json:"thumbnail"`
-	SpotifyURL string `json:"spotify_url,omitempty"`
-	AppleMusicUrl   string `json:"apple_url,omitempty"`
-	YoutubeURL string `json:"youtube_url,omitempty"`
+	Name          string `json:"name"`
+	Artists       string `json:"artists"`
+	ReleaseYear   int    `json:"year"`
+	Thumbnail     string `json:"thumbnail"`
+	SpotifyURL    string `json:"spotify_url,omitempty"`
+	AppleMusicUrl string `json:"apple_url,omitempty"`
+	YoutubeURL    string `json:"youtube_url,omitempty"`
+}
+
+// UserLevelData represents the user's level data.
+type UserLevelData struct {
+	Lvl          int
+	XpForNextLvl int
+	CurrentXp    int
 }

@@ -56,6 +56,7 @@ func main() {
 	h.Command("/withdraw", commands.WithdrawHandler(b))
 	h.Command("/deposit", commands.DepositHandler(b))
 	h.Command("/give", commands.GiveHandler(b))
+	h.Command("/leaderboard", commands.LeaderboardHandler(b))
 	// h.Command("/whois", commands.WhoisHandler)
 	h.Command("/version", commands.VersionHandler(b))
 
