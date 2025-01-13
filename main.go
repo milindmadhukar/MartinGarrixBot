@@ -46,6 +46,7 @@ func main() {
 	h := handler.New()
 
 	// TODO: This is getting out of hand, find a better place to store and have something like cog baased loading with load unload commands?
+	// TODO: Maybe add a help command
 	h.Command("/ping", commands.PingHandler)
 	h.Command("/avatar", commands.AvatarHandler)
 	h.Command("/8ball", commands.EightBallHandler)
