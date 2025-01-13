@@ -93,6 +93,7 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		b.Collector.Wait()
 
 		slices.Reverse(releases)
+		releases = releases[len(releases)-5:]
 
 		for _, release := range releases {
 

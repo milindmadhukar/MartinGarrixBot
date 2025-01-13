@@ -1,8 +1,9 @@
 services:
   bot:
-    build: .
+    image: ghcr.io/milindmadhukar/martingarrixbot:latest
     network_mode: "host"
     volumes:
       - ./config.docker.toml:/var/lib/config.toml
       - ./mgbot-google-service.json:/etc/secrets/mgbot-google-service.json
     command: -config=/var/lib/config.toml --sync-commands=true
+    restart: unless-stopped

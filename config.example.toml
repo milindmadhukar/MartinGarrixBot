@@ -14,11 +14,16 @@ max_age = 30
 # max number of log files to keep
 max_backups = 3
 
+
 [bot]
 # add guild ids the commands should sync to, leave empty to sync globally
 dev_guilds = []
 # the bot token
-token = "..."
+token = "your_token_here"
+# youtube api key
+yt_api_key = "yt_api_key_here"
+# google service json file path
+google_service_file = "/path/to/servicefile.json"
 
 [database]
 # db host
