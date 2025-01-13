@@ -1,16 +1,28 @@
--- name: GetSongLyrics :one
-SELECT * FROM songs WHERE name = $1;
+-- name: GetSong :one
+SELECT * FROM songs WHERE name = $1 AND artists = $2 AND release_year = $3;
 
 -- name: GetSongsLike :many
-SELECT name, artists FROM songs WHERE name LIKE $1;
-
--- name: GetSongsWithLyricsLike :many
-SELECT name, artists FROM songs
-WHERE lyrics IS NOT NULL AND name LIKE $1
+SELECT name, artists, release_year
+FROM songs
+WHERE LOWER(artists || ' - ' || name) LIKE LOWER($1)
 LIMIT 20;
 
--- name: GetAllSongNamesWithLyrics :many
-SELECT name, artists FROM songs
+-- name: GetRandomSongNames :many
+SELECT name, artists, release_year
+FROM songs
+ORDER BY RANDOM()
+LIMIT 20;
+
+-- name: GetSongsWithLyricsLike :many
+SELECT name, artists, release_year 
+FROM songs
+WHERE lyrics IS NOT NULL AND
+LOWER(artists || ' - ' || name) LIKE LOWER($1)
+LIMIT 20;
+
+-- name: GetRandomSongNamesWithLyrics :many
+SELECT name, artists, release_year 
+FROM songs
 WHERE lyrics IS NOT NULL
 ORDER BY RANDOM()
 LIMIT 20;

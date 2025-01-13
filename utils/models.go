@@ -140,6 +140,12 @@ type StmpdRelease struct {
 	YoutubeURL    string `json:"youtube_url,omitempty"`
 }
 
+type UniqueSong struct {
+	Name        string `json:"name"`
+	Artists     string `json:"artists"`
+	ReleaseYear int32  `json:"release_year"`
+}
+
 // UserLevelData represents the user's level data.
 type UserLevelData struct {
 	Lvl          int

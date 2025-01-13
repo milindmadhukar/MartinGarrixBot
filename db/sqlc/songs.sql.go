@@ -28,28 +28,63 @@ func (q *Queries) DoesSongExist(ctx context.Context, arg DoesSongExistParams) (b
 	return exists, err
 }
 
-const getAllSongNamesWithLyrics = `-- name: GetAllSongNamesWithLyrics :many
-SELECT name, artists FROM songs
+const getRandomSongNames = `-- name: GetRandomSongNames :many
+SELECT name, artists, release_year
+FROM songs
+ORDER BY RANDOM()
+LIMIT 20
+`
+
+type GetRandomSongNamesRow struct {
+	Name        string `json:"name"`
+	Artists     string `json:"artists"`
+	ReleaseYear int32  `json:"releaseYear"`
+}
+
+func (q *Queries) GetRandomSongNames(ctx context.Context) ([]GetRandomSongNamesRow, error) {
+	rows, err := q.db.Query(ctx, getRandomSongNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRandomSongNamesRow
+	for rows.Next() {
+		var i GetRandomSongNamesRow
+		if err := rows.Scan(&i.Name, &i.Artists, &i.ReleaseYear); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getRandomSongNamesWithLyrics = `-- name: GetRandomSongNamesWithLyrics :many
+SELECT name, artists, release_year 
+FROM songs
 WHERE lyrics IS NOT NULL
 ORDER BY RANDOM()
 LIMIT 20
 `
 
-type GetAllSongNamesWithLyricsRow struct {
-	Name    string `json:"name"`
-	Artists string `json:"artists"`
+type GetRandomSongNamesWithLyricsRow struct {
+	Name        string `json:"name"`
+	Artists     string `json:"artists"`
+	ReleaseYear int32  `json:"releaseYear"`
 }
 
-func (q *Queries) GetAllSongNamesWithLyrics(ctx context.Context) ([]GetAllSongNamesWithLyricsRow, error) {
-	rows, err := q.db.Query(ctx, getAllSongNamesWithLyrics)
+func (q *Queries) GetRandomSongNamesWithLyrics(ctx context.Context) ([]GetRandomSongNamesWithLyricsRow, error) {
+	rows, err := q.db.Query(ctx, getRandomSongNamesWithLyrics)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetAllSongNamesWithLyricsRow
+	var items []GetRandomSongNamesWithLyricsRow
 	for rows.Next() {
-		var i GetAllSongNamesWithLyricsRow
-		if err := rows.Scan(&i.Name, &i.Artists); err != nil {
+		var i GetRandomSongNamesWithLyricsRow
+		if err := rows.Scan(&i.Name, &i.Artists, &i.ReleaseYear); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -117,12 +152,18 @@ func (q *Queries) GetRandomSongWithLyricsEasy(ctx context.Context) (Song, error)
 	return i, err
 }
 
-const getSongLyrics = `-- name: GetSongLyrics :one
-SELECT id, name, artists, release_year, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, pure_title FROM songs WHERE name = $1
+const getSong = `-- name: GetSong :one
+SELECT id, name, artists, release_year, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, pure_title FROM songs WHERE name = $1 AND artists = $2 AND release_year = $3
 `
 
-func (q *Queries) GetSongLyrics(ctx context.Context, name string) (Song, error) {
-	row := q.db.QueryRow(ctx, getSongLyrics, name)
+type GetSongParams struct {
+	Name        string `json:"name"`
+	Artists     string `json:"artists"`
+	ReleaseYear int32  `json:"releaseYear"`
+}
+
+func (q *Queries) GetSong(ctx context.Context, arg GetSongParams) (Song, error) {
+	row := q.db.QueryRow(ctx, getSong, arg.Name, arg.Artists, arg.ReleaseYear)
 	var i Song
 	err := row.Scan(
 		&i.ID,
@@ -141,16 +182,20 @@ func (q *Queries) GetSongLyrics(ctx context.Context, name string) (Song, error) 
 }
 
 const getSongsLike = `-- name: GetSongsLike :many
-SELECT name, artists FROM songs WHERE name LIKE $1
+SELECT name, artists, release_year
+FROM songs
+WHERE LOWER(artists || ' - ' || name) LIKE LOWER($1)
+LIMIT 20
 `
 
 type GetSongsLikeRow struct {
-	Name    string `json:"name"`
-	Artists string `json:"artists"`
+	Name        string `json:"name"`
+	Artists     string `json:"artists"`
+	ReleaseYear int32  `json:"releaseYear"`
 }
 
-func (q *Queries) GetSongsLike(ctx context.Context, name string) ([]GetSongsLikeRow, error) {
-	rows, err := q.db.Query(ctx, getSongsLike, name)
+func (q *Queries) GetSongsLike(ctx context.Context, lower string) ([]GetSongsLikeRow, error) {
+	rows, err := q.db.Query(ctx, getSongsLike, lower)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +203,7 @@ func (q *Queries) GetSongsLike(ctx context.Context, name string) ([]GetSongsLike
 	var items []GetSongsLikeRow
 	for rows.Next() {
 		var i GetSongsLikeRow
-		if err := rows.Scan(&i.Name, &i.Artists); err != nil {
+		if err := rows.Scan(&i.Name, &i.Artists, &i.ReleaseYear); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -170,18 +215,21 @@ func (q *Queries) GetSongsLike(ctx context.Context, name string) ([]GetSongsLike
 }
 
 const getSongsWithLyricsLike = `-- name: GetSongsWithLyricsLike :many
-SELECT name, artists FROM songs
-WHERE lyrics IS NOT NULL AND name LIKE $1
+SELECT name, artists, release_year 
+FROM songs
+WHERE lyrics IS NOT NULL AND
+LOWER(artists || ' - ' || name) LIKE LOWER($1)
 LIMIT 20
 `
 
 type GetSongsWithLyricsLikeRow struct {
-	Name    string `json:"name"`
-	Artists string `json:"artists"`
+	Name        string `json:"name"`
+	Artists     string `json:"artists"`
+	ReleaseYear int32  `json:"releaseYear"`
 }
 
-func (q *Queries) GetSongsWithLyricsLike(ctx context.Context, name string) ([]GetSongsWithLyricsLikeRow, error) {
-	rows, err := q.db.Query(ctx, getSongsWithLyricsLike, name)
+func (q *Queries) GetSongsWithLyricsLike(ctx context.Context, lower string) ([]GetSongsWithLyricsLikeRow, error) {
+	rows, err := q.db.Query(ctx, getSongsWithLyricsLike, lower)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +237,7 @@ func (q *Queries) GetSongsWithLyricsLike(ctx context.Context, name string) ([]Ge
 	var items []GetSongsWithLyricsLikeRow
 	for rows.Next() {
 		var i GetSongsWithLyricsLikeRow
-		if err := rows.Scan(&i.Name, &i.Artists); err != nil {
+		if err := rows.Scan(&i.Name, &i.Artists, &i.ReleaseYear); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

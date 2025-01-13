@@ -15,6 +15,7 @@ var Commands = []discord.ApplicationCommandCreate{
 	deposit,
 	give,
 	leaderboard,
+	links,
 	//whois,
 	version,
 }

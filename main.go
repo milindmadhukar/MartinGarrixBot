@@ -49,15 +49,22 @@ func main() {
 	h.Command("/ping", commands.PingHandler)
 	h.Command("/avatar", commands.AvatarHandler)
 	h.Command("/8ball", commands.EightBallHandler)
+
 	h.Command("/lyrics", commands.LyricsHandler(b))
 	h.Autocomplete("/lyrics", commands.LyricsAutocompleteHandler(b))
+
 	h.Command("/quiz", commands.QuizHandler(b))
+	// h.Command("/whois", commands.WhoisHandler)
+
 	h.Command("/balance", commands.BalanceHandler(b))
 	h.Command("/withdraw", commands.WithdrawHandler(b))
 	h.Command("/deposit", commands.DepositHandler(b))
 	h.Command("/give", commands.GiveHandler(b))
 	h.Command("/leaderboard", commands.LeaderboardHandler(b))
-	// h.Command("/whois", commands.WhoisHandler)
+
+	h.Command("/links", commands.LinksHandler(b))
+	h.Autocomplete("/links", commands.LinksAutocompleteHandler(b))
+
 	h.Command("/version", commands.VersionHandler(b))
 
 	if err = b.SetupDB(); err != nil {
