@@ -1,9 +1,19 @@
 services:
   bot:
     image: ghcr.io/milindmadhukar/martingarrixbot:master
+    container_name: martingarrixbot
     network_mode: "host"
     volumes:
       - ./config.docker.toml:/var/lib/config.toml
       - ./mgbot-google-service.json:/etc/secrets/mgbot-google-service.json
     command: -config=/var/lib/config.toml --sync-commands=true
     restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 60 --filter "name=martingarrixbot"
+    environment:
+      - REPO_USER=$REPO_USER
+      - REPO_PASS=$REPO_PASS
