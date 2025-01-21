@@ -13,18 +13,18 @@ import (
 
 const messageSent = `-- name: MessageSent :exec
 WITH message_insert AS (
-    INSERT INTO messages (message_id, channel_id, author_id, content)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO messages (message_id, guild_id, channel_id, author_id, content)
+    VALUES ($1, $2, $3, $4, $5)
     ON CONFLICT DO NOTHING
     RETURNING author_id
 ),
 user_updates AS (
     UPDATE users 
     SET 
-        total_xp = $5,
-        last_xp_added = $6,
+        total_xp = $6,
+        last_xp_added = $7,
         messages_sent = messages_sent + 1
-    WHERE id = $3
+    WHERE id = $4 AND guild_id = $2
     RETURNING id
 )
 SELECT 1
@@ -32,6 +32,7 @@ SELECT 1
 
 type MessageSentParams struct {
 	MessageID   int64            `json:"messageId"`
+	GuildID     int64            `json:"guildId"`
 	ChannelID   int64            `json:"channelId"`
 	AuthorID    int64            `json:"authorId"`
 	Content     string           `json:"content"`
@@ -42,6 +43,7 @@ type MessageSentParams struct {
 func (q *Queries) MessageSent(ctx context.Context, arg MessageSentParams) error {
 	_, err := q.db.Exec(ctx, messageSent,
 		arg.MessageID,
+		arg.GuildID,
 		arg.ChannelID,
 		arg.AuthorID,
 		arg.Content,

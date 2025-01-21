@@ -8,6 +8,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type GuildConfiguration struct {
+	GuildID                     int64       `json:"guildId"`
+	ModlogsChannel              pgtype.Int8 `json:"modlogsChannel"`
+	LeaveJoinLogsChannel        pgtype.Int8 `json:"leaveJoinLogsChannel"`
+	YoutubeNotificationsChannel pgtype.Int8 `json:"youtubeNotificationsChannel"`
+	YoutubeNotificationsRole    pgtype.Int8 `json:"youtubeNotificationsRole"`
+	RedditNotificationsChannel  pgtype.Int8 `json:"redditNotificationsChannel"`
+	RedditNotificationsRole     pgtype.Int8 `json:"redditNotificationsRole"`
+	StmpdNotificationsChannel   pgtype.Int8 `json:"stmpdNotificationsChannel"`
+	StmpdNotificationsRole      pgtype.Int8 `json:"stmpdNotificationsRole"`
+	WelcomesChannel             pgtype.Int8 `json:"welcomesChannel"`
+	DeleteLogsChannel           pgtype.Int8 `json:"deleteLogsChannel"`
+	EditLogsChannel             pgtype.Int8 `json:"editLogsChannel"`
+	BotChannel                  pgtype.Int8 `json:"botChannel"`
+	RadioVoiceChannel           pgtype.Int8 `json:"radioVoiceChannel"`
+	NewsRole                    pgtype.Int8 `json:"newsRole"`
+	XpMultiplier                float64     `json:"xpMultiplier"`
+}
+
 type JoinLeaveLog struct {
 	MemberID int64            `json:"memberId"`
 	Action   string           `json:"action"`
@@ -20,6 +39,7 @@ type Message struct {
 	AuthorID  int64            `json:"authorId"`
 	Content   string           `json:"content"`
 	Timestamp pgtype.Timestamp `json:"timestamp"`
+	GuildID   int64            `json:"guildId"`
 }
 
 type Modlog struct {
@@ -64,6 +84,7 @@ type User struct {
 	LastXpAdded  pgtype.Timestamp `json:"lastXpAdded"`
 	GarrixCoins  pgtype.Int8      `json:"garrixCoins"`
 	InHand       pgtype.Int8      `json:"inHand"`
+	GuildID      int64            `json:"guildId"`
 }
 
 type YoutubeVideo struct {

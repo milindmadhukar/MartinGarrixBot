@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -25,6 +27,8 @@ func GetYoutubeVideos(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				PlaylistId(playlistID).
 				MaxResults(5).Do()
 
+			slices.Reverse(resp.Items)
+
 			for _, item := range resp.Items {
 				videoId := item.Snippet.ResourceId.VideoId
 				channelTitle := item.Snippet.ChannelTitle
@@ -34,29 +38,37 @@ func GetYoutubeVideos(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 					continue
 				}
 
-				// TODO: Remove hardcoded channel ID, and use configuration
-				testChannelID := 864063260864675841
-
-				// TODO: Ping the reddit role
-				_, err = b.Client.Rest().CreateMessage(
-					snowflake.ID(testChannelID),
-					discord.NewMessageCreateBuilder().
-						// TODO: Mention Garrix news role,
-						SetContentf(
-							"Hey <%s>, %s just posted a new video. Go check it out!\n%s",
-							"@GarrixNews",
-							channelTitle,
-							"https://www.youtube.com/watch?v="+videoId,
-						).
-						Build())
-
-				// TODO: Add channel ID to the log
+				youtubeNotificationsGuilds, err := b.Queries.GetYoutubeNotifactionChannels(context.Background())
 				if err != nil {
-					slog.Error("Failed to send youtube video", slog.Any("err", err))
+					slog.Error("Failed to get youtube notification channels", slog.Any("err", err))
 					continue
 				}
 
-				time.Sleep(1 * time.Second)
+				for _, guild := range youtubeNotificationsGuilds {
+
+					var content string
+
+					if guild.YoutubeNotificationsRole.Valid {
+						content = fmt.Sprintf("Hey <@&%d>, %s just posted a new video. Go check it out!\nhttps://www.youtube.com/watch?v=%s", guild.YoutubeNotificationsRole.Int64, channelTitle, videoId)
+					} else {
+						content = fmt.Sprintf("Hey, %s just posted a new video. Go check it out!\nhttps://www.youtube.com/watch?v=%s", channelTitle, videoId)
+					}
+
+					_, err = b.Client.Rest().CreateMessage(
+						snowflake.ID(guild.YoutubeNotificationsChannel.Int64),
+						discord.NewMessageCreateBuilder().
+							// TODO: Mention Garrix news role,
+							SetContent(content).
+							Build())
+
+					// TODO: Add channel ID to the log
+					if err != nil {
+						slog.Error("Failed to send youtube video", slog.Any("err", err))
+						continue
+					}
+
+					time.Sleep(1 * time.Second)
+				}
 
 			}
 

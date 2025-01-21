@@ -25,6 +25,10 @@ var (
 	Commit  = "unknown"
 )
 
+// TODO: Join leave logs
+// TODO Member welcome message
+// Message edit / delete logs?
+
 // TODO: Error handling for the bot?
 func main() {
 	shouldSyncCommands := flag.Bool("sync-commands", false, "Whether to sync commands to discord")
@@ -43,30 +47,8 @@ func main() {
 
 	b := mgbot.New(*cfg, Version, Commit)
 
-	h := handler.New()
-
-	// TODO: This is getting out of hand, find a better place to store and have something like cog baased loading with load unload commands?
-	// TODO: Maybe add a help command
-	h.Command("/ping", commands.PingHandler)
-	h.Command("/avatar", commands.AvatarHandler)
-	h.Command("/8ball", commands.EightBallHandler)
-
-	h.Command("/lyrics", commands.LyricsHandler(b))
-	h.Autocomplete("/lyrics", commands.LyricsAutocompleteHandler(b))
-
-	h.Command("/quiz", commands.QuizHandler(b))
-	// h.Command("/whois", commands.WhoisHandler)
-
-	h.Command("/balance", commands.BalanceHandler(b))
-	h.Command("/withdraw", commands.WithdrawHandler(b))
-	h.Command("/deposit", commands.DepositHandler(b))
-	h.Command("/give", commands.GiveHandler(b))
-	h.Command("/leaderboard", commands.LeaderboardHandler(b))
-
-	h.Command("/links", commands.LinksHandler(b))
-	h.Autocomplete("/links", commands.LinksAutocompleteHandler(b))
-
-	h.Command("/version", commands.VersionHandler(b))
+	// TODO: Disable app commands in DMs
+	h := commands.SetupHandlers(b)
 
 	if err = b.SetupDB(); err != nil {
 		slog.Error("Failed to setup db", slog.Any("err", err))
@@ -80,7 +62,10 @@ func main() {
 	}
 	b.YoutubeService = service
 
-	if err = b.SetupBot(h, bot.NewListenerFunc(b.OnReady), handlers.MessageHandler(b)); err != nil {
+	if err = b.SetupBot(h, bot.NewListenerFunc(b.OnReady),
+		handlers.MessageHandler(b),
+		// TODO: Setup more handlers here, like the sing along handler
+	); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
 		os.Exit(-1)
 	}
