@@ -120,11 +120,9 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 					earnings := earningsForDifficulty[difficulty]
 
 					err := b.Queries.AddCoins(e.Ctx, db.AddCoinsParams{
-						ID: int64(e.Member().User.ID),
-						InHand: pgtype.Int8{
-							Int64: int64(earnings),
-							Valid: true,
-						},
+						ID:      int64(e.Member().User.ID),
+						GuildID: int64(*e.GuildID()),
+						InHand:  pgtype.Int8{Int64: int64(earnings), Valid: true},
 					})
 
 					if err != nil {

@@ -63,7 +63,10 @@ func WithdrawHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		var embed discord.Embed
 		var amtToWithdraw int64
 
-		balanceInfo, err := b.Queries.GetBalance(e.Ctx, int64(e.Member().User.ID))
+		balanceInfo, err := b.Queries.GetBalance(e.Ctx, db.GetBalanceParams{
+			ID:      int64(e.Member().User.ID),
+			GuildID: int64(*e.GuildID()),
+		})
 		if err != nil {
 			return err
 		}
@@ -87,11 +90,9 @@ func WithdrawHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		}
 
 		err = b.Queries.WithdrawAmount(e.Ctx, db.WithdrawAmountParams{
-			ID: int64(e.Member().User.ID),
-			InHand: pgtype.Int8{
-				Int64: amtToWithdraw,
-				Valid: true,
-			},
+			ID:      int64(e.Member().User.ID),
+			GuildID: int64(*e.GuildID()),
+			InHand:  pgtype.Int8{Int64: amtToWithdraw, Valid: true},
 		})
 
 		if err != nil {

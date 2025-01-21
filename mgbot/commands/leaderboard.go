@@ -7,6 +7,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
 	"github.com/disgoorg/snowflake/v2"
+	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
@@ -55,7 +56,10 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		switch category {
 		// TODO: Use offset and pagination to show pages for leaderboards
 		case "Coins":
-			records, err := b.Queries.GetCoinsLeaderboard(e.Ctx, 0)
+			records, err := b.Queries.GetCoinsLeaderboard(e.Ctx, db.GetCoinsLeaderboardParams{
+				GuildID: int64(*e.GuildID()),
+				Offset:  0,
+			})
 			if err != nil {
 				return err
 			}
@@ -79,7 +83,10 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			}
 
 		case "Levels":
-			records, err := b.Queries.GetLevelsLeaderboard(e.Ctx, 0)
+			records, err := b.Queries.GetLevelsLeaderboard(e.Ctx, db.GetLevelsLeaderboardParams{
+				GuildID: int64(*e.GuildID()),
+				Offset:  0,
+			})
 			if err != nil {
 				return err
 			}
@@ -103,7 +110,10 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			}
 
 		case "Messages":
-			records, err := b.Queries.GetMessagesSentLeaderboard(e.Ctx, 0)
+			records, err := b.Queries.GetMessagesSentLeaderboard(e.Ctx, db.GetMessagesSentLeaderboardParams{
+				GuildID: int64(*e.GuildID()),
+				Offset:  0,
+			})
 			if err != nil {
 				return err
 			}
@@ -127,7 +137,10 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			}
 
 		case "In Hand Coins":
-			records, err := b.Queries.GetInHandLeaderboard(e.Ctx, 0)
+			records, err := b.Queries.GetInHandLeaderboard(e.Ctx, db.GetInHandLeaderboardParams{
+				GuildID: int64(*e.GuildID()),
+				Offset:  0,
+			})
 			if err != nil {
 				return err
 			}
