@@ -25,3 +25,15 @@ ORDER BY messages_sent DESC OFFSET $2 LIMIT 10;
 SELECT id, in_hand FROM users
 WHERE guild_id = $1
 ORDER BY in_hand DESC OFFSET $2 LIMIT 10;
+
+
+-- name: GetUserLevelData :one
+WITH user_ranks AS (
+  SELECT *,
+         RANK() OVER (PARTITION BY guild_id ORDER BY total_xp DESC) as rank
+  FROM users
+  WHERE guild_id = $2
+)
+SELECT *
+FROM user_ranks
+WHERE id = $1 AND guild_id = $2;

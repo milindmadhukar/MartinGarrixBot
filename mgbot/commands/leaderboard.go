@@ -105,7 +105,7 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 				leaderboard = append(leaderboard, leaderboardDetails{
 					member: discordMember,
-					value:  utils.Humanize(int(record.TotalXp.Int32)),
+					value:  utils.Humanize(record.TotalXp.Int32),
 				})
 			}
 
