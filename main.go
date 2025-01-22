@@ -28,6 +28,8 @@ var (
 // TODO: Join leave logs
 // TODO Member welcome message
 // Message edit / delete logs?
+// Martin Garrix radio automation
+// Info and server info commands
 
 // TODO: Error handling for the bot?
 func main() {

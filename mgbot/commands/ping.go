@@ -39,8 +39,7 @@ func PingHandler(e *handler.CommandEvent) error {
 		}
 	}()
 
-	return e.Respond(
-		discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
+	return e.Respond( discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
 			SetEmbeds(eb.Build()).
 			SetEphemeral(true).
 			Build(),

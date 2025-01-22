@@ -6,6 +6,7 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 )
 
+// TODO: Organize this also
 var Commands = []discord.ApplicationCommandCreate{
 	ping,
 	avatar,
@@ -18,6 +19,7 @@ var Commands = []discord.ApplicationCommandCreate{
 	give,
 	leaderboard,
 	links,
+	rank,
 	//whois,
 	version,
 }
@@ -32,6 +34,8 @@ func SetupHandlers(b *mgbot.MartinGarrixBot) *handler.Mux {
 	rootHandler.Command("/withdraw", WithdrawHandler(b))
 	rootHandler.Command("/deposit", DepositHandler(b))
 	rootHandler.Command("/give", GiveHandler(b))
+
+	rootHandler.Command("/rank", RankHandler(b))
 	rootHandler.Command("/leaderboard", LeaderboardHandler(b))
 
 	rootHandler.Command("/links", LinksHandler(b))
@@ -44,14 +48,14 @@ func SetupHandlers(b *mgbot.MartinGarrixBot) *handler.Mux {
 	fun.Command("/lyrics", LyricsHandler(b))
 	fun.Autocomplete("/lyrics", LyricsAutocompleteHandler(b))
 	fun.Command("/quiz", QuizHandler(b))
-
 	rootHandler.Mount("/", fun)
 
 	extras := handler.New()
 	extras.Command("/avatar", AvatarHandler)
 	extras.Command("/ping", PingHandler)
+	rootHandler.Mount("/", extras)
 
 	// h.Command("/whois", WhoisHandler)
 
-	return fun
+	return rootHandler
 }

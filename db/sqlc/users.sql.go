@@ -205,3 +205,47 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 	)
 	return i, err
 }
+
+const getUserLevelData = `-- name: GetUserLevelData :one
+WITH user_ranks AS (
+  SELECT id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand, guild_id,
+         RANK() OVER (PARTITION BY guild_id ORDER BY total_xp DESC) as rank
+  FROM users
+  WHERE guild_id = $2
+)
+SELECT id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand, guild_id, rank
+FROM user_ranks
+WHERE id = $1 AND guild_id = $2
+`
+
+type GetUserLevelDataParams struct {
+	ID      int64 `json:"id"`
+	GuildID int64 `json:"guildId"`
+}
+
+type GetUserLevelDataRow struct {
+	ID           int64            `json:"id"`
+	MessagesSent pgtype.Int4      `json:"messagesSent"`
+	TotalXp      pgtype.Int4      `json:"totalXp"`
+	LastXpAdded  pgtype.Timestamp `json:"lastXpAdded"`
+	GarrixCoins  pgtype.Int8      `json:"garrixCoins"`
+	InHand       pgtype.Int8      `json:"inHand"`
+	GuildID      int64            `json:"guildId"`
+	Rank         int64            `json:"rank"`
+}
+
+func (q *Queries) GetUserLevelData(ctx context.Context, arg GetUserLevelDataParams) (GetUserLevelDataRow, error) {
+	row := q.db.QueryRow(ctx, getUserLevelData, arg.ID, arg.GuildID)
+	var i GetUserLevelDataRow
+	err := row.Scan(
+		&i.ID,
+		&i.MessagesSent,
+		&i.TotalXp,
+		&i.LastXpAdded,
+		&i.GarrixCoins,
+		&i.InHand,
+		&i.GuildID,
+		&i.Rank,
+	)
+	return i, err
+}
