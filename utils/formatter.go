@@ -1,7 +1,11 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/png"
+	"io"
 	"strconv"
 	"strings"
 
@@ -34,10 +38,21 @@ func ExtractEmojiParts(emojiStr string) (name string, id snowflake.ID, animated 
 }
 
 // Humanize returns a human-readable string of a number.
-func Humanize(xp int) string {
+func Humanize(xp int32) string {
 	if xp < 1000 {
-		return strconv.Itoa(xp)
+		return strconv.Itoa(int(xp))
 	}
 	xpFloat := float64(xp) / 1000
 	return fmt.Sprintf("%.2fK", xpFloat)
+}
+
+func ImageToReader(img image.Image) (io.Reader, error) {
+	var buf bytes.Buffer
+
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, err
+	}
+
+	reader := bytes.NewReader(buf.Bytes())
+	return reader, nil
 }

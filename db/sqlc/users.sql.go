@@ -12,13 +12,18 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users(id)
-VALUES ($1)
-RETURNING id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand
+INSERT INTO users(id, guild_id)
+VALUES ($1, $2)
+RETURNING id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand, guild_id
 `
 
-func (q *Queries) CreateUser(ctx context.Context, id int64) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, id)
+type CreateUserParams struct {
+	ID      int64 `json:"id"`
+	GuildID int64 `json:"guildId"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createUser, arg.ID, arg.GuildID)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -27,14 +32,21 @@ func (q *Queries) CreateUser(ctx context.Context, id int64) (User, error) {
 		&i.LastXpAdded,
 		&i.GarrixCoins,
 		&i.InHand,
+		&i.GuildID,
 	)
 	return i, err
 }
 
 const getCoinsLeaderboard = `-- name: GetCoinsLeaderboard :many
 SELECT id, garrix_coins, in_hand FROM users
-ORDER BY garrix_coins + in_hand DESC OFFSET $1 LIMIT 10
+WHERE guild_id = $1
+ORDER BY garrix_coins + in_hand DESC OFFSET $2 LIMIT 10
 `
+
+type GetCoinsLeaderboardParams struct {
+	GuildID int64 `json:"guildId"`
+	Offset  int32 `json:"offset"`
+}
 
 type GetCoinsLeaderboardRow struct {
 	ID          int64       `json:"id"`
@@ -42,8 +54,8 @@ type GetCoinsLeaderboardRow struct {
 	InHand      pgtype.Int8 `json:"inHand"`
 }
 
-func (q *Queries) GetCoinsLeaderboard(ctx context.Context, offset int32) ([]GetCoinsLeaderboardRow, error) {
-	rows, err := q.db.Query(ctx, getCoinsLeaderboard, offset)
+func (q *Queries) GetCoinsLeaderboard(ctx context.Context, arg GetCoinsLeaderboardParams) ([]GetCoinsLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, getCoinsLeaderboard, arg.GuildID, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -64,16 +76,22 @@ func (q *Queries) GetCoinsLeaderboard(ctx context.Context, offset int32) ([]GetC
 
 const getInHandLeaderboard = `-- name: GetInHandLeaderboard :many
 SELECT id, in_hand FROM users
-ORDER BY in_hand DESC OFFSET $1 LIMIT 10
+WHERE guild_id = $1
+ORDER BY in_hand DESC OFFSET $2 LIMIT 10
 `
+
+type GetInHandLeaderboardParams struct {
+	GuildID int64 `json:"guildId"`
+	Offset  int32 `json:"offset"`
+}
 
 type GetInHandLeaderboardRow struct {
 	ID     int64       `json:"id"`
 	InHand pgtype.Int8 `json:"inHand"`
 }
 
-func (q *Queries) GetInHandLeaderboard(ctx context.Context, offset int32) ([]GetInHandLeaderboardRow, error) {
-	rows, err := q.db.Query(ctx, getInHandLeaderboard, offset)
+func (q *Queries) GetInHandLeaderboard(ctx context.Context, arg GetInHandLeaderboardParams) ([]GetInHandLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, getInHandLeaderboard, arg.GuildID, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -94,16 +112,22 @@ func (q *Queries) GetInHandLeaderboard(ctx context.Context, offset int32) ([]Get
 
 const getLevelsLeaderboard = `-- name: GetLevelsLeaderboard :many
 SELECT id, total_xp FROM users
-ORDER BY total_xp DESC OFFSET $1 LIMIT 10
+WHERE guild_id = $1
+ORDER BY total_xp DESC OFFSET $2 LIMIT 10
 `
+
+type GetLevelsLeaderboardParams struct {
+	GuildID int64 `json:"guildId"`
+	Offset  int32 `json:"offset"`
+}
 
 type GetLevelsLeaderboardRow struct {
 	ID      int64       `json:"id"`
 	TotalXp pgtype.Int4 `json:"totalXp"`
 }
 
-func (q *Queries) GetLevelsLeaderboard(ctx context.Context, offset int32) ([]GetLevelsLeaderboardRow, error) {
-	rows, err := q.db.Query(ctx, getLevelsLeaderboard, offset)
+func (q *Queries) GetLevelsLeaderboard(ctx context.Context, arg GetLevelsLeaderboardParams) ([]GetLevelsLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, getLevelsLeaderboard, arg.GuildID, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -124,16 +148,22 @@ func (q *Queries) GetLevelsLeaderboard(ctx context.Context, offset int32) ([]Get
 
 const getMessagesSentLeaderboard = `-- name: GetMessagesSentLeaderboard :many
 SELECT id, messages_sent FROM users
-ORDER BY messages_sent DESC OFFSET $1 LIMIT 10
+WHERE guild_id = $1
+ORDER BY messages_sent DESC OFFSET $2 LIMIT 10
 `
+
+type GetMessagesSentLeaderboardParams struct {
+	GuildID int64 `json:"guildId"`
+	Offset  int32 `json:"offset"`
+}
 
 type GetMessagesSentLeaderboardRow struct {
 	ID           int64       `json:"id"`
 	MessagesSent pgtype.Int4 `json:"messagesSent"`
 }
 
-func (q *Queries) GetMessagesSentLeaderboard(ctx context.Context, offset int32) ([]GetMessagesSentLeaderboardRow, error) {
-	rows, err := q.db.Query(ctx, getMessagesSentLeaderboard, offset)
+func (q *Queries) GetMessagesSentLeaderboard(ctx context.Context, arg GetMessagesSentLeaderboardParams) ([]GetMessagesSentLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, getMessagesSentLeaderboard, arg.GuildID, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -153,11 +183,16 @@ func (q *Queries) GetMessagesSentLeaderboard(ctx context.Context, offset int32) 
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand FROM users WHERE id = $1
+SELECT id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand, guild_id FROM users WHERE id = $1 AND guild_id = $2
 `
 
-func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
-	row := q.db.QueryRow(ctx, getUser, id)
+type GetUserParams struct {
+	ID      int64 `json:"id"`
+	GuildID int64 `json:"guildId"`
+}
+
+func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, getUser, arg.ID, arg.GuildID)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -166,6 +201,51 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.LastXpAdded,
 		&i.GarrixCoins,
 		&i.InHand,
+		&i.GuildID,
+	)
+	return i, err
+}
+
+const getUserLevelData = `-- name: GetUserLevelData :one
+WITH user_ranks AS (
+  SELECT id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand, guild_id,
+         RANK() OVER (PARTITION BY guild_id ORDER BY total_xp DESC) as rank
+  FROM users
+  WHERE guild_id = $2
+)
+SELECT id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand, guild_id, rank
+FROM user_ranks
+WHERE id = $1 AND guild_id = $2
+`
+
+type GetUserLevelDataParams struct {
+	ID      int64 `json:"id"`
+	GuildID int64 `json:"guildId"`
+}
+
+type GetUserLevelDataRow struct {
+	ID           int64            `json:"id"`
+	MessagesSent pgtype.Int4      `json:"messagesSent"`
+	TotalXp      pgtype.Int4      `json:"totalXp"`
+	LastXpAdded  pgtype.Timestamp `json:"lastXpAdded"`
+	GarrixCoins  pgtype.Int8      `json:"garrixCoins"`
+	InHand       pgtype.Int8      `json:"inHand"`
+	GuildID      int64            `json:"guildId"`
+	Rank         int64            `json:"rank"`
+}
+
+func (q *Queries) GetUserLevelData(ctx context.Context, arg GetUserLevelDataParams) (GetUserLevelDataRow, error) {
+	row := q.db.QueryRow(ctx, getUserLevelData, arg.ID, arg.GuildID)
+	var i GetUserLevelDataRow
+	err := row.Scan(
+		&i.ID,
+		&i.MessagesSent,
+		&i.TotalXp,
+		&i.LastXpAdded,
+		&i.GarrixCoins,
+		&i.InHand,
+		&i.GuildID,
+		&i.Rank,
 	)
 	return i, err
 }

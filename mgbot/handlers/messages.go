@@ -19,14 +19,14 @@ import (
 
 func MessageHandler(b *mgbot.MartinGarrixBot) bot.EventListener {
 	return bot.NewListenerFunc(func(e *events.MessageCreate) {
-
-		if e.Message.Author.Bot || e.Message.Author.System {
+		if e.Message.Author.Bot || e.Message.Author.System || e.GuildID == nil {
 			return
 		}
 
 		// TODO: Update message in bots channel for level change
 		// True garrixer role add if crosses level 13 // check from config
 		// Handler to prompt users to do slash commands if they are not using prefix commands
+		// Handle the XP multiplier?
 
 		if strings.HasPrefix(strings.ToLower(e.Message.Content), "mg.") {
 			replyMessageContent := "Prefix commands are deprecated. Please use slash commands instead. Type `/` to see available commands."
@@ -35,11 +35,17 @@ func MessageHandler(b *mgbot.MartinGarrixBot) bot.EventListener {
 			return
 		}
 
-		user, err := b.Queries.GetUser(context.Background(), int64(e.Message.Author.ID))
+		user, err := b.Queries.GetUser(context.Background(), db.GetUserParams{
+			ID:      int64(e.Message.Author.ID),
+			GuildID: int64(*e.GuildID),
+		})
 
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				user, err = b.Queries.CreateUser(context.Background(), int64(e.Message.Author.ID))
+				user, err = b.Queries.CreateUser(context.Background(), db.CreateUserParams{
+					ID:      int64(e.Message.Author.ID),
+					GuildID: int64(*e.GuildID),
+				})
 				if err != nil {
 					slog.Error("Failed to create user", slog.Any("err", err))
 					return
@@ -55,11 +61,12 @@ func MessageHandler(b *mgbot.MartinGarrixBot) bot.EventListener {
 
 		params := db.MessageSentParams{
 			MessageID:   int64(e.MessageID),
+			GuildID:     int64(*e.GuildID),
 			ChannelID:   int64(e.ChannelID),
 			AuthorID:    int64(e.Message.Author.ID),
 			Content:     e.Message.Content,
-			LastXpAdded: user.LastXpAdded,
 			TotalXp:     user.TotalXp,
+			LastXpAdded: user.LastXpAdded,
 		}
 
 		if !user.LastXpAdded.Valid || now.Sub(user.LastXpAdded.Time.UTC()) >= time.Minute {

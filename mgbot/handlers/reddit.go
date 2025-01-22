@@ -23,7 +23,7 @@ var imageRegex = regexp.MustCompile(`https://.*\.(?:jpg|jpeg|gif|png)`)
 func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 	url := "https://www.reddit.com/r/Martingarrix/new.json"
 
-	for ; ; <-ticker.C {
+	for ; ; <-ticker.C  {
 		slog.Info("Running reddit post fetcher")
 
 		req, err := http.NewRequest("GET", url, nil)
@@ -55,7 +55,7 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			}
 
 			redditPostEmbed := discord.NewEmbedBuilder().
-				SetTitle(utils.CutString(post.Data.Title, 256)).
+				SetTitle(html.UnescapeString(utils.CutString(post.Data.Title, 256))).
 				SetURL("https://www.reddit.com"+post.Data.Permalink).
 				SetTimestamp(time.Unix(int64(post.Data.CreatedUtc), 0)).
 				SetDescription(utils.CutString(html.UnescapeString(post.Data.Selftext), 2048)).
@@ -69,28 +69,38 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				}
 			}
 
-			// TODO: Remove hardcoded channel ID, and use configuration
-			testChannelID := 864063260915662868
-
-			_, err = b.Client.Rest().CreateMessage(
-				snowflake.ID(testChannelID),
-				discord.NewMessageCreateBuilder().
-					// TODO: Ping the reddit role
-					SetContentf(
-						"<%s>, New post on %s",
-						"@GarrixReddit",
-						post.Data.SubredditNamePrefixed,
-					).
-					SetEmbeds(redditPostEmbed.Build()).
-					Build())
-
-			// TODO: Add channel ID to the log
+			redditNotificationsGuilds, err := b.Queries.GetRedditNotificationChannels(context.Background())
 			if err != nil {
-				slog.Error("Failed to send reddit post", slog.Any("err", err))
+				slog.Error("Failed to get reddit notification channels", slog.Any("err", err))
 				continue
 			}
 
-			time.Sleep(1 * time.Second)
+			for _, guild := range redditNotificationsGuilds {
+
+				var content string
+
+				if guild.RedditNotificationsRole.Valid {
+					content = fmt.Sprintf("<@&%d>, New post on %s", guild.RedditNotificationsRole.Int64, post.Data.SubredditNamePrefixed)
+				} else {
+					content = fmt.Sprintf("New post on %s", post.Data.SubredditNamePrefixed)
+				}
+
+				_, err = b.Client.Rest().CreateMessage(
+					snowflake.ID(guild.RedditNotificationsChannel.Int64),
+					discord.NewMessageCreateBuilder().
+						// TODO: Ping the reddit role
+						SetContent(content).
+						SetEmbeds(redditPostEmbed.Build()).
+						Build())
+
+				// TODO: Add channel ID to the log
+				if err != nil {
+					slog.Error("Failed to send reddit post", slog.Any("err", err))
+					continue
+				}
+
+				time.Sleep(1 * time.Second)
+			}
 		}
 	}
 }

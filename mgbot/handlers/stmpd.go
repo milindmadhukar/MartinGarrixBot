@@ -156,37 +156,45 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				continue
 			}
 
-			// TODO: Send Announcement
 			announcementEmbed := discord.NewEmbedBuilder().
 				SetTitle(fmt.Sprintf("%s - %s", release.Artists, release.Name)).
 				SetImage(release.Thumbnail).
 				SetFooter(fmt.Sprintf("Release Year: %d", release.ReleaseYear), "").
 				Build()
 
-			// TODO: Take ID from config
-			announcementsChannelID := 810462585433882678
-
-			_, err = b.Client.Rest().CreateMessage(
-				snowflake.ID(announcementsChannelID),
-				discord.NewMessageCreateBuilder().
-					// TODO: Ping the reddit role
-					SetContentf(
-						"<%s>, New release on STMPD RCRDS!",
-						"@GarrixNews",
-					).
-					SetEmbeds(announcementEmbed).
-					AddActionRow(
-						utils.GetSongButtons(song)...,
-					).
-					Build())
-
-			// TODO: Add channel ID to the log
+			stmpdNotificationsGuilds, err := b.Queries.GetSTMPDNofiticationChannels(context.Background())
 			if err != nil {
-				slog.Error("Failed to send STMPDRCRDS release on the announcement channel", slog.Any("err", err))
+				slog.Error("Failed to get stmpd notification channels", slog.Any("err", err))
 				continue
 			}
 
-			time.Sleep(1 * time.Second)
+			for _, guild := range stmpdNotificationsGuilds {
+
+				var content string
+
+				if guild.StmpdNotificationsRole.Valid {
+					content = fmt.Sprintf("<@&%d>, New release on STMPD RCRDS!", guild.StmpdNotificationsRole.Int64)
+				} else {
+					content = "New release on STMPD RCRDS!"
+				}
+
+				_, err = b.Client.Rest().CreateMessage(
+					snowflake.ID(guild.StmpdNotificationsChannel.Int64),
+					discord.NewMessageCreateBuilder().
+						SetContent(content).
+						SetEmbeds(announcementEmbed).
+						AddActionRow(
+							utils.GetSongButtons(song)...,
+						).
+						Build())
+
+				if err != nil {
+					slog.Error("Failed to send STMPDRCRDS release on the announcement channel", slog.Any("err", err))
+					continue
+				}
+
+				time.Sleep(1 * time.Second)
+			}
 		}
 	}
 }

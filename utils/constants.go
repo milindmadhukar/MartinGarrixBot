@@ -9,3 +9,8 @@ const (
 	SpotifyEmoji    = "<:spotify:1328049287640125562>"
 	AppleMusicEmoji = "<:applemusic:1328049289527562300>"
 )
+
+
+const (
+	RANK_PICTURE_WIDTH = 680
+)

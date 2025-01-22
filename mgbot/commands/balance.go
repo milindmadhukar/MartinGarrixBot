@@ -5,6 +5,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
+	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
@@ -29,7 +30,10 @@ func BalanceHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			member = *e.Member()
 		}
 
-		balanceInfo, err := b.Queries.GetBalance(e.Ctx, int64(member.Member.User.ID))
+		balanceInfo, err := b.Queries.GetBalance(e.Ctx, db.GetBalanceParams{
+			ID:      int64(member.User.ID),
+			GuildID: int64(*e.GuildID()),
+		})
 
 		if err != nil {
 			return err

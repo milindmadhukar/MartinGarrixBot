@@ -149,6 +149,6 @@ type UniqueSong struct {
 // UserLevelData represents the user's level data.
 type UserLevelData struct {
 	Lvl          int
-	XpForNextLvl int
-	CurrentXp    int
+	XpForNextLvl int32
+	CurrentXp    int32
 }
