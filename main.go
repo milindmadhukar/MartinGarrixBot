@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -17,13 +16,18 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/handlers"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
 	Version = "dev"
 	Commit  = "unknown"
 )
+
+// TODO: Join leave logs
+// TODO Member welcome message
+// Message edit / delete logs?
+// Martin Garrix radio automation
+// Info and server info commands
 
 // TODO: Error handling for the bot?
 func main() {
@@ -37,36 +41,14 @@ func main() {
 		os.Exit(-1)
 	}
 
-	setupLogger(cfg.Log)
+	mgbot.SetupLogger(cfg.Log)
 	slog.Info("Starting Martin Garrix Bot..", slog.String("version", Version), slog.String("commit", Commit))
 	slog.Info("Syncing commands", slog.Bool("sync", *shouldSyncCommands))
 
 	b := mgbot.New(*cfg, Version, Commit)
 
-	h := handler.New()
-
-	// TODO: This is getting out of hand, find a better place to store and have something like cog baased loading with load unload commands?
-	// TODO: Maybe add a help command
-	h.Command("/ping", commands.PingHandler)
-	h.Command("/avatar", commands.AvatarHandler)
-	h.Command("/8ball", commands.EightBallHandler)
-
-	h.Command("/lyrics", commands.LyricsHandler(b))
-	h.Autocomplete("/lyrics", commands.LyricsAutocompleteHandler(b))
-
-	h.Command("/quiz", commands.QuizHandler(b))
-	// h.Command("/whois", commands.WhoisHandler)
-
-	h.Command("/balance", commands.BalanceHandler(b))
-	h.Command("/withdraw", commands.WithdrawHandler(b))
-	h.Command("/deposit", commands.DepositHandler(b))
-	h.Command("/give", commands.GiveHandler(b))
-	h.Command("/leaderboard", commands.LeaderboardHandler(b))
-
-	h.Command("/links", commands.LinksHandler(b))
-	h.Autocomplete("/links", commands.LinksAutocompleteHandler(b))
-
-	h.Command("/version", commands.VersionHandler(b))
+	// TODO: Disable app commands in DMs
+	h := commands.SetupHandlers(b)
 
 	if err = b.SetupDB(); err != nil {
 		slog.Error("Failed to setup db", slog.Any("err", err))
@@ -80,7 +62,11 @@ func main() {
 	}
 	b.YoutubeService = service
 
-	if err = b.SetupBot(h, bot.NewListenerFunc(b.OnReady), handlers.MessageHandler(b)); err != nil {
+	if err = b.SetupBot(h,
+		bot.NewListenerFunc(b.OnReady),
+		handlers.MessageHandler(b),
+		// TODO: Setup more handlers here, like the sing along handler
+	); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
 		os.Exit(-1)
 	}
@@ -88,10 +74,17 @@ func main() {
 	b.SetupColly()
 
 	// TODO: Seems out of place, place somwehere more appropriate
-	// Also only start this once the bot is ready.
-	go handlers.GetRedditPosts(b, time.NewTicker(3*time.Minute))
-	go handlers.GetYoutubeVideos(b, time.NewTicker(3*time.Minute))
-	go handlers.GetAllStmpdReleases(b, time.NewTicker(15*time.Minute))
+	go func() {
+		for {
+			if b.IsReady {
+				go handlers.GetRedditPosts(b, time.NewTicker(3*time.Minute))
+				go handlers.GetYoutubeVideos(b, time.NewTicker(3*time.Minute))
+				go handlers.GetAllStmpdReleases(b, time.NewTicker(15*time.Minute))
+				return
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
 
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -118,34 +111,4 @@ func main() {
 	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)
 	<-s
 	slog.Info("Shutting down bot...")
-}
-
-func setupLogger(cfg mgbot.LogConfig) {
-	opts := &slog.HandlerOptions{
-		AddSource: cfg.AddSource,
-		Level:     cfg.Level,
-	}
-
-	fileWriter := &lumberjack.Logger{
-		Filename:   cfg.File,
-		MaxSize:    cfg.MaxSize,
-		MaxBackups: cfg.MaxBackups,
-		MaxAge:     cfg.MaxAge,
-		Compress:   true,
-	}
-
-	multiWriter := io.MultiWriter(os.Stdout, fileWriter)
-
-	var sHandler slog.Handler
-	switch cfg.Format {
-	case "json":
-		sHandler = slog.NewJSONHandler(multiWriter, opts)
-	case "text":
-		sHandler = slog.NewTextHandler(multiWriter, opts)
-	default:
-		slog.Error("Unknown log format", slog.String("format", cfg.Format))
-		os.Exit(-1)
-	}
-
-	slog.SetDefault(slog.New(sHandler))
 }

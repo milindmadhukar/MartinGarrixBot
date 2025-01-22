@@ -71,7 +71,11 @@ func GiveHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		var embed discord.Embed
 		var amtToGive int64
 
-		balanceInfo, err := b.Queries.GetBalance(e.Ctx, int64(e.Member().User.ID))
+		balanceInfo, err := b.Queries.GetBalance(e.Ctx, db.GetBalanceParams{
+			ID:      int64(e.Member().User.ID),
+			GuildID: int64(*e.GuildID()),
+		})
+
 		if err != nil {
 			return err
 		}

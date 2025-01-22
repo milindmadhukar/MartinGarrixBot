@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/disgoorg/disgo"
@@ -22,6 +24,7 @@ import (
 	pgxStdlib "github.com/jackc/pgx/v5/stdlib"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"google.golang.org/api/youtube/v3"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func New(cfg Config, version string, commit string) *MartinGarrixBot {
@@ -39,6 +42,7 @@ type MartinGarrixBot struct {
 	Paginator *paginator.Manager
 	Version   string
 	Commit    string
+	IsReady   bool
 
 	// TODO: Add the db here
 	DB             *pgxpool.Pool
@@ -143,4 +147,36 @@ func (b *MartinGarrixBot) OnReady(e *events.Ready) {
 	if err := b.Client.SetPresence(ctx, gateway.WithListeningActivity("you"), gateway.WithOnlineStatus(discord.OnlineStatusOnline)); err != nil {
 		slog.Error("Failed to set presence", slog.Any("err", err))
 	}
+
+	b.IsReady = true
+}
+
+func SetupLogger(cfg LogConfig) {
+	opts := &slog.HandlerOptions{
+		AddSource: cfg.AddSource,
+		Level:     cfg.Level,
+	}
+
+	fileWriter := &lumberjack.Logger{
+		Filename:   cfg.File,
+		MaxSize:    cfg.MaxSize,
+		MaxBackups: cfg.MaxBackups,
+		MaxAge:     cfg.MaxAge,
+		Compress:   true,
+	}
+
+	multiWriter := io.MultiWriter(os.Stdout, fileWriter)
+
+	var sHandler slog.Handler
+	switch cfg.Format {
+	case "json":
+		sHandler = slog.NewJSONHandler(multiWriter, opts)
+	case "text":
+		sHandler = slog.NewTextHandler(multiWriter, opts)
+	default:
+		slog.Error("Unknown log format", slog.String("format", cfg.Format))
+		os.Exit(-1)
+	}
+
+	slog.SetDefault(slog.New(sHandler))
 }
