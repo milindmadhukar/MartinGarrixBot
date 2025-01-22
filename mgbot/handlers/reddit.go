@@ -23,7 +23,7 @@ var imageRegex = regexp.MustCompile(`https://.*\.(?:jpg|jpeg|gif|png)`)
 func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 	url := "https://www.reddit.com/r/Martingarrix/new.json"
 
-	for ; ; <-ticker.C {
+	for ; ; <-ticker.C  {
 		slog.Info("Running reddit post fetcher")
 
 		req, err := http.NewRequest("GET", url, nil)

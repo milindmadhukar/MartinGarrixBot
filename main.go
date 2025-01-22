@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -17,7 +16,6 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/handlers"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
@@ -43,7 +41,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	setupLogger(cfg.Log)
+	mgbot.SetupLogger(cfg.Log)
 	slog.Info("Starting Martin Garrix Bot..", slog.String("version", Version), slog.String("commit", Commit))
 	slog.Info("Syncing commands", slog.Bool("sync", *shouldSyncCommands))
 
@@ -64,7 +62,8 @@ func main() {
 	}
 	b.YoutubeService = service
 
-	if err = b.SetupBot(h, bot.NewListenerFunc(b.OnReady),
+	if err = b.SetupBot(h,
+		bot.NewListenerFunc(b.OnReady),
 		handlers.MessageHandler(b),
 		// TODO: Setup more handlers here, like the sing along handler
 	); err != nil {
@@ -75,10 +74,17 @@ func main() {
 	b.SetupColly()
 
 	// TODO: Seems out of place, place somwehere more appropriate
-	// Also only start this once the bot is ready.
-	go handlers.GetRedditPosts(b, time.NewTicker(3*time.Minute))
-	go handlers.GetYoutubeVideos(b, time.NewTicker(3*time.Minute))
-	go handlers.GetAllStmpdReleases(b, time.NewTicker(15*time.Minute))
+	go func() {
+		for {
+			if b.IsReady {
+				go handlers.GetRedditPosts(b, time.NewTicker(3*time.Minute))
+				go handlers.GetYoutubeVideos(b, time.NewTicker(3*time.Minute))
+				go handlers.GetAllStmpdReleases(b, time.NewTicker(15*time.Minute))
+				return
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
 
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -105,34 +111,4 @@ func main() {
 	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)
 	<-s
 	slog.Info("Shutting down bot...")
-}
-
-func setupLogger(cfg mgbot.LogConfig) {
-	opts := &slog.HandlerOptions{
-		AddSource: cfg.AddSource,
-		Level:     cfg.Level,
-	}
-
-	fileWriter := &lumberjack.Logger{
-		Filename:   cfg.File,
-		MaxSize:    cfg.MaxSize,
-		MaxBackups: cfg.MaxBackups,
-		MaxAge:     cfg.MaxAge,
-		Compress:   true,
-	}
-
-	multiWriter := io.MultiWriter(os.Stdout, fileWriter)
-
-	var sHandler slog.Handler
-	switch cfg.Format {
-	case "json":
-		sHandler = slog.NewJSONHandler(multiWriter, opts)
-	case "text":
-		sHandler = slog.NewTextHandler(multiWriter, opts)
-	default:
-		slog.Error("Unknown log format", slog.String("format", cfg.Format))
-		os.Exit(-1)
-	}
-
-	slog.SetDefault(slog.New(sHandler))
 }
