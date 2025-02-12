@@ -21,3 +21,5 @@ UPDATE users AS receiver
 SET in_hand = receiver.in_hand + $4
 WHERE receiver.id = $2 AND receiver.guild_id = $3
 AND EXISTS (SELECT 1 FROM sender_update);
+
+-- TODO: Use sqlc.arg for argument names
