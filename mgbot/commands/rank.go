@@ -22,6 +22,8 @@ var rank = discord.SlashCommandCreate{
 	},
 }
 
+// TODO: Maybe use the assets as embeded and all the migrations
+
 func RankHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
 		member := e.SlashCommandInteractionData().Member("user")
