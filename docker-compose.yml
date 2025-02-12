@@ -7,13 +7,18 @@ services:
       - ./config.docker.toml:/var/lib/config.toml
       - ./mgbot-google-service.json:/etc/secrets/mgbot-google-service.json
     command: -config=/var/lib/config.toml --sync-commands=true
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     restart: unless-stopped
 
   watchtower:
     image: containrrr/watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 60 --filter "name=martingarrixbot"
+    command: 
+      - "label-enable"
+      - "--interval"
+      - "60"
     environment:
       - REPO_USER=$REPO_USER
       - REPO_PASS=$REPO_PASS

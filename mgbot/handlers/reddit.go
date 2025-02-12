@@ -19,11 +19,11 @@ import (
 
 var imageRegex = regexp.MustCompile(`https://.*\.(?:jpg|jpeg|gif|png)`)
 
-// TODO: Maybe some logic to restart if it returns / fails?
+// TODO: Maybe some logic to restart if it returns / fails? / panics
 func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 	url := "https://www.reddit.com/r/Martingarrix/new.json"
 
-	for ; ; <-ticker.C  {
+	for ; ; <-ticker.C {
 		slog.Info("Running reddit post fetcher")
 
 		req, err := http.NewRequest("GET", url, nil)
@@ -45,7 +45,10 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			continue
 		}
 
-		posts := data.Data.Children[:5]
+		posts := data.Data.Children
+		if len(posts) > 5 {
+			posts = posts[:5]
+		}
 		slices.Reverse(posts)
 
 		for _, post := range posts {
@@ -76,7 +79,6 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			}
 
 			for _, guild := range redditNotificationsGuilds {
-
 				var content string
 
 				if guild.RedditNotificationsRole.Valid {
