@@ -26,6 +26,7 @@ WORKDIR /bot
 
 COPY --from=build /build/bot /bot/mgbot
 COPY --from=build /build/db/ /bot/db/
+COPY --from=build /build/assets/ /bot/assets/
 
 ENTRYPOINT ["/bot/mgbot"]
 
