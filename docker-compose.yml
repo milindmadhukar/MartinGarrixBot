@@ -11,6 +11,7 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"
     restart: unless-stopped
 
+  # To manage dynamic updates
   watchtower:
     image: containrrr/watchtower
     volumes:
