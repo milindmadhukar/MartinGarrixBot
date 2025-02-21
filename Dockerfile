@@ -13,6 +13,9 @@ ARG TARGETARCH
 ARG VERSION=dev
 ARG COMMIT=unknown
 
+LABEL org.opencontainers.image.version=${VERSION}
+LABEL org.opencontainers.image.revision=${COMMIT}
+
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     CGO_ENABLED=0 \
@@ -25,7 +28,7 @@ FROM alpine
 WORKDIR /bot
 
 COPY --from=build /build/bot /bot/mgbot
-COPY --from=build /build/db/ /bot/db/
+COPY --from=build /build/db/migrations /bot/db/migrations
 COPY --from=build /build/assets/ /bot/assets/
 
 ENTRYPOINT ["/bot/mgbot"]

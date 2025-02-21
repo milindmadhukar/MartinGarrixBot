@@ -3,23 +3,11 @@ services:
     image: ghcr.io/milindmadhukar/martingarrixbot:master
     container_name: martingarrixbot
     network_mode: "host"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     volumes:
       - ./config.docker.toml:/var/lib/config.toml
       - ./mgbot-google-service.json:/etc/secrets/mgbot-google-service.json
+      - ./garrixbot.log:/bot/garrixbot.log
     command: -config=/var/lib/config.toml --sync-commands=true
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     restart: unless-stopped
-
-  # To manage dynamic updates
-  watchtower:
-    image: containrrr/watchtower
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: 
-      - "label-enable"
-      - "--interval"
-      - "60"
-    environment:
-      - REPO_USER=$REPO_USER
-      - REPO_PASS=$REPO_PASS
