@@ -10,18 +10,19 @@ COPY . .
 
 ARG VERSION=dev
 ARG COMMIT=unknown
+ARG TARGETPLATFORM
 
 LABEL org.opencontainers.image.version=${VERSION}
 LABEL org.opencontainers.image.revision=${COMMIT}
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg \
-    CGO_ENABLED=0 \
-    GOOS=$TARGETOS \
-    GOARCH=$TARGETARCH \
-	go build -ldflags "-X main.version=$VERSION -X main.commit=$COMMIT" -o bot .
+RUN export GOOS=$(echo ${TARGETPLATFORM} | cut -d'/' -f1) \
+    && export GOARCH=$(echo ${TARGETPLATFORM} | cut -d'/' -f2) \
+    && if [ "${GOARCH}" = "arm64" ]; then export GOARCH=arm64; fi \
+    && echo "Building for GOOS=${GOOS} GOARCH=${GOARCH}" \
+    && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
+       go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT}" -o bot .
 
-FROM alpine
+FROM --platform=$TARGETPLATFORM alpine
 
 WORKDIR /bot
 
