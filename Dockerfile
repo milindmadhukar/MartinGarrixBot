@@ -10,6 +10,7 @@ COPY . .
 
 ARG VERSION=dev
 ARG COMMIT=unknown
+ARG TARGETPLATFORM
 
 LABEL org.opencontainers.image.version=${VERSION}
 LABEL org.opencontainers.image.revision=${COMMIT}
