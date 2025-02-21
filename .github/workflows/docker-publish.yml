@@ -70,15 +70,13 @@ jobs:
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
         with:
           context: .
-          platforms: linux/amd64,linux/arm64/v8  # Add platform specifications here
+          platforms: linux/amd64,linux/arm64/v8
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            TARGETOS=${{ matrix.targetos }}
-            TARGETARCH=${{ matrix.targetarch }}
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}
       # Sign the resulting Docker image digest except on PRs.
