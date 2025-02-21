@@ -28,7 +28,7 @@ FROM alpine
 WORKDIR /bot
 
 COPY --from=build /build/bot /bot/mgbot
-COPY --from=build /build/db/migrations /bot/db/migrations
+COPY --from=build /build/db/migrations/ /bot/db/migrations/
 COPY --from=build /build/assets/ /bot/assets/
 
 ENTRYPOINT ["/bot/mgbot"]
