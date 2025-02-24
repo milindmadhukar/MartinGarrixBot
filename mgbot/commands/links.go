@@ -96,13 +96,18 @@ func LinksHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			SetImage(song.ThumbnailUrl.String).
 			Build()
 
+		linksResponseMessage := discord.NewMessageCreateBuilder().
+			SetEmbeds(embed)
+
+		if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
+			linksResponseMessage = linksResponseMessage.AddActionRow(
+				utils.GetSongButtons(song)...,
+			)
+		}
+
 		return e.Respond(
-			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-				SetEmbeds(embed).
-				AddActionRow(
-					utils.GetSongButtons(song)...,
-				).
-				Build(),
+			discord.InteractionResponseTypeCreateMessage,
+			linksResponseMessage.Build(),
 		)
 	}
 }

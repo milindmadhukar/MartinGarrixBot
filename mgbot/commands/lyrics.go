@@ -103,13 +103,19 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			SetColor(utils.ColorSuccess).
 			SetThumbnail(song.ThumbnailUrl.String)
 
+		lyricsMessage := discord.NewMessageCreateBuilder().
+			SetEmbeds(eb.Build())
+
+
+		if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
+			lyricsMessage = lyricsMessage.AddActionRow(
+				utils.GetSongButtons(song)...,
+			)
+		}
+
 		return e.Respond(
-			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-				SetEmbeds(eb.Build()).
-				AddActionRow(
-					utils.GetSongButtons(song)...,
-				).
-				Build(),
+			discord.InteractionResponseTypeCreateMessage,
+			lyricsMessage.Build(),
 		)
 	}
 }
