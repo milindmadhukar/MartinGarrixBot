@@ -8,8 +8,8 @@ RUN go mod download
 
 COPY . .
 
-ARG VERSION
-ARG COMMIT
+ARG VERSION=dev 
+ARG COMMIT=unknown
 ARG TARGETPLATFORM
 
 LABEL org.opencontainers.image.version=${VERSION}

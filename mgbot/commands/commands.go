@@ -36,6 +36,7 @@ func SetupHandlers(b *mgbot.MartinGarrixBot) *handler.Mux {
 	rootHandler.Command("/give", GiveHandler(b))
 
 	rootHandler.Command("/rank", RankHandler(b))
+	// BUG: This is not being recognized
 	rootHandler.Command("/leaderboard", LeaderboardHandler(b))
 
 	rootHandler.Command("/links", LinksHandler(b))
