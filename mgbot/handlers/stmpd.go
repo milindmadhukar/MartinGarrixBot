@@ -178,15 +178,19 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 					content = "New release on STMPD RCRDS!"
 				}
 
+				stmpdNotificationMessage := discord.NewMessageCreateBuilder().
+					SetContent(content).
+					SetEmbeds(announcementEmbed)
+
+				if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
+					stmpdNotificationMessage = stmpdNotificationMessage.AddActionRow(
+						utils.GetSongButtons(song)...,
+					)
+				}
+
 				_, err = b.Client.Rest().CreateMessage(
 					snowflake.ID(guild.StmpdNotificationsChannel.Int64),
-					discord.NewMessageCreateBuilder().
-						SetContent(content).
-						SetEmbeds(announcementEmbed).
-						AddActionRow(
-							utils.GetSongButtons(song)...,
-						).
-						Build())
+					stmpdNotificationMessage.Build())
 
 				if err != nil {
 					slog.Error("Failed to send STMPDRCRDS release on the announcement channel", slog.Any("err", err))
