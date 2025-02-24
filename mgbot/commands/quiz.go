@@ -161,9 +161,14 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 			ctx, cancel := context.WithTimeout(e.Ctx, 45*time.Second)
 			defer cancel()
-			bot.WaitForEvent(b.Client, ctx, filterAuthorMessagesFunc, answerCheckFunc, func() {
 
-				timerExpiredEmbed := utils.FailureEmbed("Time's up!", "You took too long to answer the quiz.")
+			bot.WaitForEvent(b.Client, ctx, filterAuthorMessagesFunc, answerCheckFunc, func() {
+				timerExpiredEmbed := discord.NewEmbedBuilder().
+					SetTitle("<a:cross:810462920810561556> Oops, you ran out of time").
+					SetColor(utils.ColorError).
+					AddField("Song Name", fmt.Sprintf("%s - %s", song.Artists, song.Name), false).
+					SetThumbnail(song.ThumbnailUrl.String).
+					Build()
 
 				_, err := b.Client.Rest().CreateFollowupMessage(e.ApplicationID(), e.Token(),
 					discord.NewMessageCreateBuilder().

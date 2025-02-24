@@ -18,10 +18,8 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
-var (
-	Version = "dev"
-	Commit  = "unknown"
-)
+var Version string
+var Commit string
 
 // TODO: Join leave logs
 // TODO Member welcome message
@@ -31,8 +29,18 @@ var (
 
 // TODO: Error handling for the bot?
 func main() {
+	Version = os.Getenv("VERSION")
+	Commit = os.Getenv("COMMIT")
+	if Version == "" {
+		Version = "dev"
+	}
+	if Commit == "" {
+		Commit = "unknown"
+	}
+
 	shouldSyncCommands := flag.Bool("sync-commands", false, "Whether to sync commands to discord")
 	path := flag.String("config", "config.toml", "path to config")
+	shouldClearCommands := flag.Bool("clear-commands", false, "Whether to clear commands from discord")
 	flag.Parse()
 
 	cfg, err := mgbot.LoadConfig(*path)
@@ -93,9 +101,16 @@ func main() {
 	}()
 
 	if *shouldSyncCommands {
-		slog.Info("Syncing commands", slog.Any("guild_ids", cfg.Bot.DevGuilds))
-		if err = handler.SyncCommands(b.Client, commands.Commands, cfg.Bot.DevGuilds); err != nil {
+		slog.Info("Syncing commands globally")
+		if err = handler.SyncCommands(b.Client, commands.Commands, nil); err != nil {
 			slog.Error("Failed to sync commands", slog.Any("err", err))
+		}
+	}
+
+	if *shouldClearCommands {
+		slog.Info("Clearing all commands")
+		if err = handler.SyncCommands(b.Client, nil, nil); err != nil {
+			slog.Error("Failed to clear commands", slog.Any("err", err))
 		}
 	}
 
