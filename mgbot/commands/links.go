@@ -86,8 +86,19 @@ func LinksHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			Artists:     songData.Artists,
 			ReleaseYear: songData.ReleaseYear,
 		})
+
 		if err != nil {
 			return err
+		}
+
+		if !song.SpotifyUrl.Valid && !song.YoutubeUrl.Valid && !song.AppleMusicUrl.Valid {
+			return e.Respond(
+				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
+					SetEmbeds(
+						utils.FailureEmbed("No streaming links found for this song.", ""),
+					).
+					Build(),
+			)
 		}
 
 		embed := discord.NewEmbedBuilder().
@@ -96,18 +107,13 @@ func LinksHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			SetImage(song.ThumbnailUrl.String).
 			Build()
 
-		linksResponseMessage := discord.NewMessageCreateBuilder().
-			SetEmbeds(embed)
-
-		if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
-			linksResponseMessage = linksResponseMessage.AddActionRow(
-				utils.GetSongButtons(song)...,
-			)
-		}
-
 		return e.Respond(
-			discord.InteractionResponseTypeCreateMessage,
-			linksResponseMessage.Build(),
+			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
+				SetEmbeds(embed).
+				AddActionRow(
+					utils.GetSongButtons(song)...,
+				).
+				Build(),
 		)
 	}
 }

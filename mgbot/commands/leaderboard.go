@@ -49,8 +49,9 @@ type leaderboardDetails struct {
 
 func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
-		category := e.SlashCommandInteractionData().String("category")
+		e.DeferCreateMessage(false)
 
+		category := e.SlashCommandInteractionData().String("category")
 		var leaderboard []leaderboardDetails
 
 		switch category {
@@ -105,7 +106,7 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 				leaderboard = append(leaderboard, leaderboardDetails{
 					member: discordMember,
-					value:  utils.Humanize(record.TotalXp.Int32),
+					value:  strconv.Itoa(utils.GetUserLevel(record.TotalXp.Int32)),
 				})
 			}
 
@@ -178,10 +179,15 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			SetColor(utils.ColorSuccess).
 			Build()
 
-		return e.Respond(
-			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
+		_, err := e.UpdateInteractionResponse(
+			discord.NewMessageUpdateBuilder().
 				SetEmbeds(embed).
 				Build(),
 		)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
 }

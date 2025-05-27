@@ -36,32 +36,28 @@ var deposit = discord.SlashCommandCreate{
 func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
 		amt, amtOk := e.SlashCommandInteractionData().OptInt("amount")
-
-		if amtOk && amt <= 0 {
-			embed := utils.FailureEmbed("Amount of coins to deposit should be positive.", "")
-			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-					SetEmbeds(embed).
-					SetEphemeral(true).
-					Build(),
-			)
-		}
-
 		isAll := e.SlashCommandInteractionData().Bool("all")
 		isHalf := e.SlashCommandInteractionData().Bool("half")
 
-		if !amtOk && !isAll && !isHalf {
-			embed := utils.FailureEmbed("Please provide amount of coins to deposit.", "")
+		if amtOk && amt <= 0 {
 			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-					SetEmbeds(embed).
+				discord.InteractionResponseTypeCreateMessage,
+				discord.NewMessageCreateBuilder().
+					SetEmbeds(utils.FailureEmbed("Amount of coins to deposit should be positive.", "")).
 					SetEphemeral(true).
 					Build(),
 			)
 		}
 
-		var embed discord.Embed
-		var amtToDeposit int64
+		if !amtOk && !isAll && !isHalf {
+			return e.Respond(
+				discord.InteractionResponseTypeCreateMessage,
+				discord.NewMessageCreateBuilder().
+					SetEmbeds(utils.FailureEmbed("Please provide amount of coins to deposit.", "")).
+					SetEphemeral(true).
+					Build(),
+			)
+		}
 
 		balanceInfo, err := b.Queries.GetBalance(e.Ctx, db.GetBalanceParams{
 			ID:      int64(e.Member().User.ID),
@@ -71,45 +67,43 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			return err
 		}
 
+		var amtToDeposit int64
+
 		if isHalf {
 			amtToDeposit = balanceInfo.InHand.Int64 / 2
 		} else if isAll {
 			amtToDeposit = balanceInfo.InHand.Int64
 		} else if amtOk {
 			if int64(amt) > balanceInfo.InHand.Int64 {
-				embed = utils.FailureEmbed("You don't have enough coins in hand to deposit.", "")
 				return e.Respond(
-					discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-						SetEmbeds(embed).
+					discord.InteractionResponseTypeCreateMessage,
+					discord.NewMessageCreateBuilder().
+						SetEmbeds(utils.FailureEmbed("You don't have enough coins in hand to deposit.", "")).
 						SetEphemeral(true).
 						Build(),
 				)
 			}
-
 			amtToDeposit = int64(amt)
 		}
 
 		err = b.Queries.DepositAmount(e.Ctx, db.DepositAmountParams{
-			ID: int64(e.Member().User.ID),
+			ID:      int64(e.Member().User.ID),
+			GuildID: int64(*e.GuildID()),
 			InHand: pgtype.Int8{
 				Int64: amtToDeposit,
 				Valid: true,
 			},
 		})
-
 		if err != nil {
 			return err
 		}
 
-		embed = utils.SuccessEmbed(
-			fmt.Sprintf("Successfully deposited %d coins from hand to safe.", amtToDeposit),
-			"",
-		)
-
 		return e.Respond(
 			discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageUpdateBuilder().
-				SetEmbeds(embed).
+			discord.NewMessageCreateBuilder().
+				SetEmbeds(utils.SuccessEmbed(
+					fmt.Sprintf("Successfully deposited %d coins from hand to safe.", amtToDeposit),
+					"")).
 				Build(),
 		)
 	}
