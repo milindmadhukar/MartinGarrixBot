@@ -106,7 +106,7 @@ func WithdrawHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 		return e.Respond(
 			discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageUpdateBuilder().
+			discord.NewMessageCreateBuilder().
 				SetEmbeds(embed).
 				Build(),
 		)
