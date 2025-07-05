@@ -1,5 +1,7 @@
 package utils
 
+import "time"
+
 type RedditResponse struct {
 	Kind string `json:"kind,omitempty"`
 	Data struct {
@@ -121,6 +123,14 @@ type RedditResponse struct {
 		} `json:"children,omitempty"`
 		Before any `json:"before,omitempty"`
 	} `json:"data,omitempty"`
+}
+
+type RedditToken struct {
+	AccessToken string    `json:"access_token"`
+	TokenType   string    `json:"token_type"`
+	ExpiresIn   int       `json:"expires_in"`
+	Scope       string    `json:"scope"`
+	ExpiresAt time.Time `json:"-"`
 }
 
 type VideoData struct {
