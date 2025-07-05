@@ -77,11 +77,19 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		}
 	}
 
-	url := "https://www.reddit.com/r/Martingarrix/new.json"
+	if b.RedditToken.AccessToken == "" {
+		slog.Error("Reddit access token is empty after authentication")
+		return
+	}
+
+	endpoint := fmt.Sprintf("/api/v1/subreddit/posts?sr=Martingarrix&sort=new&limit=%d", 5)
+
 	for ; ; <-ticker.C {
 		slog.Info("Running reddit post fetcher")
-		req, err := http.NewRequest("GET", url, nil)
+		req, err := http.NewRequest("POST", "https://oauth.reddit.com"+endpoint, nil)
 		req.Header.Set("User-Agent", "MartinGarrixBot")
+		// Access token
+		slog.Debug("Reddit access token", slog.String("token", b.RedditToken.AccessToken))
 		req.Header.Set("Authorization", "bearer "+b.RedditToken.AccessToken)
 		if err != nil {
 			slog.Error("Failed to create reddit request", slog.Any("err", err))
