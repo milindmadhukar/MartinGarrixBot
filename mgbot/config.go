@@ -33,6 +33,10 @@ type BotConfig struct {
 	Token             string         `toml:"token"`
 	YoutubeAPIKey     string         `toml:"youtube_api_key"`
 	GoogleServiceFile string         `toml:"google_service_file"`
+	RedditClientID    string         `toml:"reddit_client_id"`
+	RedditClientSecret string         `toml:"reddit_client_secret"`
+	RedditBotUsername string         `toml:"reddit_bot_username"`
+	RedditBotPassword string         `toml:"reddit_bot_password"`
 }
 
 type LogConfig struct {

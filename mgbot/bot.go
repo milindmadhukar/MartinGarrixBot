@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	pgxStdlib "github.com/jackc/pgx/v5/stdlib"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	"github.com/milindmadhukar/MartinGarrixBot/utils"
 	"google.golang.org/api/youtube/v3"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -50,6 +51,8 @@ type MartinGarrixBot struct {
 	YoutubeService *youtube.Service
 
 	Collector *colly.Collector
+
+	RedditToken utils.RedditToken
 }
 
 func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
