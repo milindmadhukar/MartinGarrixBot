@@ -82,11 +82,11 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		return
 	}
 
-	endpoint := fmt.Sprintf("/api/v1/subreddit/posts?sr=Martingarrix&sort=new&limit=%d", 5)
+	endpoint := fmt.Sprintf("/r/Martingarrix/new?limit=%d", 5)
 
 	for ; ; <-ticker.C {
 		slog.Info("Running reddit post fetcher")
-		req, err := http.NewRequest("POST", "https://oauth.reddit.com"+endpoint, nil)
+		req, err := http.NewRequest("GET", "https://oauth.reddit.com"+endpoint, nil)
 		req.Header.Set("User-Agent", "MartinGarrixBot")
 		// Access token
 		slog.Debug("Reddit access token", slog.String("token", b.RedditToken.AccessToken))
@@ -109,6 +109,10 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			slog.Error("Failed to read response body", slog.Any("err", err))
 			continue
 		}
+
+		fmt.Println("Reddit response status code:", resp.StatusCode)
+		// body
+		fmt.Println("Reddit response body:", string(bodyBytes))
 
 		var data utils.RedditResponse
 		if err = json.Unmarshal(bodyBytes, &data); err != nil {
