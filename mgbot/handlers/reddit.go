@@ -89,7 +89,6 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		req, err := http.NewRequest("GET", "https://oauth.reddit.com"+endpoint, nil)
 		req.Header.Set("User-Agent", "MartinGarrixBot")
 		// Access token
-		slog.Debug("Reddit access token", slog.String("token", b.RedditToken.AccessToken))
 		req.Header.Set("Authorization", "bearer "+b.RedditToken.AccessToken)
 		if err != nil {
 			slog.Error("Failed to create reddit request", slog.Any("err", err))
