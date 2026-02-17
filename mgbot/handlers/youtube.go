@@ -13,8 +13,9 @@ import (
 
 func GetYoutubeVideos(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 	playlistIDs := []string{
-		"UU5H_KXkPbEsGs0tFt8R35mA",
-		"PLwPIORXMGwchuy4DTiIAasWRezahNrbUJ",
+		"UU5H_KXkPbEsGs0tFt8R35mA",           // Martin Garrix uploads
+		"PLwPIORXMGwchuy4DTiIAasWRezahNrbUJ", // Martin Garrix custom playlist
+		"UUB-7IEpKGIdXkgGUObE5D5A",           // STMPD RCRDS uploads
 	}
 
 	for ; ; <-ticker.C {
