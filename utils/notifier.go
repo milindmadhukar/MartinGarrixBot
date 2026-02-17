@@ -19,6 +19,7 @@ const (
 	NotificationTypeYoutube NotificationType = "youtube"
 	NotificationTypeReddit  NotificationType = "reddit"
 	NotificationTypeSTMPD   NotificationType = "stmpd"
+	NotificationTypeTour    NotificationType = "tour"
 )
 
 // NotificationItem represents a single item to be notified
@@ -145,6 +146,22 @@ func (bn *BatchNotifier) getGuildConfigs() ([]GuildNotificationConfig, error) {
 			}
 			configs = append(configs, config)
 		}
+
+	case NotificationTypeTour:
+		guilds, err := bn.Queries.GetTourNotificationChannels(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range guilds {
+			config := GuildNotificationConfig{
+				ChannelID: snowflake.ID(g.TourNotificationsChannel.Int64),
+			}
+			if g.TourNotificationsRole.Valid {
+				roleID := snowflake.ID(g.TourNotificationsRole.Int64)
+				config.RoleID = &roleID
+			}
+			configs = append(configs, config)
+		}
 	}
 
 	return configs, nil
@@ -195,6 +212,22 @@ func (bn *BatchNotifier) sendToGuild(guild GuildNotificationConfig) error {
 
 		case NotificationTypeSTMPD:
 			// Send each release as a separate embed message with buttons
+			if item.Embed != nil {
+				builder := discord.NewMessageCreateBuilder().
+					SetEmbeds(*item.Embed)
+
+				// Add components if they exist
+				if len(item.Components) > 0 {
+					for _, component := range item.Components {
+						builder.AddContainerComponents(component)
+					}
+				}
+
+				msg, err = bn.RestClient.CreateMessage(guild.ChannelID, builder.Build())
+			}
+
+		case NotificationTypeTour:
+			// Send each tour show as a separate embed message with ticket button
 			if item.Embed != nil {
 				builder := discord.NewMessageCreateBuilder().
 					SetEmbeds(*item.Embed)
@@ -259,6 +292,12 @@ func (bn *BatchNotifier) buildHeaderContent(roleID *snowflake.ID) string {
 			return rolePing + "New release on STMPD RCRDS!"
 		}
 		return fmt.Sprintf("%s%d new releases on STMPD RCRDS!", rolePing, itemCount)
+
+	case NotificationTypeTour:
+		if itemCount == 1 {
+			return rolePing + "New tour date announced! 🎤"
+		}
+		return fmt.Sprintf("%s%d new tour dates announced! 🎤", rolePing, itemCount)
 
 	default:
 		return rolePing + "New notification"

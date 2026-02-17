@@ -130,7 +130,7 @@ type RedditToken struct {
 	TokenType   string    `json:"token_type"`
 	ExpiresIn   int       `json:"expires_in"`
 	Scope       string    `json:"scope"`
-	ExpiresAt time.Time `json:"-"`
+	ExpiresAt   time.Time `json:"-"`
 }
 
 type VideoData struct {
@@ -154,6 +154,15 @@ type UniqueSong struct {
 	Name        string `json:"name"`
 	Artists     string `json:"artists"`
 	ReleaseYear int32  `json:"release_year"`
+}
+
+type TourShow struct {
+	ShowName  string    `json:"show_name"`
+	City      string    `json:"city"`
+	Country   string    `json:"country"`
+	Venue     string    `json:"venue"`
+	ShowDate  time.Time `json:"show_date"`
+	TicketURL string    `json:"ticket_url,omitempty"`
 }
 
 // UserLevelData represents the user's level data.

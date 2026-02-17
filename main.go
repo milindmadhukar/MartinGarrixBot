@@ -88,6 +88,7 @@ func main() {
 				go handlers.GetRedditPosts(b, time.NewTicker(3*time.Minute))
 				go handlers.GetYoutubeVideos(b, time.NewTicker(3*time.Minute))
 				go handlers.GetAllStmpdReleases(b, time.NewTicker(15*time.Minute))
+				go handlers.GetAllTourShows(b, time.NewTicker(10*time.Minute))
 				return
 			}
 			time.Sleep(1 * time.Second)

@@ -126,7 +126,7 @@ func (b *MartinGarrixBot) SetupDB() error {
 
 func (b *MartinGarrixBot) SetupColly() {
 	b.Collector = colly.NewCollector(
-		colly.AllowedDomains("stmpdrcrds.com"),
+		colly.AllowedDomains("stmpdrcrds.com", "martingarrix.com"),
 		colly.Async(true),
 		colly.AllowURLRevisit(),
 	)
