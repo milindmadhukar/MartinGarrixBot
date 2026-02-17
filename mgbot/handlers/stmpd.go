@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/snowflake/v2"
 	"github.com/gocolly/colly/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
@@ -95,6 +94,9 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		slices.Reverse(releases)
 		releases = releases[len(releases)-5:]
 
+		// Create a batch notifier for this cycle
+		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeSTMPD)
+
 		for _, release := range releases {
 
 			// PERF: Too many queries. Can I reduce them?
@@ -162,43 +164,24 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				SetFooter(fmt.Sprintf("Release Year: %d", release.ReleaseYear), "").
 				Build()
 
-			stmpdNotificationsGuilds, err := b.Queries.GetSTMPDNofiticationChannels(context.Background())
-			if err != nil {
-				slog.Error("Failed to get stmpd notification channels", slog.Any("err", err))
-				continue
+			// Prepare the components for this song
+			var components []discord.ContainerComponent
+			if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
+				components = []discord.ContainerComponent{
+					discord.NewActionRow(utils.GetSongButtons(song)...),
+				}
 			}
 
-			for _, guild := range stmpdNotificationsGuilds {
+			// Add this release to the batch
+			notifier.AddItem(utils.NotificationItem{
+				Embed:      &announcementEmbed,
+				Components: components,
+			})
+		}
 
-				var content string
-
-				if guild.StmpdNotificationsRole.Valid {
-					content = fmt.Sprintf("<@&%d>, New release on STMPD RCRDS!", guild.StmpdNotificationsRole.Int64)
-				} else {
-					content = "New release on STMPD RCRDS!"
-				}
-
-				stmpdNotificationMessage := discord.NewMessageCreateBuilder().
-					SetContent(content).
-					SetEmbeds(announcementEmbed)
-
-				if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
-					stmpdNotificationMessage = stmpdNotificationMessage.AddActionRow(
-						utils.GetSongButtons(song)...,
-					)
-				}
-
-				_, err = b.Client.Rest().CreateMessage(
-					snowflake.ID(guild.StmpdNotificationsChannel.Int64),
-					stmpdNotificationMessage.Build())
-
-				if err != nil {
-					slog.Error("Failed to send STMPDRCRDS release on the announcement channel", slog.Any("err", err))
-					continue
-				}
-
-				time.Sleep(1 * time.Second)
-			}
+		// Send all batched notifications once
+		if err := notifier.Send(); err != nil {
+			slog.Error("Failed to send batched STMPD notifications", slog.Any("err", err))
 		}
 	}
 }

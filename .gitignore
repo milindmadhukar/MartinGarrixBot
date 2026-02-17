@@ -4,3 +4,4 @@ config.toml
 mgbot-google-service.json
 config.docker.toml
 .env
+/tmp
