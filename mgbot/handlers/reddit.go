@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/snowflake/v2"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
@@ -86,6 +85,10 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 
 	for ; ; <-ticker.C {
 		slog.Info("Running reddit post fetcher")
+
+		// Create a batch notifier for this cycle
+		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeReddit)
+
 		req, err := http.NewRequest("GET", "https://oauth.reddit.com"+endpoint, nil)
 		req.Header.Set("User-Agent", "MartinGarrixBot")
 		// Access token
@@ -100,6 +103,7 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			slog.Error("Failed to fetch reddit posts", slog.Any("err", err))
 			continue
 		}
+
 		defer resp.Body.Close()
 
 		// Read the body into a byte slice for potential debugging
@@ -108,10 +112,6 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			slog.Error("Failed to read response body", slog.Any("err", err))
 			continue
 		}
-
-		fmt.Println("Reddit response status code:", resp.StatusCode)
-		// body
-		fmt.Println("Reddit response body:", string(bodyBytes))
 
 		var data utils.RedditResponse
 		if err = json.Unmarshal(bodyBytes, &data); err != nil {
@@ -128,11 +128,14 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			posts = posts[:5]
 		}
 		slices.Reverse(posts)
+
 		for _, post := range posts {
 			err := b.Queries.InsertRedditPost(context.Background(), post.Data.ID)
 			if err != nil {
+				// Post already exists, skip it
 				continue
 			}
+
 			redditPostEmbed := discord.NewEmbedBuilder().
 				SetTitle(html.UnescapeString(utils.CutString(post.Data.Title, 256))).
 				SetURL("https://www.reddit.com"+post.Data.Permalink).
@@ -141,37 +144,23 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				SetFooter(fmt.Sprintf("Author u/%s on Subreddit %s", post.Data.Author, post.Data.SubredditNamePrefixed), "").
 				// TODO: Change to reddit orange
 				SetColor(utils.ColorSuccess)
+
 			if imageRegex.MatchString(post.Data.URL) {
 				redditPostEmbed.Image = &discord.EmbedResource{
 					URL: post.Data.URL,
 				}
 			}
-			redditNotificationsGuilds, err := b.Queries.GetRedditNotificationChannels(context.Background())
-			if err != nil {
-				slog.Error("Failed to get reddit notification channels", slog.Any("err", err))
-				continue
-			}
-			for _, guild := range redditNotificationsGuilds {
-				var content string
-				if guild.RedditNotificationsRole.Valid {
-					content = fmt.Sprintf("<@&%d>, New post on %s", guild.RedditNotificationsRole.Int64, post.Data.SubredditNamePrefixed)
-				} else {
-					content = fmt.Sprintf("New post on %s", post.Data.SubredditNamePrefixed)
-				}
-				_, err = b.Client.Rest().CreateMessage(
-					snowflake.ID(guild.RedditNotificationsChannel.Int64),
-					discord.NewMessageCreateBuilder().
-						// TODO: Ping the reddit role
-						SetContent(content).
-						SetEmbeds(redditPostEmbed.Build()).
-						Build())
-				// TODO: Add channel ID to the log
-				if err != nil {
-					slog.Error("Failed to send reddit post", slog.Any("err", err))
-					continue
-				}
-				time.Sleep(1 * time.Second)
-			}
+
+			// Add this post to the batch
+			embed := redditPostEmbed.Build()
+			notifier.AddItem(utils.NotificationItem{
+				Embed: &embed,
+			})
+		}
+
+		// Send all batched notifications once
+		if err := notifier.Send(); err != nil {
+			slog.Error("Failed to send batched reddit notifications", slog.Any("err", err))
 		}
 	}
 } // TODO: Maybe some logic to restart if it returns / fails? / panics
