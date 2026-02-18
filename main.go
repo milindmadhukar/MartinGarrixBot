@@ -14,6 +14,7 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/commands"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/handlers"
+	"github.com/milindmadhukar/MartinGarrixBot/mgbot/listeners"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
 )
@@ -21,9 +22,7 @@ import (
 var Version string
 var Commit string
 
-// TODO: Join leave logs
 // TODO Member welcome message
-// Message edit / delete logs?
 // Martin Garrix radio automation
 // Info and server info commands
 
@@ -72,7 +71,11 @@ func main() {
 
 	if err = b.SetupBot(h,
 		bot.NewListenerFunc(b.OnReady),
-		handlers.MessageHandler(b),
+		listeners.MessageCreateListener(b),
+		listeners.GuildMemberJoinListener(b),
+		listeners.GuildMemberLeaveListener(b),
+		listeners.MessageDeleteListener(b),
+		listeners.MessageUpdateListener(b),
 		// TODO: Setup more handlers here, like the sing along handler
 	); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
