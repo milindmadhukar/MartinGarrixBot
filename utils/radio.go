@@ -73,9 +73,12 @@ func (rm *RadioManager) AddSkipVote(guildID, userID snowflake.ID, totalMembers i
 	rm.SkipVotes[guildID].TotalMembers = totalMembers
 
 	currentVotes := len(rm.SkipVotes[guildID].Voters)
-	votesNeeded := (totalMembers / 2) + 1 // > 50%
+	// For >50% majority, we need: currentVotes / totalMembers > 0.5
+	// Which is: currentVotes * 2 > totalMembers
+	votesNeeded := (totalMembers / 2) + 1 // Minimum votes needed for display
+	shouldSkip := currentVotes*2 > totalMembers
 
-	return votesNeeded, currentVotes, currentVotes >= votesNeeded
+	return votesNeeded, currentVotes, shouldSkip
 }
 
 // GetSkipVoteStatus returns the current skip vote status
