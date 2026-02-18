@@ -28,6 +28,33 @@ func (q *Queries) DoesSongExist(ctx context.Context, arg DoesSongExistParams) (b
 	return exists, err
 }
 
+const getRandomSongForRadio = `-- name: GetRandomSongForRadio :one
+SELECT name, artists, thumbnail_url, youtube_url
+FROM songs
+WHERE youtube_url IS NOT NULL
+ORDER BY RANDOM()
+LIMIT 1
+`
+
+type GetRandomSongForRadioRow struct {
+	Name         string      `json:"name"`
+	Artists      string      `json:"artists"`
+	ThumbnailUrl pgtype.Text `json:"thumbnailUrl"`
+	YoutubeUrl   pgtype.Text `json:"youtubeUrl"`
+}
+
+func (q *Queries) GetRandomSongForRadio(ctx context.Context) (GetRandomSongForRadioRow, error) {
+	row := q.db.QueryRow(ctx, getRandomSongForRadio)
+	var i GetRandomSongForRadioRow
+	err := row.Scan(
+		&i.Name,
+		&i.Artists,
+		&i.ThumbnailUrl,
+		&i.YoutubeUrl,
+	)
+	return i, err
+}
+
 const getRandomSongNames = `-- name: GetRandomSongNames :many
 SELECT name, artists, release_year
 FROM songs

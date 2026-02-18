@@ -20,6 +20,7 @@ var Commands = []discord.ApplicationCommandCreate{
 	leaderboard,
 	links,
 	rank,
+	radio,
 	//whois,
 	version,
 }
@@ -43,6 +44,8 @@ func SetupHandlers(b *mgbot.MartinGarrixBot) *handler.Mux {
 	rootHandler.Autocomplete("/links", LinksAutocompleteHandler(b))
 
 	rootHandler.Command("/version", VersionHandler(b))
+
+	rootHandler.Command("/radio", RadioHandler(b))
 
 	fun := handler.New()
 	fun.Command("/8ball", EightBallHandler)

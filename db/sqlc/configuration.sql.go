@@ -11,6 +11,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getRadioVoiceChannels = `-- name: GetRadioVoiceChannels :many
+SELECT guild_id, radio_voice_channel
+FROM guild_configurations
+WHERE radio_voice_channel IS NOT NULL
+`
+
+type GetRadioVoiceChannelsRow struct {
+	GuildID           int64       `json:"guildId"`
+	RadioVoiceChannel pgtype.Int8 `json:"radioVoiceChannel"`
+}
+
+func (q *Queries) GetRadioVoiceChannels(ctx context.Context) ([]GetRadioVoiceChannelsRow, error) {
+	rows, err := q.db.Query(ctx, getRadioVoiceChannels)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRadioVoiceChannelsRow
+	for rows.Next() {
+		var i GetRadioVoiceChannelsRow
+		if err := rows.Scan(&i.GuildID, &i.RadioVoiceChannel); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRedditNotificationChannels = `-- name: GetRedditNotificationChannels :many
 SELECT reddit_notifications_channel, reddit_notifications_role 
 FROM guild_configurations

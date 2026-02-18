@@ -51,3 +51,10 @@ RETURNING *;
 
 -- name: DoesSongExist :one
 SELECT EXISTS(SELECT 1 FROM songs WHERE name = $1 AND artists = $2 AND release_year = $3);
+
+-- name: GetRandomSongForRadio :one
+SELECT name, artists, thumbnail_url, youtube_url
+FROM songs
+WHERE youtube_url IS NOT NULL
+ORDER BY RANDOM()
+LIMIT 1;

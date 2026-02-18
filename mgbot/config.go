@@ -23,20 +23,21 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	Log LogConfig      `toml:"log"`
-	Bot BotConfig      `toml:"bot"`
-	DB  DatabaseConfig `toml:"database"`
+	Log      LogConfig      `toml:"log"`
+	Bot      BotConfig      `toml:"bot"`
+	Lavalink LavalinkConfig `toml:"lavalink"`
+	DB       DatabaseConfig `toml:"database"`
 }
 
 type BotConfig struct {
-	DevGuilds         []snowflake.ID `toml:"dev_guilds"`
-	Token             string         `toml:"token"`
-	YoutubeAPIKey     string         `toml:"youtube_api_key"`
-	GoogleServiceFile string         `toml:"google_service_file"`
-	RedditClientID    string         `toml:"reddit_client_id"`
+	DevGuilds          []snowflake.ID `toml:"dev_guilds"`
+	Token              string         `toml:"token"`
+	YoutubeAPIKey      string         `toml:"youtube_api_key"`
+	GoogleServiceFile  string         `toml:"google_service_file"`
+	RedditClientID     string         `toml:"reddit_client_id"`
 	RedditClientSecret string         `toml:"reddit_client_secret"`
-	RedditBotUsername string         `toml:"reddit_bot_username"`
-	RedditBotPassword string         `toml:"reddit_bot_password"`
+	RedditBotUsername  string         `toml:"reddit_bot_username"`
+	RedditBotPassword  string         `toml:"reddit_bot_password"`
 }
 
 type LogConfig struct {
@@ -47,6 +48,11 @@ type LogConfig struct {
 	MaxSize    int        `toml:"max_size"`
 	MaxAge     int        `toml:"max_age"`
 	MaxBackups int        `toml:"max_backups"`
+}
+
+type LavalinkConfig struct {
+	URL      string `toml:"url"`
+	Password string `toml:"password"`
 }
 
 type DatabaseConfig struct {

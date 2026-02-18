@@ -15,6 +15,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
+	"github.com/disgoorg/disgolink/v3/disgolink"
 	"github.com/disgoorg/paginator"
 	"github.com/gocolly/colly/v2"
 	"github.com/golang-migrate/migrate/v4"
@@ -45,20 +46,20 @@ type MartinGarrixBot struct {
 	Commit    string
 	IsReady   bool
 
-	// TODO: Add the db here
 	DB             *pgxpool.Pool
 	Queries        *db.Queries
 	YoutubeService *youtube.Service
 
 	Collector *colly.Collector
 
-	RedditToken utils.RedditToken
+	RedditToken  utils.RedditToken
+	RadioManager *utils.RadioManager
 }
 
 func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
 	client, err := disgo.New(b.Cfg.Bot.Token,
-		bot.WithGatewayConfigOpts(gateway.WithIntents(gateway.IntentGuilds, gateway.IntentGuildMessages, gateway.IntentMessageContent, gateway.IntentGuildMembers)),
-		bot.WithCacheConfigOpts(cache.WithCaches(cache.FlagGuilds, cache.FlagMessages)),
+		bot.WithGatewayConfigOpts(gateway.WithIntents(gateway.IntentGuilds, gateway.IntentGuildMessages, gateway.IntentMessageContent, gateway.IntentGuildMembers, gateway.IntentGuildVoiceStates)),
+		bot.WithCacheConfigOpts(cache.WithCaches(cache.FlagGuilds, cache.FlagMessages, cache.FlagVoiceStates)),
 		bot.WithEventListeners(b.Paginator),
 		bot.WithEventListeners(listeners...),
 	)
@@ -182,4 +183,22 @@ func SetupLogger(cfg LogConfig) {
 	}
 
 	slog.SetDefault(slog.New(sHandler))
+}
+
+// SetupLavalink initializes the Lavalink client and connects to the node
+func (b *MartinGarrixBot) SetupLavalink(ctx context.Context) error {
+	b.RadioManager = utils.NewRadioManager(b.Client.ApplicationID())
+
+	// Connect to Lavalink with retry logic
+	if err := b.RadioManager.ConnectToLavalink(ctx, b.Cfg.Lavalink.URL, b.Cfg.Lavalink.Password); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// RegisterLavalinkListeners registers Lavalink event listeners
+// This should be called from main.go after SetupLavalink to avoid import cycles
+func (b *MartinGarrixBot) RegisterLavalinkListeners(eventListeners ...disgolink.EventListener) {
+	b.RadioManager.Client.AddListeners(eventListeners...)
 }
