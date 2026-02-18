@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/rest"
 	"github.com/disgoorg/snowflake/v2"
+	"github.com/jackc/pgx/v5"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 )
 
@@ -102,6 +104,10 @@ func (bn *BatchNotifier) getGuildConfigs() ([]GuildNotificationConfig, error) {
 	case NotificationTypeYoutube:
 		guilds, err := bn.Queries.GetYoutubeNotifactionChannels(context.Background())
 		if err != nil {
+			// If no guild configs exist, return empty list silently
+			if errors.Is(err, pgx.ErrNoRows) {
+				return configs, nil
+			}
 			return nil, err
 		}
 		for _, g := range guilds {
@@ -118,6 +124,10 @@ func (bn *BatchNotifier) getGuildConfigs() ([]GuildNotificationConfig, error) {
 	case NotificationTypeReddit:
 		guilds, err := bn.Queries.GetRedditNotificationChannels(context.Background())
 		if err != nil {
+			// If no guild configs exist, return empty list silently
+			if errors.Is(err, pgx.ErrNoRows) {
+				return configs, nil
+			}
 			return nil, err
 		}
 		for _, g := range guilds {
@@ -134,6 +144,10 @@ func (bn *BatchNotifier) getGuildConfigs() ([]GuildNotificationConfig, error) {
 	case NotificationTypeSTMPD:
 		guilds, err := bn.Queries.GetSTMPDNofiticationChannels(context.Background())
 		if err != nil {
+			// If no guild configs exist, return empty list silently
+			if errors.Is(err, pgx.ErrNoRows) {
+				return configs, nil
+			}
 			return nil, err
 		}
 		for _, g := range guilds {
@@ -150,6 +164,10 @@ func (bn *BatchNotifier) getGuildConfigs() ([]GuildNotificationConfig, error) {
 	case NotificationTypeTour:
 		guilds, err := bn.Queries.GetTourNotificationChannels(context.Background())
 		if err != nil {
+			// If no guild configs exist, return empty list silently
+			if errors.Is(err, pgx.ErrNoRows) {
+				return configs, nil
+			}
 			return nil, err
 		}
 		for _, g := range guilds {
@@ -169,7 +187,14 @@ func (bn *BatchNotifier) getGuildConfigs() ([]GuildNotificationConfig, error) {
 
 // sendToGuild sends the batched notifications to a specific guild
 func (bn *BatchNotifier) sendToGuild(guild GuildNotificationConfig) error {
-	// First, send the ping message with the count
+	itemCount := len(bn.Items)
+
+	// If there's only one item, combine the ping with the content in a single message
+	if itemCount == 1 {
+		return bn.sendSingleItem(guild)
+	}
+
+	// For multiple items, send ping first, then separate messages
 	headerContent := bn.buildHeaderContent(guild.RoleID)
 	headerMsg, err := bn.RestClient.CreateMessage(guild.ChannelID,
 		discord.NewMessageCreateBuilder().
@@ -260,6 +285,98 @@ func (bn *BatchNotifier) sendToGuild(guild GuildNotificationConfig) error {
 
 		// Small delay between messages
 		time.Sleep(500 * time.Millisecond)
+	}
+
+	return nil
+}
+
+// sendSingleItem sends a single notification item with the ping combined
+func (bn *BatchNotifier) sendSingleItem(guild GuildNotificationConfig) error {
+	if len(bn.Items) != 1 {
+		return fmt.Errorf("sendSingleItem called with %d items", len(bn.Items))
+	}
+
+	item := bn.Items[0]
+
+	// Build role ping prefix
+	rolePing := ""
+	if guild.RoleID != nil {
+		rolePing = fmt.Sprintf("<@&%d>, ", *guild.RoleID)
+	}
+
+	var msg *discord.Message
+	var err error
+
+	switch bn.NotificationType {
+	case NotificationTypeYoutube:
+		// Combine ping with video content
+		content := rolePing + item.Content
+		msg, err = bn.RestClient.CreateMessage(guild.ChannelID,
+			discord.NewMessageCreateBuilder().
+				SetContent(content).
+				Build())
+
+	case NotificationTypeReddit:
+		// Send embed with ping as content
+		if item.Embed != nil {
+			content := rolePing + "New post on r/Martingarrix"
+			msg, err = bn.RestClient.CreateMessage(guild.ChannelID,
+				discord.NewMessageCreateBuilder().
+					SetContent(content).
+					SetEmbeds(*item.Embed).
+					Build())
+		}
+
+	case NotificationTypeSTMPD:
+		// Send embed with buttons and ping as content
+		if item.Embed != nil {
+			content := rolePing + "New release on STMPD RCRDS!"
+			builder := discord.NewMessageCreateBuilder().
+				SetContent(content).
+				SetEmbeds(*item.Embed)
+
+			// Add components if they exist
+			if len(item.Components) > 0 {
+				for _, component := range item.Components {
+					builder.AddContainerComponents(component)
+				}
+			}
+
+			msg, err = bn.RestClient.CreateMessage(guild.ChannelID, builder.Build())
+		}
+
+	case NotificationTypeTour:
+		// Send embed with buttons and ping as content
+		if item.Embed != nil {
+			content := rolePing + "New tour date announced!"
+			builder := discord.NewMessageCreateBuilder().
+				SetContent(content).
+				SetEmbeds(*item.Embed)
+
+			// Add components if they exist
+			if len(item.Components) > 0 {
+				for _, component := range item.Components {
+					builder.AddContainerComponents(component)
+				}
+			}
+
+			msg, err = bn.RestClient.CreateMessage(guild.ChannelID, builder.Build())
+		}
+	}
+
+	if err != nil {
+		slog.Error("Failed to send single notification item",
+			slog.String("type", string(bn.NotificationType)),
+			slog.Uint64("channel_id", uint64(guild.ChannelID)),
+			slog.Any("err", err))
+		return err
+	}
+
+	if msg != nil {
+		slog.Debug("Sent single notification item",
+			slog.String("type", string(bn.NotificationType)),
+			slog.Uint64("channel_id", uint64(guild.ChannelID)),
+			slog.Uint64("message_id", uint64(msg.ID)))
 	}
 
 	return nil
