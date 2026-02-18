@@ -25,6 +25,12 @@ yt_api_key = "yt_api_key_here"
 # google service json file path
 google_service_file = "/path/to/servicefile.json"
 
+[lavalink]
+# lavalink server url
+url = "http://localhost:2333"
+# lavalink password
+password = "youshallnotpass"
+
 [database]
 # db host
 host = "localhost"

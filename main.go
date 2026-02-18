@@ -11,6 +11,7 @@ import (
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/handler"
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/commands"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot/handlers"
@@ -71,18 +72,34 @@ func main() {
 
 	if err = b.SetupBot(h,
 		bot.NewListenerFunc(b.OnReady),
+		listeners.VoiceStateUpdateListener(b),
+		listeners.VoiceServerUpdateListener(b),
 		listeners.MessageCreateListener(b),
 		listeners.GuildMemberJoinListener(b),
 		listeners.GuildMemberLeaveListener(b),
 		listeners.MessageDeleteListener(b),
 		listeners.MessageUpdateListener(b),
-		// TODO: Setup more handlers here, like the sing along handler
 	); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
 		os.Exit(-1)
 	}
 
 	b.SetupColly()
+
+	// Setup Lavalink (non-blocking, warnings only)
+	if err = b.SetupLavalink(context.Background()); err != nil {
+		slog.Warn("Failed to setup Lavalink - radio features will be disabled until connection is established", slog.Any("err", err))
+		slog.Warn("You can use '/radio start' command to retry connection later")
+	} else {
+		// Register Lavalink event listeners only if connection succeeded
+		b.RegisterLavalinkListeners(
+			listeners.LavalinkTrackStartListener(b),
+			listeners.LavalinkTrackEndListener(b),
+			listeners.LavalinkTrackExceptionListener(b),
+			listeners.LavalinkTrackStuckListener(b),
+			listeners.LavalinkWebSocketClosedListener(b),
+		)
+	}
 
 	// TODO: Seems out of place, place somwehere more appropriate
 	go func() {
@@ -92,6 +109,34 @@ func main() {
 				go handlers.GetYoutubeVideos(b, time.NewTicker(3*time.Minute))
 				go handlers.GetAllStmpdReleases(b, time.NewTicker(15*time.Minute))
 				go handlers.GetAllTourShows(b, time.NewTicker(10*time.Minute))
+
+				// Auto-start radio in all configured guilds (only if Lavalink is connected)
+				go func() {
+					time.Sleep(5 * time.Second) // Wait for everything to be ready
+
+					// Only auto-start if Lavalink is connected
+					if b.RadioManager == nil || !b.RadioManager.IsLavalinkConnected() {
+						slog.Info("Lavalink not connected - skipping auto-start of radio")
+						return
+					}
+
+					radioConfigs, err := b.Queries.GetRadioVoiceChannels(context.Background())
+					if err != nil {
+						slog.Error("Failed to get radio configurations", slog.Any("err", err))
+						return
+					}
+
+					for _, config := range radioConfigs {
+						if config.RadioVoiceChannel.Valid {
+							guildID := snowflake.ID(config.GuildID)
+							slog.Info("Auto-starting radio", slog.String("guild_id", guildID.String()))
+							if err := b.StartRadioInGuild(context.Background(), guildID); err != nil {
+								slog.Error("Failed to start radio", slog.Any("err", err), slog.String("guild_id", guildID.String()))
+							}
+						}
+					}
+				}()
+
 				return
 			}
 			time.Sleep(1 * time.Second)

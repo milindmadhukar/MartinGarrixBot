@@ -12,3 +12,8 @@ WHERE youtube_notifications_channel IS NOT NULL;
 SELECT stmpd_notifications_channel, stmpd_notifications_role
 FROM guild_configurations
 WHERE stmpd_notifications_channel IS NOT NULL;
+
+-- name: GetRadioVoiceChannels :many
+SELECT guild_id, radio_voice_channel
+FROM guild_configurations
+WHERE radio_voice_channel IS NOT NULL;
