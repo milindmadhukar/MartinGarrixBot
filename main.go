@@ -175,4 +175,13 @@ func main() {
 	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)
 	<-s
 	slog.Info("Shutting down bot...")
+
+	// Graceful shutdown: disconnect from all radio channels and clear status
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	if b.RadioManager != nil {
+		slog.Info("Disconnecting from all radio channels...")
+		b.DisconnectAllRadioChannels(shutdownCtx)
+	}
 }

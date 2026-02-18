@@ -1,8 +1,23 @@
 services:
+  lavalink:
+    image: ghcr.io/lavalink-devs/lavalink:4-alpine
+    container_name: martingarrix-lavalink
+    restart: unless-stopped
+    environment:
+      # set Java options here (6GB heap size)
+      - _JAVA_OPTIONS=-Xmx6G
+    volumes:
+      - ./lavalink/application.yml:/opt/Lavalink/application.yml
+      - ./lavalink/plugins/:/opt/Lavalink/plugins/
+    networks:
+      - martingarrix
+    expose:
+      # lavalink exposes port 2333 to connect to for other containers
+      - 2333
+
   bot:
     image: ghcr.io/milindmadhukar/martingarrixbot:master
     container_name: martingarrixbot
-    network_mode: "host"
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     volumes:
@@ -11,3 +26,11 @@ services:
       - ./garrixbot.log:/bot/garrixbot.log
     command: -config=/var/lib/config.toml --sync-commands=true
     restart: unless-stopped
+    networks:
+      - martingarrix
+    depends_on:
+      - lavalink
+
+networks:
+  martingarrix:
+    name: martingarrix

@@ -59,7 +59,7 @@ type MartinGarrixBot struct {
 func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
 	client, err := disgo.New(b.Cfg.Bot.Token,
 		bot.WithGatewayConfigOpts(gateway.WithIntents(gateway.IntentGuilds, gateway.IntentGuildMessages, gateway.IntentMessageContent, gateway.IntentGuildMembers, gateway.IntentGuildVoiceStates)),
-		bot.WithCacheConfigOpts(cache.WithCaches(cache.FlagGuilds, cache.FlagMessages, cache.FlagVoiceStates)),
+		bot.WithCacheConfigOpts(cache.WithCaches(cache.FlagGuilds, cache.FlagMessages, cache.FlagVoiceStates, cache.FlagMembers)),
 		bot.WithEventListeners(b.Paginator),
 		bot.WithEventListeners(listeners...),
 	)
@@ -189,10 +189,21 @@ func SetupLogger(cfg LogConfig) {
 func (b *MartinGarrixBot) SetupLavalink(ctx context.Context) error {
 	b.RadioManager = utils.NewRadioManager(b.Client.ApplicationID())
 
+	// Set up disconnect callback
+	b.RadioManager.OnLavalinkDisconnect = func() {
+		slog.Error("Lavalink permanently disconnected - disconnecting from all radio channels")
+		disconnectCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		b.DisconnectAllRadioChannels(disconnectCtx)
+	}
+
 	// Connect to Lavalink with retry logic
 	if err := b.RadioManager.ConnectToLavalink(ctx, b.Cfg.Lavalink.URL, b.Cfg.Lavalink.Password); err != nil {
 		return err
 	}
+
+	// Start monitoring Lavalink connection (max 10 reconnect attempts = ~50 seconds)
+	go b.RadioManager.MonitorLavalinkConnection(10)
 
 	return nil
 }

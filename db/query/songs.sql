@@ -1,6 +1,9 @@
 -- name: GetSong :one
 SELECT * FROM songs WHERE name = $1 AND artists = $2 AND release_year = $3;
 
+-- name: GetSongByID :one
+SELECT * FROM songs WHERE id = $1;
+
 -- name: GetSongsLike :many
 SELECT name, artists, release_year
 FROM songs
@@ -53,7 +56,7 @@ RETURNING *;
 SELECT EXISTS(SELECT 1 FROM songs WHERE name = $1 AND artists = $2 AND release_year = $3);
 
 -- name: GetRandomSongForRadio :one
-SELECT name, artists, thumbnail_url, youtube_url
+SELECT id, name, artists, thumbnail_url, youtube_url
 FROM songs
 WHERE youtube_url IS NOT NULL
 ORDER BY RANDOM()

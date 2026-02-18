@@ -5,3 +5,4 @@ mgbot-google-service.json
 config.docker.toml
 .env
 /tmp
+/lavalink/logs/

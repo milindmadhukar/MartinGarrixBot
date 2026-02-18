@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/disgoorg/snowflake/v2"
+	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
 
 // PlayNextRadioSong fetches and plays a random song from the database
@@ -25,7 +26,7 @@ func (b *MartinGarrixBot) PlayNextRadioSong(guildID snowflake.ID) {
 	query := fmt.Sprintf("ytsearch:%s - %s", song.Artists, song.Name)
 
 	// Play the track using RadioManager helper (stores track info and plays)
-	if err := b.RadioManager.PlayTrackWithInfo(ctx, guildID, query, song.Artists, song.Name); err != nil {
+	if err := b.RadioManager.PlayTrackWithInfo(ctx, guildID, query, song.ID, song.Artists, song.Name); err != nil {
 		slog.Error("Failed to play track", slog.Any("err", err), slog.String("artist", song.Artists), slog.String("song", song.Name))
 		// Try again with next song
 		time.Sleep(2 * time.Second)
@@ -111,6 +112,13 @@ func (b *MartinGarrixBot) StartRadioInGuild(ctx context.Context, guildID snowfla
 	// Wait for voice connection to establish
 	time.Sleep(2 * time.Second)
 
+	// Set initial voice channel status
+	statusCtx, statusCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer statusCancel()
+	if err := utils.UpdateVoiceChannelStatus(statusCtx, b.Client, b.Cfg.Bot.Token, radioChannelID, "Loading..."); err != nil {
+		slog.Error("Failed to set initial voice channel status", slog.Any("err", err))
+	}
+
 	// Start playing
 	b.PlayNextRadioSong(guildID)
 
@@ -136,4 +144,37 @@ func (b *MartinGarrixBot) StopRadioInGuild(ctx context.Context, guildID snowflak
 
 	slog.Info("Stopped radio", slog.String("guild_id", guildID.String()))
 	return nil
+}
+
+// DisconnectAllRadioChannels disconnects the bot from all active radio channels
+func (b *MartinGarrixBot) DisconnectAllRadioChannels(ctx context.Context) {
+	if b.RadioManager == nil {
+		return
+	}
+
+	// Get all active guilds
+	activeGuilds := b.RadioManager.GetActiveGuilds()
+
+	for _, guildID := range activeGuilds {
+		slog.Info("Disconnecting from radio channel due to Lavalink failure", slog.String("guild_id", guildID.String()))
+
+		// Get the channel ID from player before disconnecting
+		player := b.RadioManager.Client.ExistingPlayer(guildID)
+		if player != nil {
+			if channelID := player.ChannelID(); channelID != nil {
+				// Clear voice channel status
+				if err := utils.UpdateVoiceChannelStatus(ctx, b.Client, b.Cfg.Bot.Token, *channelID, ""); err != nil {
+					slog.Error("Failed to clear voice channel status", slog.Any("err", err))
+				}
+			}
+		}
+
+		// Disconnect from voice channel
+		if err := b.Client.UpdateVoiceState(ctx, guildID, nil, false, false); err != nil {
+			slog.Error("Failed to disconnect from voice channel", slog.Any("err", err), slog.String("guild_id", guildID.String()))
+		}
+	}
+
+	// Stop all radios in RadioManager
+	b.RadioManager.StopAllRadios(ctx)
 }
