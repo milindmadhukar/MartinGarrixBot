@@ -24,6 +24,9 @@ func LavalinkTrackStartListener(b *mgbot.MartinGarrixBot) disgolink.EventListene
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
+		// Reset skip votes for new track
+		b.RadioManager.ResetSkipVotes(event.GuildID())
+
 		// Get the voice channel ID from the player
 		channelID := player.ChannelID()
 		if channelID == nil {

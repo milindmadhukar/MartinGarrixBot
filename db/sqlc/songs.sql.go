@@ -29,7 +29,7 @@ func (q *Queries) DoesSongExist(ctx context.Context, arg DoesSongExistParams) (b
 }
 
 const getRandomSongForRadio = `-- name: GetRandomSongForRadio :one
-SELECT name, artists, thumbnail_url, youtube_url
+SELECT id, name, artists, thumbnail_url, youtube_url
 FROM songs
 WHERE youtube_url IS NOT NULL
 ORDER BY RANDOM()
@@ -37,6 +37,7 @@ LIMIT 1
 `
 
 type GetRandomSongForRadioRow struct {
+	ID           int64       `json:"id"`
 	Name         string      `json:"name"`
 	Artists      string      `json:"artists"`
 	ThumbnailUrl pgtype.Text `json:"thumbnailUrl"`
@@ -47,6 +48,7 @@ func (q *Queries) GetRandomSongForRadio(ctx context.Context) (GetRandomSongForRa
 	row := q.db.QueryRow(ctx, getRandomSongForRadio)
 	var i GetRandomSongForRadioRow
 	err := row.Scan(
+		&i.ID,
 		&i.Name,
 		&i.Artists,
 		&i.ThumbnailUrl,
@@ -191,6 +193,29 @@ type GetSongParams struct {
 
 func (q *Queries) GetSong(ctx context.Context, arg GetSongParams) (Song, error) {
 	row := q.db.QueryRow(ctx, getSong, arg.Name, arg.Artists, arg.ReleaseYear)
+	var i Song
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Artists,
+		&i.ReleaseYear,
+		&i.ThumbnailUrl,
+		&i.SpotifyUrl,
+		&i.AppleMusicUrl,
+		&i.YoutubeUrl,
+		&i.Lyrics,
+		&i.IsUnreleased,
+		&i.PureTitle,
+	)
+	return i, err
+}
+
+const getSongByID = `-- name: GetSongByID :one
+SELECT id, name, artists, release_year, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, pure_title FROM songs WHERE id = $1
+`
+
+func (q *Queries) GetSongByID(ctx context.Context, id int64) (Song, error) {
+	row := q.db.QueryRow(ctx, getSongByID, id)
 	var i Song
 	err := row.Scan(
 		&i.ID,

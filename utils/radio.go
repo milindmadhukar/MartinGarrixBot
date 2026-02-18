@@ -15,17 +15,27 @@ import (
 )
 
 type TrackInfo struct {
-	Artist   string
-	SongName string
+	SongID   int64  // Database song ID
+	Artist   string // For fallback/display
+	SongName string // For fallback/display
+}
+
+type SkipVote struct {
+	Voters       map[snowflake.ID]bool // User IDs who voted to skip
+	TotalMembers int                   // Total members in voice channel
 }
 
 type RadioManager struct {
-	Client        disgolink.Client
-	ActiveGuilds  map[snowflake.ID]bool
-	CurrentTracks map[snowflake.ID]TrackInfo // Store current track info per guild
-	IsConnected   bool
-	mu            sync.RWMutex
-	OnTrackChange func(guildID snowflake.ID, trackName, artist, thumbnailURL string)
+	Client               disgolink.Client
+	ActiveGuilds         map[snowflake.ID]bool
+	CurrentTracks        map[snowflake.ID]TrackInfo // Store current track info per guild
+	SkipVotes            map[snowflake.ID]*SkipVote // Store skip votes per guild
+	IsConnected          bool
+	ReconnectAttempts    int       // Track reconnection attempts
+	LastConnectAttempt   time.Time // Track last connection attempt
+	mu                   sync.RWMutex
+	OnTrackChange        func(guildID snowflake.ID, trackName, artist, thumbnailURL string)
+	OnLavalinkDisconnect func() // Callback when Lavalink disconnects permanently
 }
 
 func NewRadioManager(userID snowflake.ID) *RadioManager {
@@ -33,7 +43,57 @@ func NewRadioManager(userID snowflake.ID) *RadioManager {
 		Client:        disgolink.New(userID),
 		ActiveGuilds:  make(map[snowflake.ID]bool),
 		CurrentTracks: make(map[snowflake.ID]TrackInfo),
+		SkipVotes:     make(map[snowflake.ID]*SkipVote),
 	}
+}
+
+// ResetSkipVotes clears skip votes for a guild (call when new track starts)
+func (rm *RadioManager) ResetSkipVotes(guildID snowflake.ID) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	delete(rm.SkipVotes, guildID)
+}
+
+// AddSkipVote adds a user's vote to skip the current track
+// Returns (votesNeeded, currentVotes, shouldSkip)
+func (rm *RadioManager) AddSkipVote(guildID, userID snowflake.ID, totalMembers int) (int, int, bool) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	// Initialize skip votes for this guild if not exists
+	if rm.SkipVotes[guildID] == nil {
+		rm.SkipVotes[guildID] = &SkipVote{
+			Voters:       make(map[snowflake.ID]bool),
+			TotalMembers: totalMembers,
+		}
+	}
+
+	// Add the vote
+	rm.SkipVotes[guildID].Voters[userID] = true
+	rm.SkipVotes[guildID].TotalMembers = totalMembers
+
+	currentVotes := len(rm.SkipVotes[guildID].Voters)
+	votesNeeded := (totalMembers / 2) + 1 // > 50%
+
+	return votesNeeded, currentVotes, currentVotes >= votesNeeded
+}
+
+// GetSkipVoteStatus returns the current skip vote status
+// Returns (votesNeeded, currentVotes, hasVoted)
+func (rm *RadioManager) GetSkipVoteStatus(guildID, userID snowflake.ID, totalMembers int) (int, int, bool) {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	votesNeeded := (totalMembers / 2) + 1 // > 50%
+
+	if rm.SkipVotes[guildID] == nil {
+		return votesNeeded, 0, false
+	}
+
+	currentVotes := len(rm.SkipVotes[guildID].Voters)
+	hasVoted := rm.SkipVotes[guildID].Voters[userID]
+
+	return votesNeeded, currentVotes, hasVoted
 }
 
 func (rm *RadioManager) IsActive(guildID snowflake.ID) bool {
@@ -60,10 +120,11 @@ func (rm *RadioManager) SetLavalinkConnected(connected bool) {
 	rm.IsConnected = connected
 }
 
-func (rm *RadioManager) SetCurrentTrack(guildID snowflake.ID, artist, songName string) {
+func (rm *RadioManager) SetCurrentTrack(guildID snowflake.ID, songID int64, artist, songName string) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 	rm.CurrentTracks[guildID] = TrackInfo{
+		SongID:   songID,
 		Artist:   artist,
 		SongName: songName,
 	}
@@ -236,9 +297,9 @@ func (rm *RadioManager) StopRadioAndClearStatus(ctx context.Context, client bot.
 }
 
 // PlayTrackWithInfo plays a track and stores the artist/song info for status display
-func (rm *RadioManager) PlayTrackWithInfo(ctx context.Context, guildID snowflake.ID, query, artist, songName string) error {
+func (rm *RadioManager) PlayTrackWithInfo(ctx context.Context, guildID snowflake.ID, query string, songID int64, artist, songName string) error {
 	// Store the track info before playing
-	rm.SetCurrentTrack(guildID, artist, songName)
+	rm.SetCurrentTrack(guildID, songID, artist, songName)
 
 	// Play the track
 	if err := rm.PlayTrack(ctx, guildID, query); err != nil {
@@ -246,4 +307,106 @@ func (rm *RadioManager) PlayTrackWithInfo(ctx context.Context, guildID snowflake
 	}
 
 	return nil
+}
+
+// GetActiveGuilds returns a slice of all active guild IDs
+func (rm *RadioManager) GetActiveGuilds() []snowflake.ID {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	guilds := make([]snowflake.ID, 0, len(rm.ActiveGuilds))
+	for guildID, active := range rm.ActiveGuilds {
+		if active {
+			guilds = append(guilds, guildID)
+		}
+	}
+	return guilds
+}
+
+// StopAllRadios stops radio in all active guilds and marks them as inactive
+func (rm *RadioManager) StopAllRadios(ctx context.Context) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	for guildID, active := range rm.ActiveGuilds {
+		if active {
+			slog.Info("Stopping radio due to Lavalink disconnect", slog.String("guild_id", guildID.String()))
+
+			// Stop the player
+			player := rm.Client.ExistingPlayer(guildID)
+			if player != nil {
+				if err := player.Update(ctx, lavalink.WithNullTrack()); err != nil {
+					slog.Error("Failed to stop player", slog.Any("err", err), slog.String("guild_id", guildID.String()))
+				}
+			}
+
+			// Mark as inactive
+			rm.ActiveGuilds[guildID] = false
+		}
+	}
+}
+
+// DisconnectLavalink removes the Lavalink node and marks connection as lost
+func (rm *RadioManager) DisconnectLavalink() {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	// Remove the node to stop reconnection attempts
+	node := rm.Client.Node("main")
+	if node != nil {
+		slog.Info("Removing Lavalink node to stop reconnection attempts")
+		rm.Client.RemoveNode("main")
+	}
+
+	rm.IsConnected = false
+}
+
+// MonitorLavalinkConnection monitors the Lavalink connection and handles permanent disconnection
+// Call this after successfully connecting to Lavalink
+func (rm *RadioManager) MonitorLavalinkConnection(maxReconnectAttempts int) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	consecutiveFailures := 0
+
+	for range ticker.C {
+		node := rm.Client.Node("main")
+		if node == nil {
+			// Node was removed, stop monitoring
+			return
+		}
+
+		// Check node status
+		status := node.Status()
+
+		if status == disgolink.StatusDisconnected {
+			consecutiveFailures++
+			slog.Warn("Lavalink node disconnected",
+				slog.Int("consecutive_failures", consecutiveFailures),
+				slog.Int("max_attempts", maxReconnectAttempts))
+
+			if consecutiveFailures >= maxReconnectAttempts {
+				slog.Error("Lavalink connection failed after maximum reconnection attempts - giving up")
+
+				// Mark as disconnected
+				rm.SetLavalinkConnected(false)
+
+				// Remove the node to stop infinite reconnection attempts
+				rm.DisconnectLavalink()
+
+				// Call the disconnect callback if set
+				if rm.OnLavalinkDisconnect != nil {
+					go rm.OnLavalinkDisconnect()
+				}
+
+				return
+			}
+		} else if status == disgolink.StatusConnected {
+			// Reset failure counter if connected
+			if consecutiveFailures > 0 {
+				slog.Info("Lavalink reconnected successfully")
+				consecutiveFailures = 0
+			}
+		}
+	}
 }

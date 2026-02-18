@@ -5,6 +5,7 @@ const (
 	ColorDanger     = 0xFF0000
 	ColorSuccess    = 0x5c5fea
 	ColorWarning    = 0xFFA500
+	ColorInfo       = 0x3498db
 	TickEmoji       = "<a:tick:810462879374770186> "
 	CrossEmoji      = "<a:cross:810462920810561556>"
 	YoutubeEmoji    = "<:youtube:1328049285123674264>"
