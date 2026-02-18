@@ -379,7 +379,8 @@ func (rm *RadioManager) MonitorLavalinkConnection(maxReconnectAttempts int) {
 		// Check node status
 		status := node.Status()
 
-		if status == disgolink.StatusDisconnected {
+		switch status {
+		case disgolink.StatusDisconnected:
 			consecutiveFailures++
 			slog.Warn("Lavalink node disconnected",
 				slog.Int("consecutive_failures", consecutiveFailures),
@@ -401,7 +402,7 @@ func (rm *RadioManager) MonitorLavalinkConnection(maxReconnectAttempts int) {
 
 				return
 			}
-		} else if status == disgolink.StatusConnected {
+		case disgolink.StatusConnected:
 			// Reset failure counter if connected
 			if consecutiveFailures > 0 {
 				slog.Info("Lavalink reconnected successfully")

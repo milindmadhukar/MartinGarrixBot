@@ -20,14 +20,11 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
-var Version string
-var Commit string
+var (
+	Version string
+	Commit  string
+)
 
-// TODO Member welcome message
-// Martin Garrix radio automation
-// Info and server info commands
-
-// TODO: Error handling for the bot?
 func main() {
 	Version = os.Getenv("VERSION")
 	Commit = os.Getenv("COMMIT")
