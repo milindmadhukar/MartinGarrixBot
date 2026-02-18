@@ -5,7 +5,6 @@ go 1.24.0
 require (
 	github.com/disgoorg/disgo v0.18.14
 	github.com/disgoorg/disgolink/v3 v3.0.4
-	github.com/disgoorg/json v1.2.0
 	github.com/disgoorg/paginator v0.0.0-20240725182907-1bdf780b5586
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/gocolly/colly/v2 v2.1.0
@@ -26,6 +25,7 @@ require (
 	github.com/antchfx/htmlquery v1.2.3 // indirect
 	github.com/antchfx/xmlquery v1.3.1 // indirect
 	github.com/antchfx/xpath v1.1.10 // indirect
+	github.com/disgoorg/json v1.2.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
