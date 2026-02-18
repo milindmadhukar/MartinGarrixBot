@@ -10,11 +10,10 @@ services:
       - ./lavalink/application.yml:/opt/Lavalink/application.yml
       - ./lavalink/plugins/:/opt/Lavalink/plugins/
     networks:
-      - martingarrix
+      - garrixbot
     expose:
       # lavalink exposes port 2333 to connect to for other containers
       - 2333
-
   bot:
     image: ghcr.io/milindmadhukar/martingarrixbot:master
     container_name: martingarrixbot
@@ -27,10 +26,12 @@ services:
     command: -config=/var/lib/config.toml --sync-commands=true
     restart: unless-stopped
     networks:
-      - martingarrix
+      - garrixbot
+      - db
     depends_on:
       - lavalink
-
 networks:
-  martingarrix:
-    name: martingarrix
+  garrixbot:
+    name: garrixbot
+  db:
+    external: true
