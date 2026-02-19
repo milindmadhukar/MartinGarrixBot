@@ -48,6 +48,7 @@ type LogConfig struct {
 	MaxSize    int        `toml:"max_size"`
 	MaxAge     int        `toml:"max_age"`
 	MaxBackups int        `toml:"max_backups"`
+	TimeZone   string     `toml:"timezone"`
 }
 
 type LavalinkConfig struct {
