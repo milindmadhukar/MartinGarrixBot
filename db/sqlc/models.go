@@ -27,6 +27,7 @@ type Guild struct {
 	XpMultiplier                float64     `json:"xpMultiplier"`
 	TourNotificationsChannel    pgtype.Int8 `json:"tourNotificationsChannel"`
 	TourNotificationsRole       pgtype.Int8 `json:"tourNotificationsRole"`
+	ModeratorRole               pgtype.Int8 `json:"moderatorRole"`
 }
 
 type JoinLeaveLog struct {
@@ -52,6 +53,9 @@ type Modlog struct {
 	LogType     string           `json:"logType"`
 	Reason      pgtype.Text      `json:"reason"`
 	Time        pgtype.Timestamp `json:"time"`
+	GuildID     int64            `json:"guildId"`
+	ExpiresAt   pgtype.Timestamp `json:"expiresAt"`
+	Active      pgtype.Bool      `json:"active"`
 }
 
 type RedditPost struct {

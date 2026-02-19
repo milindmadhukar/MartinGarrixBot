@@ -12,3 +12,6 @@ make_migration:
 
 sqlc:
 	docker run --rm -v $(ROOT_DIR):/src -w /src sqlc/sqlc generate
+
+psql:
+	docker exec -it postgres-db-1 psql -U postgres -d garrixbot

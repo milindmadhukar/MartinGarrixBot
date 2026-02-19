@@ -18,6 +18,11 @@ SELECT guild_id, radio_voice_channel
 FROM guilds
 WHERE radio_voice_channel IS NOT NULL;
 
+-- name: SetModeratorRole :exec
+UPDATE guilds
+SET moderator_role = $2
+WHERE guild_id = $1;
+
 -- name: CreateGuild :one
 INSERT INTO guilds(guild_id)
 VALUES ($1)
