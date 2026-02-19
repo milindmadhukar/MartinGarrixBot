@@ -72,6 +72,7 @@ func main() {
 		listeners.VoiceStateUpdateListener(b),
 		listeners.VoiceServerUpdateListener(b),
 		listeners.MessageCreateListener(b),
+		listeners.GuildJoinListener(b),
 		listeners.GuildMemberJoinListener(b),
 		listeners.GuildMemberLeaveListener(b),
 		listeners.MessageDeleteListener(b),

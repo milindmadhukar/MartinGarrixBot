@@ -13,8 +13,8 @@ import (
 
 const messageSent = `-- name: MessageSent :exec
 WITH message_insert AS (
-    INSERT INTO messages (message_id, guild_id, channel_id, author_id, content)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO messages (message_id, guild_id, channel_id, author_id, author_guild_id, content)
+    VALUES ($1, $2, $3, $4, $2, $5)
     ON CONFLICT DO NOTHING
     RETURNING author_id
 ),
@@ -34,7 +34,7 @@ type MessageSentParams struct {
 	MessageID   int64            `json:"messageId"`
 	GuildID     int64            `json:"guildId"`
 	ChannelID   int64            `json:"channelId"`
-	AuthorID    int64            `json:"authorId"`
+	AuthorID    pgtype.Int8      `json:"authorId"`
 	Content     string           `json:"content"`
 	TotalXp     pgtype.Int4      `json:"totalXp"`
 	LastXpAdded pgtype.Timestamp `json:"lastXpAdded"`

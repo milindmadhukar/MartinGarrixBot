@@ -12,6 +12,7 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/rest"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
@@ -60,10 +61,13 @@ func MessageHandler(b *mgbot.MartinGarrixBot) bot.EventListener {
 		now := time.Now().UTC()
 
 		params := db.MessageSentParams{
-			MessageID:   int64(e.MessageID),
-			GuildID:     int64(*e.GuildID),
-			ChannelID:   int64(e.ChannelID),
-			AuthorID:    int64(e.Message.Author.ID),
+			MessageID: int64(e.MessageID),
+			GuildID:   int64(*e.GuildID),
+			ChannelID: int64(e.ChannelID),
+			AuthorID: pgtype.Int8{
+				Int64: int64(e.Message.Author.ID),
+				Valid: true,
+			},
 			Content:     e.Message.Content,
 			TotalXp:     user.TotalXp,
 			LastXpAdded: user.LastXpAdded,

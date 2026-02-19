@@ -63,7 +63,7 @@ func (q *Queries) GetAllTourShows(ctx context.Context) ([]TourShow, error) {
 
 const getTourNotificationChannels = `-- name: GetTourNotificationChannels :many
 SELECT tour_notifications_channel, tour_notifications_role 
-FROM guild_configurations
+FROM guilds
 WHERE tour_notifications_channel IS NOT NULL
 `
 
