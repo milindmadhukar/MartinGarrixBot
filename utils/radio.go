@@ -28,6 +28,7 @@ type SkipVote struct {
 type RadioManager struct {
 	Client               disgolink.Client
 	ActiveGuilds         map[snowflake.ID]bool
+	PausedGuilds         map[snowflake.ID]bool      // Guilds where radio is paused (waiting for listeners)
 	CurrentTracks        map[snowflake.ID]TrackInfo // Store current track info per guild
 	SkipVotes            map[snowflake.ID]*SkipVote // Store skip votes per guild
 	IsConnected          bool
@@ -42,6 +43,7 @@ func NewRadioManager(userID snowflake.ID) *RadioManager {
 	return &RadioManager{
 		Client:        disgolink.New(userID),
 		ActiveGuilds:  make(map[snowflake.ID]bool),
+		PausedGuilds:  make(map[snowflake.ID]bool),
 		CurrentTracks: make(map[snowflake.ID]TrackInfo),
 		SkipVotes:     make(map[snowflake.ID]*SkipVote),
 	}
@@ -109,6 +111,18 @@ func (rm *RadioManager) SetActive(guildID snowflake.ID, active bool) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 	rm.ActiveGuilds[guildID] = active
+}
+
+func (rm *RadioManager) IsPaused(guildID snowflake.ID) bool {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	return rm.PausedGuilds[guildID]
+}
+
+func (rm *RadioManager) SetPaused(guildID snowflake.ID, paused bool) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	rm.PausedGuilds[guildID] = paused
 }
 
 func (rm *RadioManager) IsLavalinkConnected() bool {

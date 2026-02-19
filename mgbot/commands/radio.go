@@ -274,15 +274,7 @@ func handleRadioSkip(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	}
 
 	// Count members in voice channel (excluding bots)
-	humanCount := 0
-	b.Client.Caches().VoiceStatesForEach(guildID, func(vs discord.VoiceState) {
-		if vs.ChannelID != nil && *vs.ChannelID == *player.ChannelID() {
-			member, ok := b.Client.Caches().Member(guildID, vs.UserID)
-			if ok && !member.User.Bot {
-				humanCount++
-			}
-		}
-	})
+	humanCount := utils.CountHumansInVoiceChannel(b.Client, guildID, *player.ChannelID())
 
 	if humanCount == 0 {
 		return e.CreateMessage(discord.NewMessageCreateBuilder().

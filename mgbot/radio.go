@@ -112,14 +112,7 @@ func (b *MartinGarrixBot) StartRadioInGuild(ctx context.Context, guildID snowfla
 	// Wait for voice connection to establish
 	time.Sleep(2 * time.Second)
 
-	// Set initial voice channel status
-	statusCtx, statusCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer statusCancel()
-	if err := utils.UpdateVoiceChannelStatus(statusCtx, b.Client, b.Cfg.Bot.Token, radioChannelID, "Loading..."); err != nil {
-		slog.Error("Failed to set initial voice channel status", slog.Any("err", err))
-	}
-
-	// Start playing
+	// Start playing (the TrackStartEvent will update the voice channel status)
 	b.PlayNextRadioSong(guildID)
 
 	return nil
