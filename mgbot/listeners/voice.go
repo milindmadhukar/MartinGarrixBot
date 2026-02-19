@@ -7,6 +7,7 @@ import (
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/events"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
+	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
 
 // VoiceStateUpdateListener forwards voice state updates to Lavalink and handles radio resume
@@ -38,8 +39,8 @@ func VoiceStateUpdateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 			return
 		}
 
-		// Check if radio is active and paused in this guild
-		if !b.RadioManager.IsActive(e.VoiceState.GuildID) || !b.RadioManager.IsPaused(e.VoiceState.GuildID) {
+		// Check if radio is active in this guild
+		if !b.RadioManager.IsActive(e.VoiceState.GuildID) {
 			return
 		}
 
@@ -51,18 +52,38 @@ func VoiceStateUpdateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 
 		radioChannelID := *player.ChannelID()
 
-		// Check if a user joined the radio channel
-		if e.VoiceState.ChannelID != nil && *e.VoiceState.ChannelID == radioChannelID {
-			// Check if the user is not a bot
-			member, ok := b.Client.Caches().Member(e.VoiceState.GuildID, e.VoiceState.UserID)
-			if !ok || member.User.Bot {
+		// Check if this is a user joining the radio channel (not leaving or already in)
+		// User is joining if:
+		// 1. New state has them in the radio channel
+		// 2. Old state had them in a different channel (or no channel)
+		isNowInRadioChannel := e.VoiceState.ChannelID != nil && *e.VoiceState.ChannelID == radioChannelID
+		wasInDifferentChannel := e.OldVoiceState.ChannelID == nil || *e.OldVoiceState.ChannelID != radioChannelID
+
+		if isNowInRadioChannel && wasInDifferentChannel {
+			// Check if the user is a bot (uses cache-first-then-REST utility)
+			member, err := utils.GetMember(b.Client, e.VoiceState.GuildID, e.VoiceState.UserID)
+			if err != nil {
+				// Failed to fetch member, assume human (safer to resume)
+				slog.Debug("Failed to get member during voice join, assuming human",
+					slog.String("guild_id", e.VoiceState.GuildID.String()),
+					slog.String("user_id", e.VoiceState.UserID.String()),
+					slog.Any("err", err))
+			} else if member.User.Bot {
+				// It's a bot, ignore
 				return
 			}
 
-			// A human joined! Resume the radio
-			slog.Info("Human joined radio channel, resuming playback",
+			// Check if radio is paused
+			if !b.RadioManager.IsPaused(e.VoiceState.GuildID) {
+				// Radio is not paused, no need to resume
+				return
+			}
+
+			// A human joined and radio is paused! Resume the radio
+			slog.Debug("Human joined radio channel while paused, resuming playback",
 				slog.String("guild_id", e.VoiceState.GuildID.String()),
-				slog.String("user_id", e.VoiceState.UserID.String()))
+				slog.String("user_id", e.VoiceState.UserID.String()),
+				slog.String("channel_id", radioChannelID.String()))
 
 			b.RadioManager.SetPaused(e.VoiceState.GuildID, false)
 

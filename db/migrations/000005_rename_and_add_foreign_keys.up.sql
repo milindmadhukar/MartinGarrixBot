@@ -18,6 +18,17 @@ ALTER TABLE messages ALTER COLUMN author_guild_id SET NOT NULL;
 -- Make author_id nullable first (required for ON DELETE SET NULL)
 ALTER TABLE messages ALTER COLUMN author_id DROP NOT NULL;
 
+-- Clean up orphaned messages: set author_id to NULL for messages where the author doesn't exist in users table
+-- This ensures the foreign key constraint can be added without violating referential integrity
+UPDATE messages 
+SET author_id = NULL 
+WHERE NOT EXISTS (
+    SELECT 1 
+    FROM users 
+    WHERE users.id = messages.author_id 
+    AND users.guild_id = messages.author_guild_id
+);
+
 -- Add foreign key constraint
 -- ON DELETE SET NULL: If a user is deleted from users table, set author_id to NULL instead of deleting the message
 -- This preserves message history even when user data is removed

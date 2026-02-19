@@ -13,6 +13,9 @@ max_size = 500
 max_age = 30
 # max number of log files to keep
 max_backups = 3
+# timezone for logs (IANA Time Zone database format, e.g., "Asia/Kolkata", "UTC", "America/New_York")
+# defaults to "Asia/Kolkata" if not specified or invalid
+timezone = "Asia/Kolkata"
 
 
 [bot]

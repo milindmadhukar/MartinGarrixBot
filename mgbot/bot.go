@@ -198,6 +198,23 @@ func (b *MartinGarrixBot) ensureGuildConfigurations(guilds []discord.Unavailable
 }
 
 func SetupLogger(cfg LogConfig) {
+	// Set timezone from config, default to Asia/Kolkata if not specified
+	timezone := cfg.TimeZone
+	if timezone == "" {
+		timezone = "Asia/Kolkata"
+	}
+
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		slog.Error("Failed to load timezone, using Asia/Kolkata",
+			slog.String("timezone", timezone),
+			slog.Any("err", err))
+		loc, _ = time.LoadLocation("Asia/Kolkata")
+	}
+
+	// Set the timezone globally for the application
+	time.Local = loc
+
 	opts := &slog.HandlerOptions{
 		AddSource: cfg.AddSource,
 		Level:     cfg.Level,
@@ -209,6 +226,7 @@ func SetupLogger(cfg LogConfig) {
 		MaxBackups: cfg.MaxBackups,
 		MaxAge:     cfg.MaxAge,
 		Compress:   true,
+		LocalTime:  true, // Use local time for log rotation
 	}
 
 	multiWriter := io.MultiWriter(os.Stdout, fileWriter)
