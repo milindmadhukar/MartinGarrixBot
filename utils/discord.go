@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/snowflake/v2"
 )
 
@@ -49,4 +50,18 @@ func UpdateVoiceChannelStatus(ctx context.Context, client bot.Client, botToken s
 	}
 
 	return nil
+}
+
+// CountHumansInVoiceChannel counts the number of human (non-bot) members in a voice channel
+func CountHumansInVoiceChannel(client bot.Client, guildID, channelID snowflake.ID) int {
+	humanCount := 0
+	client.Caches().VoiceStatesForEach(guildID, func(vs discord.VoiceState) {
+		if vs.ChannelID != nil && *vs.ChannelID == channelID {
+			member, ok := client.Caches().Member(guildID, vs.UserID)
+			if ok && !member.User.Bot {
+				humanCount++
+			}
+		}
+	})
+	return humanCount
 }

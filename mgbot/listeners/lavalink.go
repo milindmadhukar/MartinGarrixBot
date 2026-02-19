@@ -69,7 +69,34 @@ func LavalinkTrackEndListener(b *mgbot.MartinGarrixBot) disgolink.EventListener 
 			return
 		}
 
-		// Play next random song
+		// Get the voice channel ID from the player
+		channelID := player.ChannelID()
+		if channelID == nil {
+			slog.Warn("No voice channel ID available")
+			return
+		}
+
+		// Check if there are any humans in the voice channel
+		humanCount := utils.CountHumansInVoiceChannel(b.Client, event.GuildID(), *channelID)
+
+		if humanCount == 0 {
+			// No one is listening, pause the radio and clear status
+			slog.Info("No listeners in voice channel, pausing radio",
+				slog.String("guild_id", event.GuildID().String()))
+
+			b.RadioManager.SetPaused(event.GuildID(), true)
+
+			// Clear voice channel status
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := utils.UpdateVoiceChannelStatus(ctx, b.Client, b.Cfg.Bot.Token, *channelID, ""); err != nil {
+				slog.Error("Failed to clear voice channel status", slog.Any("err", err))
+			}
+
+			return
+		}
+
+		// There are listeners, play next song
 		go playNextRadioSong(b, event.GuildID())
 	})
 }
