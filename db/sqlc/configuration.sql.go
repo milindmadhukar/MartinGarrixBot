@@ -11,9 +11,72 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createGuild = `-- name: CreateGuild :one
+INSERT INTO guilds(guild_id)
+VALUES ($1)
+ON CONFLICT (guild_id) DO NOTHING
+RETURNING guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role
+`
+
+func (q *Queries) CreateGuild(ctx context.Context, guildID int64) (Guild, error) {
+	row := q.db.QueryRow(ctx, createGuild, guildID)
+	var i Guild
+	err := row.Scan(
+		&i.GuildID,
+		&i.ModlogsChannel,
+		&i.LeaveJoinLogsChannel,
+		&i.YoutubeNotificationsChannel,
+		&i.YoutubeNotificationsRole,
+		&i.RedditNotificationsChannel,
+		&i.RedditNotificationsRole,
+		&i.StmpdNotificationsChannel,
+		&i.StmpdNotificationsRole,
+		&i.WelcomesChannel,
+		&i.DeleteLogsChannel,
+		&i.EditLogsChannel,
+		&i.BotChannel,
+		&i.RadioVoiceChannel,
+		&i.NewsRole,
+		&i.XpMultiplier,
+		&i.TourNotificationsChannel,
+		&i.TourNotificationsRole,
+	)
+	return i, err
+}
+
+const getGuild = `-- name: GetGuild :one
+SELECT guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role FROM guilds WHERE guild_id = $1
+`
+
+func (q *Queries) GetGuild(ctx context.Context, guildID int64) (Guild, error) {
+	row := q.db.QueryRow(ctx, getGuild, guildID)
+	var i Guild
+	err := row.Scan(
+		&i.GuildID,
+		&i.ModlogsChannel,
+		&i.LeaveJoinLogsChannel,
+		&i.YoutubeNotificationsChannel,
+		&i.YoutubeNotificationsRole,
+		&i.RedditNotificationsChannel,
+		&i.RedditNotificationsRole,
+		&i.StmpdNotificationsChannel,
+		&i.StmpdNotificationsRole,
+		&i.WelcomesChannel,
+		&i.DeleteLogsChannel,
+		&i.EditLogsChannel,
+		&i.BotChannel,
+		&i.RadioVoiceChannel,
+		&i.NewsRole,
+		&i.XpMultiplier,
+		&i.TourNotificationsChannel,
+		&i.TourNotificationsRole,
+	)
+	return i, err
+}
+
 const getRadioVoiceChannels = `-- name: GetRadioVoiceChannels :many
 SELECT guild_id, radio_voice_channel
-FROM guild_configurations
+FROM guilds
 WHERE radio_voice_channel IS NOT NULL
 `
 
@@ -44,7 +107,7 @@ func (q *Queries) GetRadioVoiceChannels(ctx context.Context) ([]GetRadioVoiceCha
 
 const getRedditNotificationChannels = `-- name: GetRedditNotificationChannels :many
 SELECT reddit_notifications_channel, reddit_notifications_role 
-FROM guild_configurations
+FROM guilds
 WHERE reddit_notifications_channel IS NOT NULL
 `
 
@@ -75,7 +138,7 @@ func (q *Queries) GetRedditNotificationChannels(ctx context.Context) ([]GetReddi
 
 const getSTMPDNofiticationChannels = `-- name: GetSTMPDNofiticationChannels :many
 SELECT stmpd_notifications_channel, stmpd_notifications_role
-FROM guild_configurations
+FROM guilds
 WHERE stmpd_notifications_channel IS NOT NULL
 `
 
@@ -106,7 +169,7 @@ func (q *Queries) GetSTMPDNofiticationChannels(ctx context.Context) ([]GetSTMPDN
 
 const getYoutubeNotifactionChannels = `-- name: GetYoutubeNotifactionChannels :many
 SELECT youtube_notifications_channel, youtube_notifications_role 
-FROM guild_configurations
+FROM guilds
 WHERE youtube_notifications_channel IS NOT NULL
 `
 

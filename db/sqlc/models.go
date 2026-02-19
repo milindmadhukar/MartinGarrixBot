@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type GuildConfiguration struct {
+type Guild struct {
 	GuildID                     int64       `json:"guildId"`
 	ModlogsChannel              pgtype.Int8 `json:"modlogsChannel"`
 	LeaveJoinLogsChannel        pgtype.Int8 `json:"leaveJoinLogsChannel"`
@@ -36,12 +36,13 @@ type JoinLeaveLog struct {
 }
 
 type Message struct {
-	MessageID int64            `json:"messageId"`
-	ChannelID int64            `json:"channelId"`
-	AuthorID  int64            `json:"authorId"`
-	Content   string           `json:"content"`
-	Timestamp pgtype.Timestamp `json:"timestamp"`
-	GuildID   int64            `json:"guildId"`
+	MessageID     int64            `json:"messageId"`
+	ChannelID     int64            `json:"channelId"`
+	AuthorID      pgtype.Int8      `json:"authorId"`
+	Content       string           `json:"content"`
+	Timestamp     pgtype.Timestamp `json:"timestamp"`
+	GuildID       int64            `json:"guildId"`
+	AuthorGuildID int64            `json:"authorGuildId"`
 }
 
 type Modlog struct {

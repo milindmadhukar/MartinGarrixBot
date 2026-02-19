@@ -8,5 +8,5 @@ VALUES ($1, 'leave', $2);
 
 -- name: GetLeaveJoinLogsChannel :one
 SELECT leave_join_logs_channel
-FROM guild_configurations
+FROM guilds
 WHERE guild_id = $1;

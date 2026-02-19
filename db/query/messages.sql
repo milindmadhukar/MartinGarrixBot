@@ -1,7 +1,7 @@
 -- name: MessageSent :exec
 WITH message_insert AS (
-    INSERT INTO messages (message_id, guild_id, channel_id, author_id, content)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO messages (message_id, guild_id, channel_id, author_id, author_guild_id, content)
+    VALUES ($1, $2, $3, $4, $2, $5)
     ON CONFLICT DO NOTHING
     RETURNING author_id
 ),

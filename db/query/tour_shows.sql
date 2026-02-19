@@ -8,7 +8,7 @@ RETURNING *;
 
 -- name: GetTourNotificationChannels :many
 SELECT tour_notifications_channel, tour_notifications_role 
-FROM guild_configurations
+FROM guilds
 WHERE tour_notifications_channel IS NOT NULL;
 
 -- name: GetAllTourShows :many

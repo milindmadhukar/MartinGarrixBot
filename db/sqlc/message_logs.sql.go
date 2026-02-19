@@ -13,7 +13,7 @@ import (
 
 const getDeleteLogsChannel = `-- name: GetDeleteLogsChannel :one
 SELECT delete_logs_channel
-FROM guild_configurations
+FROM guilds
 WHERE guild_id = $1
 `
 
@@ -26,7 +26,7 @@ func (q *Queries) GetDeleteLogsChannel(ctx context.Context, guildID int64) (pgty
 
 const getEditLogsChannel = `-- name: GetEditLogsChannel :one
 SELECT edit_logs_channel
-FROM guild_configurations
+FROM guilds
 WHERE guild_id = $1
 `
 

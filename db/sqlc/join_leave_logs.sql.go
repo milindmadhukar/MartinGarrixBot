@@ -13,7 +13,7 @@ import (
 
 const getLeaveJoinLogsChannel = `-- name: GetLeaveJoinLogsChannel :one
 SELECT leave_join_logs_channel
-FROM guild_configurations
+FROM guilds
 WHERE guild_id = $1
 `
 

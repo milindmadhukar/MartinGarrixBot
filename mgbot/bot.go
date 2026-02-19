@@ -147,12 +147,54 @@ func (b *MartinGarrixBot) OnReady(e *events.Ready) {
 	slog.Info("Bot ID: " + e.User.ID.String())
 	slog.Info(fmt.Sprintf("Total Guilds: %d", len(e.Guilds)))
 
+	// Ensure all guilds have configurations (in case bot was added while offline)
+	b.ensureGuildConfigurations(e.Guilds)
+
 	// TODO: Update presence
 	if err := b.Client.SetPresence(ctx, gateway.WithListeningActivity("you"), gateway.WithOnlineStatus(discord.OnlineStatusOnline)); err != nil {
 		slog.Error("Failed to set presence", slog.Any("err", err))
 	}
 
 	b.IsReady = true
+}
+
+// ensureGuildConfigurations checks if configurations exist for all guilds and creates missing ones
+func (b *MartinGarrixBot) ensureGuildConfigurations(guilds []discord.UnavailableGuild) {
+	slog.Info("Checking guild configurations...")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	created := 0
+	existing := 0
+	failed := 0
+
+	for _, guild := range guilds {
+		guildID := int64(guild.ID)
+
+		// Check if guild configuration exists
+		_, err := b.Queries.GetGuild(ctx, guildID)
+		if err != nil {
+			// Guild configuration doesn't exist, create it
+			_, createErr := b.Queries.CreateGuild(ctx, guildID)
+			if createErr != nil {
+				slog.Error("Failed to create guild configuration",
+					slog.Any("guild_id", guild.ID),
+					slog.Any("err", createErr))
+				failed++
+				continue
+			}
+			slog.Info("Created missing guild configuration", slog.Any("guild_id", guild.ID))
+			created++
+		} else {
+			existing++
+		}
+	}
+
+	slog.Info("Guild configuration check complete",
+		slog.Int("total", len(guilds)),
+		slog.Int("existing", existing),
+		slog.Int("created", created),
+		slog.Int("failed", failed))
 }
 
 func SetupLogger(cfg LogConfig) {
