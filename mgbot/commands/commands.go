@@ -23,6 +23,8 @@ var Commands = []discord.ApplicationCommandCreate{
 	radio,
 	//whois,
 	version,
+	moderation,
+	config,
 }
 
 func SetupHandlers(b *mgbot.MartinGarrixBot) *handler.Mux {
@@ -46,6 +48,10 @@ func SetupHandlers(b *mgbot.MartinGarrixBot) *handler.Mux {
 	rootHandler.Command("/version", VersionHandler(b))
 
 	rootHandler.Command("/radio", RadioHandler(b))
+
+	rootHandler.Command("/moderation", ModerationHandler(b))
+
+	rootHandler.Command("/config", ConfigHandler(b))
 
 	fun := handler.New()
 	fun.Command("/8ball", EightBallHandler)
