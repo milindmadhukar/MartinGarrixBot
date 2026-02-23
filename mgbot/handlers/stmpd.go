@@ -92,18 +92,29 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		b.Collector.Wait()
 
 		slices.Reverse(releases)
-		releases = releases[len(releases)-5:]
+		if len(releases) > 5 {
+			releases = releases[len(releases)-5:]
+		}
+
+		// Load existing songs for similarity matching
+		existingSongs, err := b.Queries.GetAllSongsForMatching(context.Background())
+		if err != nil {
+			slog.Error("Failed to load existing songs for STMPD matching", slog.Any("err", err))
+			continue
+		}
 
 		// Create a batch notifier for this cycle
 		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeSTMPD)
 
 		for _, release := range releases {
+			// Convert release year to release_date format
+			releaseDate := fmt.Sprintf("%d-01-01", release.ReleaseYear)
 
-			// PERF: Too many queries. Can I reduce them?
+			// First check exact match in DB
 			doesExist, err := b.Queries.DoesSongExist(context.Background(), db.DoesSongExistParams{
 				Name:        release.Name,
 				Artists:     release.Artists,
-				ReleaseYear: int32(release.ReleaseYear),
+				ReleaseDate: releaseDate,
 			})
 
 			if err != nil {
@@ -115,10 +126,54 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				continue
 			}
 
+			// Check similarity with existing songs (especially beatport songs)
+			matchedSong := findSimilarExistingSong(existingSongs, release.Name, release.Artists)
+
+			if matchedSong != nil && matchedSong.BeatportID.Valid {
+				// Check if already updated — avoid re-updating every run
+				fullSong, lookupErr := b.Queries.GetSongByID(context.Background(), matchedSong.ID)
+				if lookupErr == nil && fullSong.BeatportUpdated {
+					continue
+				}
+
+				// A similar beatport song exists — update it with STMPD links silently
+				err = b.Queries.UpdateSongWithStmpdLinks(context.Background(), db.UpdateSongWithStmpdLinksParams{
+					ID: matchedSong.ID,
+					SpotifyUrl: pgtype.Text{
+						String: release.SpotifyURL,
+						Valid:  release.SpotifyURL != "",
+					},
+					AppleMusicUrl: pgtype.Text{
+						String: release.AppleMusicUrl,
+						Valid:  release.AppleMusicUrl != "",
+					},
+					YoutubeUrl: pgtype.Text{
+						String: release.YoutubeURL,
+						Valid:  release.YoutubeURL != "",
+					},
+					ThumbnailUrl: pgtype.Text{
+						String: release.Thumbnail,
+						Valid:  release.Thumbnail != "",
+					},
+				})
+
+				if err != nil {
+					slog.Error("Failed to update song with STMPD links",
+						slog.String("name", release.Name), slog.Any("err", err))
+				} else {
+					slog.Debug("Updated beatport song with STMPD links",
+						slog.String("name", release.Name),
+						slog.String("artists", release.Artists),
+						slog.Int64("song_id", matchedSong.ID))
+				}
+				continue
+			}
+
+			// No similar song exists — insert new STMPD song
 			releaseParams := db.InsertReleaseParams{
 				Name:        release.Name,
 				Artists:     release.Artists,
-				ReleaseYear: int32(release.ReleaseYear),
+				ReleaseDate: releaseDate,
 			}
 
 			if release.SpotifyURL != "" {
@@ -157,6 +212,14 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				slog.Error("Failed to insert release for "+release.Name, slog.Any("err", err))
 				continue
 			}
+
+			// Add to existing songs list
+			existingSongs = append(existingSongs, db.GetAllSongsForMatchingRow{
+				ID:      song.ID,
+				Name:    song.Name,
+				Artists: song.Artists,
+				Source:  "stmpd",
+			})
 
 			announcementEmbed := discord.NewEmbedBuilder().
 				SetTitle(fmt.Sprintf("%s - %s", release.Artists, release.Name)).

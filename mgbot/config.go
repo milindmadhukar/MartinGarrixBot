@@ -38,6 +38,11 @@ type BotConfig struct {
 	RedditClientSecret string         `toml:"reddit_client_secret"`
 	RedditBotUsername  string         `toml:"reddit_bot_username"`
 	RedditBotPassword  string         `toml:"reddit_bot_password"`
+	BeatportUsername   string         `toml:"beatport_username"`
+	BeatportPassword   string         `toml:"beatport_password"`
+	BeatportLabelID    string         `toml:"beatport_label_id"`
+	BeatportArtistIDs  []string       `toml:"beatport_artist_ids"`
+	BeatportMaxTracks  int            `toml:"beatport_max_tracks"`
 }
 
 type LogConfig struct {

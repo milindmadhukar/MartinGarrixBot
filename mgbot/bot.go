@@ -52,8 +52,9 @@ type MartinGarrixBot struct {
 
 	Collector *colly.Collector
 
-	RedditToken  utils.RedditToken
-	RadioManager *utils.RadioManager
+	RedditToken    utils.RedditToken
+	RadioManager   *utils.RadioManager
+	BeatportClient *utils.BeatportClient
 }
 
 func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
@@ -136,6 +137,39 @@ func (b *MartinGarrixBot) SetupColly() {
 		Parallelism: 2,
 		RandomDelay: 2 * time.Second,
 	})
+}
+
+// SetupBeatport initializes the Beatport API client
+func (b *MartinGarrixBot) SetupBeatport() error {
+	if b.Cfg.Bot.BeatportUsername == "" || b.Cfg.Bot.BeatportPassword == "" {
+		slog.Warn("Beatport credentials not configured, beatport features will be disabled")
+		return nil
+	}
+
+	maxTracks := b.Cfg.Bot.BeatportMaxTracks
+	if maxTracks == 0 {
+		maxTracks = 50
+	}
+
+	config := &utils.BeatportConfig{
+		Username:  b.Cfg.Bot.BeatportUsername,
+		Password:  b.Cfg.Bot.BeatportPassword,
+		LabelID:   b.Cfg.Bot.BeatportLabelID,
+		ArtistIDs: b.Cfg.Bot.BeatportArtistIDs,
+		MaxTracks: maxTracks,
+	}
+
+	client, err := utils.NewBeatportClient(config)
+	if err != nil {
+		return fmt.Errorf("failed to create beatport client: %w", err)
+	}
+
+	b.BeatportClient = client
+	slog.Info("Beatport client initialized",
+		slog.String("label_id", config.LabelID),
+		slog.Int("artist_count", len(config.ArtistIDs)),
+		slog.Int("max_tracks", maxTracks))
+	return nil
 }
 
 func (b *MartinGarrixBot) OnReady(e *events.Ready) {

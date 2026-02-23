@@ -27,6 +27,15 @@ token = "your_token_here"
 yt_api_key = "yt_api_key_here"
 # google service json file path
 google_service_file = "/path/to/servicefile.json"
+# beatport credentials
+beatport_username = ""
+beatport_password = ""
+# beatport label ID to monitor (STMPD RCRDS = 56009)
+beatport_label_id = "56009"
+# beatport artist IDs to monitor (Martin Garrix, AREA21, GRX, YTRAM)
+beatport_artist_ids = ["185928", "626138", "368469", "898749"]
+# maximum tracks to fetch per source on each check (use --fetch-all-beatport flag for initial import)
+beatport_max_tracks = 50
 
 [lavalink]
 # lavalink server url
