@@ -235,9 +235,20 @@ func handleRadioSkip(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 			Build())
 	}
 
-	// Check if user is in the voice channel
-	voiceState, ok := b.Client.Caches().VoiceState(*e.GuildID(), userID)
-	if !ok || voiceState.ChannelID == nil {
+	// Check if user is in a voice channel (uses cache-first-then-REST utility)
+	voiceState, err := utils.GetVoiceState(b.Client, guildID, userID)
+	if err != nil || voiceState.ChannelID == nil {
+		return e.CreateMessage(discord.NewMessageCreateBuilder().
+			SetEmbeds(discord.NewEmbedBuilder().
+				SetTitle("Not in Voice Channel").
+				SetDescription("You must be in the radio voice channel to vote for skip.").
+				SetColor(utils.ColorDanger).
+				Build()).
+			SetEphemeral(true).
+			Build())
+	}
+
+	if voiceState.ChannelID == nil {
 		return e.CreateMessage(discord.NewMessageCreateBuilder().
 			SetEmbeds(discord.NewEmbedBuilder().
 				SetTitle("Not in Voice Channel").

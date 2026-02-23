@@ -63,17 +63,26 @@ type RedditPost struct {
 }
 
 type Song struct {
-	ID            int64       `json:"id"`
-	Name          string      `json:"name"`
-	Artists       string      `json:"artists"`
-	ReleaseYear   int32       `json:"releaseYear"`
-	ThumbnailUrl  pgtype.Text `json:"thumbnailUrl"`
-	SpotifyUrl    pgtype.Text `json:"spotifyUrl"`
-	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
-	YoutubeUrl    pgtype.Text `json:"youtubeUrl"`
-	Lyrics        pgtype.Text `json:"lyrics"`
-	IsUnreleased  bool        `json:"isUnreleased"`
-	PureTitle     pgtype.Text `json:"pureTitle"`
+	ID              int64       `json:"id"`
+	Name            string      `json:"name"`
+	Artists         string      `json:"artists"`
+	ThumbnailUrl    pgtype.Text `json:"thumbnailUrl"`
+	SpotifyUrl      pgtype.Text `json:"spotifyUrl"`
+	AppleMusicUrl   pgtype.Text `json:"appleMusicUrl"`
+	YoutubeUrl      pgtype.Text `json:"youtubeUrl"`
+	Lyrics          pgtype.Text `json:"lyrics"`
+	IsUnreleased    bool        `json:"isUnreleased"`
+	BeatportID      pgtype.Int4 `json:"beatportId"`
+	MixName         pgtype.Text `json:"mixName"`
+	ReleaseDate     string      `json:"releaseDate"`
+	ReleaseName     pgtype.Text `json:"releaseName"`
+	Genre           pgtype.Text `json:"genre"`
+	SubGenre        pgtype.Text `json:"subGenre"`
+	Bpm             pgtype.Int4 `json:"bpm"`
+	MusicalKey      pgtype.Text `json:"musicalKey"`
+	LengthMs        pgtype.Int4 `json:"lengthMs"`
+	BeatportUpdated bool        `json:"beatportUpdated"`
+	Source          string      `json:"source"`
 }
 
 type Tag struct {

@@ -52,8 +52,9 @@ type MartinGarrixBot struct {
 
 	Collector *colly.Collector
 
-	RedditToken  utils.RedditToken
-	RadioManager *utils.RadioManager
+	RedditToken    utils.RedditToken
+	RadioManager   *utils.RadioManager
+	BeatportClient *utils.BeatportClient
 }
 
 func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
@@ -138,6 +139,39 @@ func (b *MartinGarrixBot) SetupColly() {
 	})
 }
 
+// SetupBeatport initializes the Beatport API client
+func (b *MartinGarrixBot) SetupBeatport() error {
+	if b.Cfg.Bot.BeatportUsername == "" || b.Cfg.Bot.BeatportPassword == "" {
+		slog.Warn("Beatport credentials not configured, beatport features will be disabled")
+		return nil
+	}
+
+	maxTracks := b.Cfg.Bot.BeatportMaxTracks
+	if maxTracks == 0 {
+		maxTracks = 50
+	}
+
+	config := &utils.BeatportConfig{
+		Username:  b.Cfg.Bot.BeatportUsername,
+		Password:  b.Cfg.Bot.BeatportPassword,
+		LabelID:   b.Cfg.Bot.BeatportLabelID,
+		ArtistIDs: b.Cfg.Bot.BeatportArtistIDs,
+		MaxTracks: maxTracks,
+	}
+
+	client, err := utils.NewBeatportClient(config)
+	if err != nil {
+		return fmt.Errorf("failed to create beatport client: %w", err)
+	}
+
+	b.BeatportClient = client
+	slog.Info("Beatport client initialized",
+		slog.String("label_id", config.LabelID),
+		slog.Int("artist_count", len(config.ArtistIDs)),
+		slog.Int("max_tracks", maxTracks))
+	return nil
+}
+
 func (b *MartinGarrixBot) OnReady(e *events.Ready) {
 	slog.Info("Martin Garrix Bot ready")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -198,6 +232,23 @@ func (b *MartinGarrixBot) ensureGuildConfigurations(guilds []discord.Unavailable
 }
 
 func SetupLogger(cfg LogConfig) {
+	// Set timezone from config, default to Asia/Kolkata if not specified
+	timezone := cfg.TimeZone
+	if timezone == "" {
+		timezone = "Asia/Kolkata"
+	}
+
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		slog.Error("Failed to load timezone, using Asia/Kolkata",
+			slog.String("timezone", timezone),
+			slog.Any("err", err))
+		loc, _ = time.LoadLocation("Asia/Kolkata")
+	}
+
+	// Set the timezone globally for the application
+	time.Local = loc
+
 	opts := &slog.HandlerOptions{
 		AddSource: cfg.AddSource,
 		Level:     cfg.Level,
@@ -209,6 +260,7 @@ func SetupLogger(cfg LogConfig) {
 		MaxBackups: cfg.MaxBackups,
 		MaxAge:     cfg.MaxAge,
 		Compress:   true,
+		LocalTime:  true, // Use local time for log rotation
 	}
 
 	multiWriter := io.MultiWriter(os.Stdout, fileWriter)

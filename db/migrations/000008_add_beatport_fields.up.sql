@@ -1,0 +1,30 @@
+-- Add new columns (IF NOT EXISTS handles idempotency)
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS beatport_id INTEGER;
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS mix_name VARCHAR(300);
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS release_date TEXT NOT NULL DEFAULT '1970-01-01';
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS release_name VARCHAR(500);
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS genre VARCHAR(200);
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS sub_genre VARCHAR(200);
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS bpm INTEGER;
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS musical_key VARCHAR(100);
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS length_ms INTEGER;
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS beatport_updated BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS source VARCHAR(50) NOT NULL DEFAULT 'stmpd';
+
+-- Drop old columns and constraints
+ALTER TABLE songs DROP CONSTRAINT IF EXISTS unique_release;
+ALTER TABLE songs DROP COLUMN IF EXISTS release_year;
+ALTER TABLE songs DROP COLUMN IF EXISTS pure_title;
+ALTER TABLE songs DROP COLUMN IF EXISTS data_source;
+ALTER TABLE songs DROP COLUMN IF EXISTS metadata_locked;
+ALTER TABLE songs DROP COLUMN IF EXISTS last_updated_at;
+ALTER TABLE songs DROP COLUMN IF EXISTS catalog_number;
+ALTER TABLE songs DROP COLUMN IF EXISTS key;
+
+DROP INDEX IF EXISTS idx_songs_beatport_id;
+DROP INDEX IF EXISTS idx_songs_beatport_id_unique;
+DROP INDEX IF EXISTS idx_songs_data_source;
+
+-- New unique constraints
+ALTER TABLE songs ADD CONSTRAINT unique_release UNIQUE (name, artists, release_date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_songs_beatport_id ON songs(beatport_id) WHERE beatport_id IS NOT NULL;

@@ -153,7 +153,7 @@ type StmpdRelease struct {
 type UniqueSong struct {
 	Name        string `json:"name"`
 	Artists     string `json:"artists"`
-	ReleaseYear int32  `json:"release_year"`
+	ReleaseDate string `json:"release_date"`
 }
 
 type TourShow struct {
