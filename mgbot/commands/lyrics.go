@@ -41,7 +41,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 				songChoices = append(songChoices, utils.UniqueSong{
 					Name:        song.Name,
 					Artists:     song.Artists,
-					ReleaseYear: song.ReleaseYear,
+					ReleaseDate: song.ReleaseDate,
 				})
 			}
 
@@ -56,7 +56,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 				songChoices = append(songChoices, utils.UniqueSong{
 					Name:        song.Name,
 					Artists:     song.Artists,
-					ReleaseYear: song.ReleaseYear,
+					ReleaseDate: song.ReleaseDate,
 				})
 			}
 		}
@@ -84,7 +84,7 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		song, err := b.Queries.GetSong(e.Ctx, db.GetSongParams{
 			Name:        songData.Name,
 			Artists:     songData.Artists,
-			ReleaseYear: songData.ReleaseYear,
+			ReleaseDate: songData.ReleaseDate,
 		})
 
 		if err != nil {
@@ -105,7 +105,6 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 		lyricsMessage := discord.NewMessageCreateBuilder().
 			SetEmbeds(eb.Build())
-
 
 		if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
 			lyricsMessage = lyricsMessage.AddActionRow(

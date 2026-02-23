@@ -101,12 +101,7 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 			answerCheckFunc := func(messageEvent *events.MessageCreate) {
 				response := messageEvent.Message.Content
-				var nameToCheck string
-				if song.PureTitle.Valid {
-					nameToCheck = song.PureTitle.String
-				} else {
-					nameToCheck = song.Name
-				}
+				nameToCheck := song.Name
 				isClose := utils.IsCloseMatch(nameToCheck, response, 0.6)
 				var followUpResponseEmbed discord.Embed
 				if isClose {
