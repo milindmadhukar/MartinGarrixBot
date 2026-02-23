@@ -236,7 +236,11 @@ func (bc *BeatportClient) Authenticate() error {
 
 	loginBody, _ := io.ReadAll(loginResp.Body)
 	if loginResp.StatusCode != http.StatusOK && loginResp.StatusCode != http.StatusFound {
-		return fmt.Errorf("login failed with status %d: %s", loginResp.StatusCode, string(loginBody))
+		slog.Debug("Beatport login failed",
+			"status", loginResp.StatusCode,
+			"body", string(loginBody),
+		)
+		return fmt.Errorf("login failed with status %d", loginResp.StatusCode)
 	}
 
 	slog.Debug("Beatport login successful, requesting authorization...")
