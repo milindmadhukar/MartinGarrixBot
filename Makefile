@@ -30,4 +30,4 @@ run:
 	go run . --sync-commands
 
 kill:
-	@pgrep -f "mgbot_bin|garrixbot" | xargs kill || true
+	@pgrep -f "mgbot_bin\|garrixbot" | xargs kill || true
