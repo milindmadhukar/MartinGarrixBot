@@ -42,7 +42,7 @@ func LinksAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHand
 				songChoices = append(songChoices, utils.UniqueSong{
 					Name:        song.Name,
 					Artists:     song.Artists,
-					ReleaseYear: song.ReleaseYear,
+					ReleaseDate: song.ReleaseDate,
 				})
 			}
 
@@ -58,7 +58,7 @@ func LinksAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHand
 				songChoices = append(songChoices, utils.UniqueSong{
 					Name:        song.Name,
 					Artists:     song.Artists,
-					ReleaseYear: song.ReleaseYear,
+					ReleaseDate: song.ReleaseDate,
 				})
 			}
 		}
@@ -84,7 +84,7 @@ func LinksHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		song, err := b.Queries.GetSong(e.Ctx, db.GetSongParams{
 			Name:        songData.Name,
 			Artists:     songData.Artists,
-			ReleaseYear: songData.ReleaseYear,
+			ReleaseDate: songData.ReleaseDate,
 		})
 
 		if err != nil {
