@@ -2,6 +2,8 @@ services:
   lavalink:
     image: ghcr.io/lavalink-devs/lavalink:4-alpine
     container_name: martingarrix-lavalink
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     restart: unless-stopped
     environment:
       # set Java options here (6GB heap size)
@@ -9,10 +11,10 @@ services:
     volumes:
       - ./lavalink/application.yml:/opt/Lavalink/application.yml
       - ./lavalink/plugins/:/opt/Lavalink/plugins/
+      - /usr/lib/x86_64-linux-gnu/libudev.so.1:/usr/lib/x86_64-linux-gnu/libudev.so.1:ro
     networks:
       - garrixbot
     expose:
-      # lavalink exposes port 2333 to connect to for other containers
       - 2333
   bot:
     image: ghcr.io/milindmadhukar/martingarrixbot:master
@@ -30,6 +32,7 @@ services:
       - db
     depends_on:
       - lavalink
+
 networks:
   garrixbot:
     name: garrixbot
