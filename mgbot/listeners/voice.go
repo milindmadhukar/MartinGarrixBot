@@ -20,12 +20,16 @@ func VoiceStateUpdateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 				return
 			}
 
-			b.RadioManager.Client.OnVoiceStateUpdate(
-				context.TODO(),
-				e.VoiceState.GuildID,
-				e.VoiceState.ChannelID,
-				e.VoiceState.SessionID,
-			)
+			// Only forward voice state updates when we have a channel ID
+			// Lavalink v4 requires channelId field even for disconnect events
+			if e.VoiceState.ChannelID != nil {
+				b.RadioManager.Client.OnVoiceStateUpdate(
+					context.TODO(),
+					e.VoiceState.GuildID,
+					e.VoiceState.ChannelID,
+					e.VoiceState.SessionID,
+				)
+			}
 
 			// Clean up when disconnected
 			if e.VoiceState.ChannelID == nil {
@@ -98,6 +102,13 @@ func VoiceServerUpdateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 	return bot.NewListenerFunc(func(e *events.VoiceServerUpdate) {
 		// Check if RadioManager is initialized
 		if b.RadioManager == nil {
+			return
+		}
+
+		// Only forward if we have a valid endpoint
+		if e.Endpoint == nil {
+			slog.Warn("Voice server update received with nil endpoint",
+				slog.String("guild_id", e.GuildID.String()))
 			return
 		}
 
