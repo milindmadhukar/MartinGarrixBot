@@ -6,3 +6,4 @@ config.docker.toml
 .env
 /tmp
 /lavalink/logs/
+/martin-garrix-bot
