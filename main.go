@@ -61,6 +61,11 @@ func main() {
 		os.Exit(-1)
 	}
 
+	// Started after SetupDB so the database check has a pool, but before the
+	// gateway opens so /health answers during startup (reporting unhealthy)
+	// rather than refusing connections.
+	b.StartHealthServer()
+
 	service, err := youtube.NewService(context.Background(), option.WithAPIKey(b.Cfg.Bot.YoutubeAPIKey), option.WithCredentialsFile(b.Cfg.Bot.GoogleServiceFile))
 	if err != nil {
 		slog.Error("Failed to create youtube service", slog.Any("err", err))

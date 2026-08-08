@@ -27,6 +27,7 @@ type Config struct {
 	Bot      BotConfig      `toml:"bot"`
 	Lavalink LavalinkConfig `toml:"lavalink"`
 	DB       DatabaseConfig `toml:"database"`
+	Health   HealthConfig   `toml:"health"`
 }
 
 type BotConfig struct {
@@ -59,6 +60,13 @@ type LogConfig struct {
 type LavalinkConfig struct {
 	URL      string `toml:"url"`
 	Password string `toml:"password"`
+}
+
+// HealthConfig controls the /health endpoint used by the container HEALTHCHECK
+// and by external uptime monitoring. Address is a net/http listen address;
+// it defaults to ":8081" when left empty.
+type HealthConfig struct {
+	Address string `toml:"address"`
 }
 
 type DatabaseConfig struct {

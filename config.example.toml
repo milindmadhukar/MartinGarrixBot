@@ -54,3 +54,11 @@ password = "password"
 name = "garrixbot"
 # db port
 port = 5432
+
+[health]
+# listen address for the GET /health endpoint, used by the container
+# HEALTHCHECK and by external uptime monitoring. Defaults to ":8081".
+# Returns 200 when Discord and the database are both up, 503 otherwise.
+# Lavalink is reported in the response but never fails the check, since the
+# bot runs fine without it (radio features are simply disabled).
+address = ":8081"
