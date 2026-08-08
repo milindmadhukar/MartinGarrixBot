@@ -11,15 +11,37 @@ plugins:
     allowDirectPlaylistIds: true # Whether just playlist IDs can match. If false, only complete URLs will be loaded.
     # The clients to use for track loading. See below for a list of valid clients.
     # Clients are queried in the order they are given (so the first client is queried first and so on...)
+    # TV is first because it is the only OAuth-capable client: on hosts whose IP
+    # YouTube distrusts (datacenter/VPS ranges) the other clients are rejected
+    # with "This video requires login", and only the authenticated TV client works.
     clients:
+      - TV
       - MUSIC
       - ANDROID_VR
       - WEB
-      - WEBEMBEDDED 
+      - WEBEMBEDDED
+
+    # Authenticates requests as a real account, which is what gets past
+    # "This video requires login" on datacenter IPs.
+    # The refresh token is a credential and must NOT be committed here: it is
+    # injected via the PLUGINS_YOUTUBE_OAUTH_REFRESHTOKEN environment variable.
+    # Without it, Lavalink prints a google.com/device code on startup to re-authorise.
+    # !!! Authorise with a BURNER Google account - YouTube bans accounts for this. !!!
+    oauth:
+      enabled: true
+
+    # YouTube's player scripts change constantly and youtube-source's built-in
+    # cipher extraction keeps breaking ("Must find sig function from script: ...").
+    # Upstream delegates this to a remote cipher server instead. This is the public
+    # instance (no password, ratelimited to 10 req/s); self-host kikkia/yt-cipher
+    # and repoint this if that ever becomes a constraint.
+    remoteCipher:
+      url: "https://cipher.kikkia.dev/"
+      userAgent: "martingarrixbot"
 
 lavalink:
   plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.0"
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
       snapshot: false # Set to true if you want to use a snapshot version.
 #    - dependency: "com.github.example:example-plugin:1.0.0" # required, the coordinates of your plugin
 #      repository: "https://maven.example.com/releases" # optional, defaults to the Lavalink releases repository by default

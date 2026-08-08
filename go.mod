@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/disgoorg/disgo v0.18.14
-	github.com/disgoorg/disgolink/v3 v3.0.4
+	github.com/disgoorg/disgolink/v3 v3.1.0
 	github.com/disgoorg/json v1.2.0
 	github.com/disgoorg/paginator v0.0.0-20240725182907-1bdf780b5586
 	github.com/disgoorg/snowflake/v2 v2.0.3
