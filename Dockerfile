@@ -30,6 +30,14 @@ COPY --from=build /build/bot /bot/mgbot
 COPY --from=build /build/db/migrations/ /bot/db/migrations/
 COPY --from=build /build/assets/ /bot/assets/
 
+EXPOSE 8081
+
+# /health returns 503 unless both Discord and the database are up, which wget
+# surfaces as a non-zero exit. start-period covers migrations and the gateway
+# handshake so a slow boot is not reported as a failure.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://127.0.0.1:8081/health || exit 1
+
 ENTRYPOINT ["/bot/mgbot"]
 
 CMD ["-config", "/var/lib/config.toml"]
