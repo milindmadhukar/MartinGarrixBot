@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -85,6 +86,35 @@ func nextDataPayload(body string) (string, error) {
 	return body[start : start+end], nil
 }
 
+// discordMaxButtonURL is Discord's limit for a link button's url field. Exceeding
+// it fails the whole message with "50035: Invalid Form Body", not just the button.
+const discordMaxButtonURL = 512
+
+// sanitizeTicketURL drops the Google Analytics cross-domain linker parameters
+// that ticket vendors append. They are not needed to open the page, and
+// taogroup's push some URLs past 650 characters, over Discord's button limit.
+func sanitizeTicketURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+
+	query := u.Query()
+	for key := range query {
+		// _gl, _ga, _ga_*, _gcl_aw, _gcl_au, _fplc and FPAU are all analytics.
+		if strings.HasPrefix(key, "_") || key == "FPAU" {
+			query.Del(key)
+		}
+	}
+	u.RawQuery = query.Encode()
+
+	return u.String()
+}
+
 // fetchTourShows returns the announced shows, ordered by date.
 func fetchTourShows() ([]utils.TourShow, error) {
 	req, err := http.NewRequest("GET", tourURL, nil)
@@ -141,7 +171,7 @@ func fetchTourShows() ([]utils.TourShow, error) {
 			ShowName:  d.Title.String(),
 			Venue:     d.Venue.String(),
 			ShowDate:  showDate,
-			TicketURL: d.TicketLink.URL,
+			TicketURL: sanitizeTicketURL(d.TicketLink.URL),
 		}
 
 		// Location reads "City, Country"; anything after the first comma is the
@@ -278,10 +308,17 @@ func GetAllTourShows(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 					ticketURL = "https://" + ticketURL
 				}
 
-				components = []discord.ContainerComponent{
-					discord.NewActionRow(
-						discord.NewLinkButton("🎟️ Get Tickets", ticketURL),
-					),
+				// Drop the button rather than lose the whole announcement to it.
+				if len(ticketURL) > discordMaxButtonURL {
+					slog.Warn("Ticket URL too long for a link button, announcing without it",
+						slog.String("show_name", show.ShowName),
+						slog.Int("url_length", len(ticketURL)))
+				} else {
+					components = []discord.ContainerComponent{
+						discord.NewActionRow(
+							discord.NewLinkButton("🎟️ Get Tickets", ticketURL),
+						),
+					}
 				}
 			}
 
