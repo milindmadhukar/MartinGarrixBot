@@ -3,7 +3,12 @@ services:
     image: ghcr.io/lavalink-devs/lavalink:4-alpine
     container_name: martingarrix-lavalink
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      # Pinned to the 4.x line: WUD reports, never applies.
+      - "wud.trigger.exclude=docker.local"
+      # The {1,2} bound is the point: Lavalink also publishes commit-hash tags
+      # like `9930779-alpine`, which a plain \d+ would happily treat as
+      # version 9,930,779 and rank above everything forever.
+      - 'wud.tag.include=^\d{1,2}(\.\d+)*-alpine$$'
     restart: unless-stopped
     environment:
       # JVM heap. Override LAVALINK_HEAP in .env per host - the previous hardcoded
@@ -26,7 +31,10 @@ services:
     image: ghcr.io/milindmadhukar/martingarrixbot:main
     container_name: martingarrixbot
     labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      # Rolling tag (:main): not semver, so digest watching is what makes it
+      # visible to WUD at all. With no trigger.exclude, docker.local auto-applies
+      # a new digest, which is how a push to main reaches the box.
+      - "wud.watch.digest=true"
     volumes:
       - ./config.docker.toml:/var/lib/config.toml
       - ./mgbot-google-service.json:/etc/secrets/mgbot-google-service.json
