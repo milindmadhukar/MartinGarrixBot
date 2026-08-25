@@ -23,7 +23,7 @@ services:
     expose:
       - 2333
   bot:
-    image: ghcr.io/milindmadhukar/martingarrixbot:master
+    image: ghcr.io/milindmadhukar/martingarrixbot:main
     container_name: martingarrixbot
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
