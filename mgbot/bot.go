@@ -17,7 +17,6 @@ import (
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/disgolink/v3/disgolink"
 	"github.com/disgoorg/paginator"
-	"github.com/gocolly/colly/v2"
 	"github.com/golang-migrate/migrate/v4"
 	migratePgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -49,8 +48,6 @@ type MartinGarrixBot struct {
 	DB             *pgxpool.Pool
 	Queries        *db.Queries
 	YoutubeService *youtube.Service
-
-	Collector *colly.Collector
 
 	RedditToken    utils.RedditToken
 	RadioManager   *utils.RadioManager
@@ -124,19 +121,6 @@ func (b *MartinGarrixBot) SetupDB() error {
 		return nil
 	}
 	return errors.New("Could not make a connection to the database.")
-}
-
-func (b *MartinGarrixBot) SetupColly() {
-	b.Collector = colly.NewCollector(
-		colly.AllowedDomains("stmpdrcrds.com", "martingarrix.com"),
-		colly.Async(true),
-		colly.AllowURLRevisit(),
-	)
-
-	b.Collector.Limit(&colly.LimitRule{
-		Parallelism: 2,
-		RandomDelay: 2 * time.Second,
-	})
 }
 
 // SetupBeatport initializes the Beatport API client

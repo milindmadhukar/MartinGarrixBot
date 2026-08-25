@@ -88,8 +88,6 @@ func main() {
 		os.Exit(-1)
 	}
 
-	b.SetupColly()
-
 	// Setup Beatport client
 	if err = b.SetupBeatport(); err != nil {
 		slog.Warn("Failed to setup Beatport client - beatport features will be disabled", slog.Any("err", err))
