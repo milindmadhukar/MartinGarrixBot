@@ -2,18 +2,18 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"html"
+	"io"
 	"log/slog"
+	"net/http"
 	"net/url"
-	"path"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/gocolly/colly/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
@@ -31,65 +31,226 @@ import (
 
 // TODO: All sets kb, when asked AI can query and send link in chat?
 
+const stmpdArchiveURL = "https://stmpdrcrds.com/archive"
+
+// stmpdClient bounds the archive request. This fetcher no longer uses the shared
+// colly collector: the archive is a Next.js app whose release data arrives as a
+// JSON payload, so there is no HTML worth traversing.
+var stmpdClient = &http.Client{Timeout: 30 * time.Second}
+
+// stmpdArchiveRelease mirrors the release objects STMPD's archive page embeds in
+// its Next.js payload. The old CSS-selector scrape broke when the site was
+// rebuilt; this payload carries the same fields (plus an exact release date) and
+// does not depend on class names surviving a redesign.
+type stmpdArchiveRelease struct {
+	ID          string `json:"_id"`
+	Title       string `json:"title"`
+	Artists     string `json:"artists"`
+	Version     string `json:"version"`
+	ReleaseDate string `json:"releaseDate"`
+	ArtworkURL  string `json:"artworkUrl"`
+	Slug        struct {
+		Current string `json:"current"`
+	} `json:"slug"`
+	StreamingLinks struct {
+		Spotify    string `json:"spotify"`
+		AppleMusic string `json:"appleMusic"`
+		YouTube    string `json:"youtube"`
+	} `json:"streamingLinks"`
+}
+
+// nextFlightPayload reassembles the Next.js RSC payload, which the page streams
+// as a series of self.__next_f.push([1,"<json-string-chunk>"]) calls. Each chunk
+// is a JSON string literal, so decoding and concatenating them yields the
+// original text the server sent.
+func nextFlightPayload(body string) string {
+	const marker = `self.__next_f.push([1,`
+
+	var sb strings.Builder
+	for idx := 0; idx < len(body); {
+		k := strings.Index(body[idx:], marker)
+		if k < 0 {
+			break
+		}
+
+		p := idx + k + len(marker)
+		for p < len(body) && body[p] != '"' && body[p] != ']' {
+			p++
+		}
+		if p >= len(body) || body[p] != '"' {
+			idx = p + 1
+			continue
+		}
+
+		// Walk to the closing quote, stepping over backslash escapes.
+		q := p + 1
+		for q < len(body) && body[q] != '"' {
+			if body[q] == '\\' {
+				q++
+			}
+			q++
+		}
+		if q >= len(body) {
+			break
+		}
+
+		var chunk string
+		if err := json.Unmarshal([]byte(body[p:q+1]), &chunk); err == nil {
+			sb.WriteString(chunk)
+		}
+		idx = q + 1
+	}
+
+	return sb.String()
+}
+
+// extractJSONArray returns the JSON array following key, tracking string state so
+// that brackets inside titles or URLs do not end the array early.
+func extractJSONArray(s, key string) (string, error) {
+	k := strings.Index(s, key)
+	if k < 0 {
+		return "", fmt.Errorf("key %q not found in payload", key)
+	}
+
+	rel := strings.Index(s[k:], "[")
+	if rel < 0 {
+		return "", fmt.Errorf("no array found after key %q", key)
+	}
+	start := k + rel
+
+	var depth int
+	var inStr, esc bool
+	for i := start; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case esc:
+			esc = false
+		case c == '\\':
+			esc = true
+		case c == '"':
+			inStr = !inStr
+		case inStr:
+			// brackets inside strings are data, not structure
+		case c == '[':
+			depth++
+		case c == ']':
+			depth--
+			if depth == 0 {
+				return s[start : i+1], nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("unterminated array after key %q", key)
+}
+
+// upscaleArtwork asks Sanity's CDN for a larger rendition than the 400px one the
+// page uses for its grid thumbnails, so Discord embeds are not blurry.
+func upscaleArtwork(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+
+	q := u.Query()
+	if q.Get("w") == "" && q.Get("h") == "" {
+		return raw
+	}
+	q.Set("w", "1000")
+	q.Set("h", "1000")
+	u.RawQuery = q.Encode()
+
+	return u.String()
+}
+
+// fetchStmpdReleases returns the archive's releases, newest first.
+func fetchStmpdReleases() ([]utils.StmpdRelease, error) {
+	req, err := http.NewRequest("GET", stmpdArchiveURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stmpd request: %w", err)
+	}
+	req.Header.Set("User-Agent", "MartinGarrixBot (+https://github.com/milindmadhukar/MartinGarrixBot)")
+
+	resp, err := stmpdClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch stmpd archive: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("stmpd archive returned %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read stmpd archive body: %w", err)
+	}
+
+	payload := nextFlightPayload(string(body))
+	if payload == "" {
+		return nil, fmt.Errorf("no next.js payload found in stmpd archive")
+	}
+
+	rawArray, err := extractJSONArray(payload, `"initialReleases"`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to locate releases in stmpd payload: %w", err)
+	}
+
+	var parsed []stmpdArchiveRelease
+	if err := json.Unmarshal([]byte(rawArray), &parsed); err != nil {
+		return nil, fmt.Errorf("failed to decode stmpd releases: %w", err)
+	}
+
+	releases := make([]utils.StmpdRelease, 0, len(parsed))
+	for _, p := range parsed {
+		if p.Title == "" {
+			continue
+		}
+
+		name := p.Title
+		if p.Version != "" {
+			name = fmt.Sprintf("%s (%s)", p.Title, p.Version)
+		}
+
+		release := utils.StmpdRelease{
+			Name:          name,
+			Artists:       p.Artists,
+			Thumbnail:     upscaleArtwork(p.ArtworkURL),
+			SpotifyURL:    p.StreamingLinks.Spotify,
+			AppleMusicUrl: p.StreamingLinks.AppleMusic,
+			YoutubeURL:    p.StreamingLinks.YouTube,
+		}
+
+		// releaseDate is a full ISO date, but only the year is kept: the existing
+		// rows were written as "<year>-01-01" and DoesSongExist matches on the
+		// date, so switching to the exact date would make every stored song look
+		// new and re-announce it.
+		if len(p.ReleaseDate) >= 4 {
+			if year, err := strconv.Atoi(p.ReleaseDate[:4]); err == nil {
+				release.ReleaseYear = year
+			}
+		}
+
+		releases = append(releases, release)
+	}
+
+	return releases, nil
+}
+
 func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 	for ; ; <-ticker.C {
 		slog.Info("Running STMPD RCRDS releases fetcher")
 
-		err := b.Collector.Visit("https://stmpdrcrds.com/archive")
+		releases, err := fetchStmpdReleases()
 		if err != nil {
-			slog.Error("Failed to visit stmpdrcrds.com", slog.Any("err", err))
+			slog.Error("Failed to fetch STMPD releases", slog.Any("err", err))
 			continue
 		}
 
-		var releases []utils.StmpdRelease
-
-		b.Collector.OnHTML(".releases", func(e *colly.HTMLElement) {
-			e.ForEach(".grid__cell", func(_ int, cell *colly.HTMLElement) {
-				var release utils.StmpdRelease
-
-				releaseInfoDate, err := strconv.Atoi(cell.ChildText(".release__info__date"))
-				if err == nil {
-					release.ReleaseYear = releaseInfoDate
-				}
-
-				release.Thumbnail = cell.ChildAttr(".release__figure img", "src")
-				parsedURL, err := url.Parse(release.Thumbnail)
-				if err != nil {
-					panic(err)
-				}
-				urlPath := parsedURL.Path
-				dir, file := path.Split(urlPath)
-				newFile := strings.Replace(file, "small", "big", 1)
-				parsedURL.Path = dir + newFile
-
-				release.Thumbnail = parsedURL.String()
-
-				h3 := cell.DOM.Find(".release__info__h3")
-				if h3.Length() > 0 {
-					htmlContent, _ := h3.Html()
-					parts := strings.Split(htmlContent, "<br/>")
-					if len(parts) >= 2 {
-						release.Artists = html.UnescapeString(strings.TrimSpace(parts[0]))
-						release.Name = html.UnescapeString(strings.TrimSpace(parts[1]))
-					}
-				}
-
-				cell.ForEach(".links__links__a", func(_ int, link *colly.HTMLElement) {
-					href := link.Attr("href")
-					if strings.Contains(href, "spotify") {
-						release.SpotifyURL = href
-					} else if strings.Contains(href, "apple") {
-						release.AppleMusicUrl = href
-					} else if strings.Contains(href, "youtube") || strings.Contains(href, "youtu.be") {
-						release.YoutubeURL = href
-					}
-				})
-
-				releases = append(releases, release)
-			})
-		})
-
-		b.Collector.Wait()
+		if len(releases) == 0 {
+			slog.Warn("STMPD archive returned no releases - the page layout may have changed again")
+			continue
+		}
 
 		slices.Reverse(releases)
 		if len(releases) > 5 {

@@ -16,13 +16,28 @@ import (
 
 // GetBeatportReleases periodically fetches new songs from the Beatport API
 func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll bool) {
-	if b.BeatportClient == nil {
-		slog.Warn("Beatport client not initialized, skipping beatport releases fetcher")
+	// Credentials only change with a restart, so there is nothing to retry for.
+	if b.Cfg.Bot.BeatportUsername == "" || b.Cfg.Bot.BeatportPassword == "" {
+		slog.Warn("Beatport credentials not configured, skipping beatport releases fetcher")
 		return
 	}
 
 	for ; ; <-ticker.C {
 		slog.Info("Running Beatport releases fetcher")
+
+		// Initialise lazily. NewBeatportClient performs network calls to obtain a
+		// client ID and log in, so a transient failure while the bot was starting
+		// must not disable the fetcher for the lifetime of the process.
+		if b.BeatportClient == nil {
+			if err := b.SetupBeatport(); err != nil {
+				slog.Error("Failed to initialize beatport client, retrying next cycle", slog.Any("err", err))
+				continue
+			}
+			if b.BeatportClient == nil {
+				slog.Error("Beatport client unavailable after setup, retrying next cycle")
+				continue
+			}
+		}
 
 		maxTracks := b.Cfg.Bot.BeatportMaxTracks
 		if fetchAll {
