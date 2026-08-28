@@ -82,6 +82,7 @@ const getRandomSongForRadio = `-- name: GetRandomSongForRadio :one
 SELECT id, name, artists, thumbnail_url, youtube_url
 FROM songs
 WHERE youtube_url IS NOT NULL
+  AND (length_ms IS NULL OR length_ms <= 600000)
 ORDER BY RANDOM()
 LIMIT 1
 `
