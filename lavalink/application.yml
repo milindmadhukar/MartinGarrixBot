@@ -11,13 +11,17 @@ plugins:
     allowDirectPlaylistIds: true # Whether just playlist IDs can match. If false, only complete URLs will be loaded.
     # The clients to use for track loading. See below for a list of valid clients.
     # Clients are queried in the order they are given (so the first client is queried first and so on...)
-    # TV is first because it is the only OAuth-capable client: on hosts whose IP
-    # YouTube distrusts (datacenter/VPS ranges) the other clients are rejected
-    # with "This video requires login", and only the authenticated TV client works.
+    #
+    # TV is the only OAuth-capable client (Tv.java is the sole supportsOAuth() override),
+    # and on hosts whose IP YouTube distrusts (datacenter/VPS ranges) it is the only one
+    # that gets past "This video requires login". Note it is playback-only:
+    # Tv.canHandleRequest() is hardcoded false, so it never participates in search or
+    # resolution - those always fall to MUSIC/ANDROID_VR/WEB regardless of ordering.
     clients:
-      - TV
-      - MUSIC
-      - ANDROID_VR
+      - TV               # authenticated playback; beats "This video requires login"
+      - TVHTML5_SIMPLY   # unauthenticated fallback, Opus, playback-capable
+      - ANDROID_VR       # Opus, no auth
+      - MUSIC            # search only (ytmsearch:), no playback
       - WEB
       - WEBEMBEDDED
 
@@ -41,8 +45,14 @@ plugins:
 
 lavalink:
   plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
-      snapshot: false # Set to true if you want to use a snapshot version.
+    # 1.18.2 sends a Cobalt User-Agent on the TVHTML5 player endpoint, which YouTube
+    # began rejecting on 2026-08-18: "The page needs to be reloaded.", 0 formats, so
+    # every track resolved and then died at playback. Fixed by b33460b3 (PlayStation 4
+    # User-Agent), which is not in any tagged release yet - 1.18.2 is still latest.
+    # Revisit and move back to a release pin when 1.18.3 ships.
+    # Upstream: https://github.com/lavalink-devs/youtube-source/issues/226
+    - dependency: "dev.lavalink.youtube:youtube-plugin:b33460b38ad13b5cd07da75e46444397cf0ea2df"
+      snapshot: true # Set to true if you want to use a snapshot version.
 #    - dependency: "com.github.example:example-plugin:1.0.0" # required, the coordinates of your plugin
 #      repository: "https://maven.example.com/releases" # optional, defaults to the Lavalink releases repository by default
 #      snapshot: false # optional, defaults to false, used to tell Lavalink to use the snapshot repository instead of the release repository
@@ -122,6 +132,9 @@ logging:
   level:
     root: INFO
     lavalink: INFO
+    # Surfaces client selection, per-client failures and OAuth token refreshes. Without
+    # this the only record of a YouTube breakage is the exception text the bot receives.
+    dev.lavalink.youtube: INFO
 
   request:
     enabled: true

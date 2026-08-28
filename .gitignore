@@ -6,4 +6,7 @@ config.docker.toml
 .env
 /tmp
 /lavalink/logs/
+# Lavalink downloads the plugin version declared in application.yml itself. A committed
+# jar only risks a fresh deploy running a stale version alongside the declared one.
+/lavalink/plugins/*.jar
 /martin-garrix-bot

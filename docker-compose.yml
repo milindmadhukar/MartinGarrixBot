@@ -22,6 +22,12 @@ services:
     volumes:
       - ./lavalink/application.yml:/opt/Lavalink/application.yml
       - ./lavalink/plugins/:/opt/Lavalink/plugins/
+      # Lavalink writes its own logs to ./logs inside the container. Without this bind
+      # the only record of a YouTube breakage is whatever the bot happens to log, which
+      # is how the 2026-08-18 TV-client outage went undiagnosed for ten days.
+      # The container runs as uid 322, so the host dir must be writable by it:
+      #   docker exec -u 0 martingarrix-lavalink chown 322:65533 /opt/Lavalink/logs
+      - ./lavalink/logs/:/opt/Lavalink/logs/
       - /usr/lib/x86_64-linux-gnu/libudev.so.1:/usr/lib/x86_64-linux-gnu/libudev.so.1:ro
     networks:
       - garrixbot
