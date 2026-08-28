@@ -4,33 +4,124 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/disgoorg/snowflake/v2"
+	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
 
-// PlayNextRadioSong fetches and plays a random song from the database
-func (b *MartinGarrixBot) PlayNextRadioSong(guildID snowflake.ID) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+const (
+	// Backoff between attempts, doubling each time, capped at radioMaxBackoff.
+	radioBaseBackoff = 2 * time.Second
+	radioMaxBackoff  = 5 * time.Minute
+	// Consecutive failures before we treat this as a source-side outage rather than a
+	// handful of bad rows, and drop to polling at radioMaxBackoff instead.
+	radioCircuitBreakAt = 15
+)
 
-	// Get random song from database
-	song, err := b.Queries.GetRandomSongForRadio(ctx)
-	if err != nil {
-		slog.Error("Failed to get random song", slog.Any("err", err))
-		return
+// radioBackoff maps consecutive playback failures onto a delay before the next attempt.
+//
+// The count is deliberately held on RadioManager rather than as a loop variable: the
+// common failure is asynchronous. PlayTrackWithInfo returns nil, TrackStartEvent fires,
+// and only then does Lavalink raise TrackExceptionEvent - so each retry arrives as a
+// fresh call and a local counter would restart at zero every time. That is precisely how
+// the 2026-08-18 outage produced one track per second for ten days.
+func radioBackoff(failures int) time.Duration {
+	if failures <= 0 {
+		return 0
 	}
 
-	// Build search query using artist and song name
-	query := fmt.Sprintf("ytsearch:%s - %s", song.Artists, song.Name)
+	if failures >= radioCircuitBreakAt {
+		return radioMaxBackoff
+	}
 
-	// Play the track using RadioManager helper (stores track info and plays)
-	if err := b.RadioManager.PlayTrackWithInfo(ctx, guildID, query, song.ID, song.Artists, song.Name); err != nil {
-		slog.Error("Failed to play track", slog.Any("err", err), slog.String("artist", song.Artists), slog.String("song", song.Name))
-		// Try again with next song
-		time.Sleep(2 * time.Second)
-		b.PlayNextRadioSong(guildID)
+	return min(radioBaseBackoff<<min(failures-1, 8), radioMaxBackoff)
+}
+
+// radioQuery prefers the stored YouTube URL over a text search, which avoids a search
+// round-trip and the chance of search picking the wrong upload.
+//
+// It falls back to search unless the URL names a single video. songs.youtube_url is not
+// uniform: 193 of 848 rows are playlist links. Loading one of those would play the first
+// track of the playlist instead of the song we picked, and pull up to
+// youtubePlaylistLoadLimit pages of results to do it.
+func radioQuery(song db.GetRandomSongForRadioRow) string {
+	if song.YoutubeUrl.Valid && isYouTubeVideoURL(song.YoutubeUrl.String) {
+		return song.YoutubeUrl.String
+	}
+
+	return fmt.Sprintf("ytsearch:%s - %s", song.Artists, song.Name)
+}
+
+// isYouTubeVideoURL reports whether url addresses one video rather than a playlist or mix.
+func isYouTubeVideoURL(url string) bool {
+	if strings.Contains(url, "/playlist") || strings.Contains(url, "list=") {
+		return false
+	}
+
+	return strings.Contains(url, "watch?v=") || strings.Contains(url, "youtu.be/")
+}
+
+// PlayNextRadioSong fetches and plays a random song from the database, pacing itself
+// against the guild's recent failure history until a track plays or the radio is stopped.
+//
+// This deliberately does not recurse. When every track fails, an unbounded immediate retry
+// turns a source outage into thousands of requests a day from an IP YouTube is already
+// rate-limiting, which makes the underlying problem worse rather than better.
+func (b *MartinGarrixBot) PlayNextRadioSong(guildID snowflake.ID) {
+	// TrackEnd, TrackException and TrackStuck can all advance the track, and any of them
+	// can fire while an advance is already running. Without this guard they compound.
+	if !b.RadioManager.TryBeginAdvance(guildID) {
+		slog.Debug("Track advance already in flight, skipping", slog.String("guild_id", guildID.String()))
+		return
+	}
+	defer b.RadioManager.EndAdvance(guildID)
+
+	for {
+		// The only exit other than a successful start: someone stopped the radio, or
+		// Lavalink went away, while we were backing off.
+		if !b.RadioManager.IsActive(guildID) {
+			slog.Info("Radio no longer active, stopping advance", slog.String("guild_id", guildID.String()))
+			return
+		}
+
+		failures := b.RadioManager.PlaybackFailureCount(guildID)
+		if delay := radioBackoff(failures); delay > 0 {
+			slog.Warn("Backing off before next radio attempt",
+				slog.String("guild_id", guildID.String()),
+				slog.Int("consecutive_failures", failures),
+				slog.Duration("backoff", delay))
+			time.Sleep(delay)
+		}
+
+		// Cancel explicitly rather than deferring: the deferred cancels would otherwise
+		// all pile up until the loop finished.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+		song, err := b.Queries.GetRandomSongForRadio(ctx)
+		if err != nil {
+			cancel()
+			slog.Error("Failed to get random song", slog.Any("err", err))
+			return
+		}
+
+		err = b.RadioManager.PlayTrackWithInfo(ctx, guildID, radioQuery(song), song.ID, song.Artists, song.Name)
+		cancel()
+
+		if err == nil {
+			// Not a success yet - the track may still fail at playback. The counter is
+			// cleared by LavalinkTrackEndListener once a track actually finishes.
+			return
+		}
+
+		failures = b.RadioManager.RecordPlaybackFailure(guildID)
+		slog.Error("Failed to play track",
+			slog.Any("err", err),
+			slog.String("artist", song.Artists),
+			slog.String("song", song.Name),
+			slog.Int("consecutive_failures", failures))
 	}
 }
 

@@ -32,8 +32,10 @@ type RadioManager struct {
 	CurrentTracks        map[snowflake.ID]TrackInfo // Store current track info per guild
 	SkipVotes            map[snowflake.ID]*SkipVote // Store skip votes per guild
 	IsConnected          bool
-	ReconnectAttempts    int       // Track reconnection attempts
-	LastConnectAttempt   time.Time // Track last connection attempt
+	ReconnectAttempts    int                   // Track reconnection attempts
+	LastConnectAttempt   time.Time             // Track last connection attempt
+	PlaybackFailures     map[snowflake.ID]int  // Consecutive failed playback attempts per guild
+	Advancing            map[snowflake.ID]bool // Single-flight guard for advancing the track
 	mu                   sync.RWMutex
 	OnTrackChange        func(guildID snowflake.ID, trackName, artist, thumbnailURL string)
 	OnLavalinkDisconnect func() // Callback when Lavalink disconnects permanently
@@ -46,7 +48,55 @@ func NewRadioManager(userID snowflake.ID) *RadioManager {
 		PausedGuilds:  make(map[snowflake.ID]bool),
 		CurrentTracks: make(map[snowflake.ID]TrackInfo),
 		SkipVotes:     make(map[snowflake.ID]*SkipVote),
+
+		PlaybackFailures: make(map[snowflake.ID]int),
+		Advancing:        make(map[snowflake.ID]bool),
 	}
+}
+
+// TryBeginAdvance claims the right to advance the track for a guild. It returns false if
+// an advance is already in flight, which stops the TrackException and TrackStuck listeners
+// from each spawning their own chain for the same guild.
+func (rm *RadioManager) TryBeginAdvance(guildID snowflake.ID) bool {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	if rm.Advancing[guildID] {
+		return false
+	}
+
+	rm.Advancing[guildID] = true
+	return true
+}
+
+// EndAdvance releases the guard taken by TryBeginAdvance.
+func (rm *RadioManager) EndAdvance(guildID snowflake.ID) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	delete(rm.Advancing, guildID)
+}
+
+// RecordPlaybackFailure increments and returns the consecutive failure count for a guild.
+func (rm *RadioManager) RecordPlaybackFailure(guildID snowflake.ID) int {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	rm.PlaybackFailures[guildID]++
+	return rm.PlaybackFailures[guildID]
+}
+
+// ResetPlaybackFailures clears the failure count once a track plays successfully.
+func (rm *RadioManager) ResetPlaybackFailures(guildID snowflake.ID) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	delete(rm.PlaybackFailures, guildID)
+}
+
+// PlaybackFailureCount reports consecutive playback failures for a guild.
+func (rm *RadioManager) PlaybackFailureCount(guildID snowflake.ID) int {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	return rm.PlaybackFailures[guildID]
 }
 
 // ResetSkipVotes clears skip votes for a guild (call when new track starts)

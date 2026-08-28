@@ -59,6 +59,13 @@ func LavalinkTrackEndListener(b *mgbot.MartinGarrixBot) disgolink.EventListener 
 			slog.String("guild_id", event.GuildID().String()),
 			slog.String("reason", string(event.Reason)))
 
+		// A track that played through to the end is the only trustworthy signal that
+		// playback is healthy. TrackStartEvent is not: during the 2026-08-18 outage it
+		// fired for every track, roughly a second before the track threw.
+		if event.Reason == lavalink.TrackEndReasonFinished {
+			b.RadioManager.ResetPlaybackFailures(event.GuildID())
+		}
+
 		// Only auto-play next song if the reason allows it
 		if !event.Reason.MayStartNext() {
 			return
@@ -109,6 +116,13 @@ func LavalinkTrackExceptionListener(b *mgbot.MartinGarrixBot) disgolink.EventLis
 			slog.String("message", event.Exception.Message),
 			slog.String("severity", string(event.Exception.Severity)))
 
+		// Count this against the guild before advancing: PlayNextRadioSong paces itself
+		// off the failure count, and the load itself succeeded, so nothing else records it.
+		failures := b.RadioManager.RecordPlaybackFailure(event.GuildID())
+		slog.Warn("Recorded playback failure",
+			slog.String("guild_id", event.GuildID().String()),
+			slog.Int("consecutive_failures", failures))
+
 		// Try to play next song on error
 		if b.RadioManager.IsActive(event.GuildID()) {
 			go playNextRadioSong(b, event.GuildID())
@@ -122,6 +136,9 @@ func LavalinkTrackStuckListener(b *mgbot.MartinGarrixBot) disgolink.EventListene
 		slog.Warn("Track stuck",
 			slog.String("guild_id", event.GuildID().String()),
 			slog.String("threshold", event.Threshold.String()))
+
+		// A stuck track is a failed track as far as pacing is concerned.
+		b.RadioManager.RecordPlaybackFailure(event.GuildID())
 
 		// Try to play next song when stuck
 		if b.RadioManager.IsActive(event.GuildID()) {
