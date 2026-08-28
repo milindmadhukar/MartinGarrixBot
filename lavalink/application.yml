@@ -45,13 +45,18 @@ plugins:
 
 lavalink:
   plugins:
-    # 1.18.2 sends a Cobalt User-Agent on the TVHTML5 player endpoint, which YouTube
-    # began rejecting on 2026-08-18: "The page needs to be reloaded.", 0 formats, so
-    # every track resolved and then died at playback. Fixed by b33460b3 (PlayStation 4
-    # User-Agent), which is not in any tagged release yet - 1.18.2 is still latest.
-    # Revisit and move back to a release pin when 1.18.3 ships.
-    # Upstream: https://github.com/lavalink-devs/youtube-source/issues/226
-    - dependency: "dev.lavalink.youtube:youtube-plugin:b33460b38ad13b5cd07da75e46444397cf0ea2df"
+    # Pinned to a snapshot because two fixes we need are in no tagged release yet
+    # (1.18.2, 2026-07-27, is still latest). Revisit when 1.18.3 ships.
+    #
+    # b33460b3 - PlayStation 4 User-Agent for the TV client. 1.18.2 sends a Cobalt UA on
+    #   the TVHTML5 player endpoint, which YouTube began rejecting on 2026-08-18:
+    #   "The page needs to be reloaded.", 0 formats, so every track resolved and then
+    #   died at playback. https://github.com/lavalink-devs/youtube-source/issues/226
+    # f45bbb7a - recovers the total length for formats that omit contentLength. Without
+    #   it roughly one track in three threw at the end ("Something went wrong when
+    #   decoding the track", seek past EOF in MpegStandardFileTrackProvider) and was cut
+    #   up to a minute short. https://github.com/lavalink-devs/youtube-source/issues/234
+    - dependency: "dev.lavalink.youtube:youtube-plugin:f45bbb7aebfcbc1c553769e04af6cd43afa8b7c3"
       snapshot: true # Set to true if you want to use a snapshot version.
 #    - dependency: "com.github.example:example-plugin:1.0.0" # required, the coordinates of your plugin
 #      repository: "https://maven.example.com/releases" # optional, defaults to the Lavalink releases repository by default
