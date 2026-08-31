@@ -218,8 +218,13 @@ func GetAllTourShows(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		shows, err := fetchTourShows()
 		if err != nil {
 			slog.Error("Failed to fetch tour shows", slog.Any("err", err))
+			utils.RecordSourceFailure(utils.SourceTour, err)
 			continue
 		}
+
+		// An empty tour page is genuinely normal between tour announcements, so
+		// unlike the release feeds this is a success with nothing in it.
+		utils.RecordSourceSuccess(utils.SourceTour)
 
 		if len(shows) == 0 {
 			slog.Info("No tour shows found")

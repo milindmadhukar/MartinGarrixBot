@@ -1,13 +1,11 @@
 package commands
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
@@ -28,65 +26,54 @@ var lyrics = discord.SlashCommandCreate{
 // PERF: Implement some sort of caching, we are hitting the database for every autocomplete request.
 func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHandler {
 	return func(e *handler.AutocompleteEvent) error {
-		var songChoices []utils.UniqueSong
+		var songChoices []utils.SongChoice
 		autocompleteInput := e.Data.String("song")
+
 		if autocompleteInput == "" {
 			songs, err := b.Queries.GetRandomSongNamesWithLyrics(e.Ctx)
 			if err != nil {
-				slog.Error("Failed to get all song names with lyrics", slog.Any("err", err))
+				slog.Error("Failed to get random song names with lyrics", slog.Any("err", err))
 				return err
 			}
-
 			for _, song := range songs {
-				songChoices = append(songChoices, utils.UniqueSong{
-					Name:        song.Name,
-					Artists:     song.Artists,
-					ReleaseDate: song.ReleaseDate,
+				songChoices = append(songChoices, utils.SongChoice{
+					ID: song.ID, Name: song.Name, Artists: song.Artists,
 				})
 			}
-
 		} else {
-			songs, err := b.Queries.GetSongsWithLyricsLike(e.Ctx, "%"+e.Data.String("song")+"%")
+			songs, err := b.Queries.GetSongsWithLyricsLike(e.Ctx, "%"+autocompleteInput+"%")
 			if err != nil {
 				slog.Error("Failed to get songs with lyrics like", slog.Any("err", err))
 				return err
 			}
-
 			for _, song := range songs {
-				songChoices = append(songChoices, utils.UniqueSong{
-					Name:        song.Name,
-					Artists:     song.Artists,
-					ReleaseDate: song.ReleaseDate,
+				songChoices = append(songChoices, utils.SongChoice{
+					ID: song.ID, Name: song.Name, Artists: song.Artists,
 				})
 			}
 		}
 
-		choices := make([]discord.AutocompleteChoice, len(songChoices))
-		for i, song := range songChoices {
-			choiceJson, _ := json.Marshal(song)
-			choices[i] = discord.AutocompleteChoiceString{
-				Name:  fmt.Sprintf("%s - %s", song.Artists, song.Name),
-				Value: string(choiceJson),
-			}
-		}
-
-		return e.AutocompleteResult(choices)
+		return e.AutocompleteResult(utils.BuildSongChoices(songChoices))
 	}
 }
 
 func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
 
-		songDataJson := e.SlashCommandInteractionData().String("song")
-		var songData utils.UniqueSong
-		json.Unmarshal([]byte(songDataJson), &songData)
+		songID, ok := utils.ParseSongChoice(e.SlashCommandInteractionData().String("song"))
+		if !ok {
+			// The user submitted free text instead of picking a suggestion.
+			return e.Respond(discord.InteractionResponseTypeCreateMessage,
+				discord.NewMessageCreateBuilder().
+					SetEmbeds(discord.NewEmbedBuilder().
+						SetDescription("Please pick a song from the suggestions.").
+						SetColor(utils.ColorWarning).
+						Build()).
+					SetEphemeral(true).
+					Build())
+		}
 
-		song, err := b.Queries.GetSong(e.Ctx, db.GetSongParams{
-			Name:        songData.Name,
-			Artists:     songData.Artists,
-			ReleaseDate: songData.ReleaseDate,
-		})
-
+		song, err := b.Queries.GetSongByID(e.Ctx, songID)
 		if err != nil {
 			return err
 		}
@@ -106,11 +93,9 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		lyricsMessage := discord.NewMessageCreateBuilder().
 			SetEmbeds(eb.Build())
 
-		if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
-			lyricsMessage = lyricsMessage.AddActionRow(
-				utils.GetSongButtons(song)...,
-			)
-		}
+		// GetSongButtonRows returns nil when the song carries no links, so the
+		// hand-written "does it have any" guard this replaced is redundant.
+		lyricsMessage = lyricsMessage.AddContainerComponents(utils.GetSongButtonRows(song)...)
 
 		return e.Respond(
 			discord.InteractionResponseTypeCreateMessage,

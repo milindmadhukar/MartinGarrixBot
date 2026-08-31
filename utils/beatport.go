@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -23,11 +24,11 @@ const (
 
 // BeatportConfig holds beatport API configuration
 type BeatportConfig struct {
-	Username     string
-	Password     string
-	LabelID      string
-	ArtistIDs    []string
-	MaxTracks    int
+	Username  string
+	Password  string
+	LabelID   string
+	ArtistIDs []string
+	MaxTracks int
 }
 
 // BeatportTokenResponse represents the OAuth token response
@@ -120,6 +121,55 @@ type BeatportClient struct {
 	tokenExpiry time.Time
 	config      *BeatportConfig
 	clientID    string
+
+	// Auth failures are held on the client, not as a loop variable, because the
+	// caller re-enters through EnsureAuthenticated once per configured source --
+	// one label plus four artist IDs -- on every 15 minute cycle. A local counter
+	// would restart at zero each time, which is how a rejected password produced
+	// roughly 480 login attempts a day against Beatport for six days straight.
+	authFailures    int
+	nextAuthAttempt time.Time
+	lastAuthErr     error
+}
+
+// ErrBeatportCredentialsRejected marks an authentication failure that retrying
+// cannot fix. Beatport answers a bad username or password with 403, the same status
+// a bot-protection layer would use, so the two are indistinguishable without reading
+// the body -- and treating a permanent rejection as a transient block is what kept
+// the retry loop running for days.
+var ErrBeatportCredentialsRejected = errors.New("beatport rejected the configured credentials")
+
+const (
+	// beatportAuthBaseBackoff is the delay after a single transient auth failure.
+	beatportAuthBaseBackoff = time.Minute
+	// beatportAuthMaxBackoff caps the transient backoff.
+	beatportAuthMaxBackoff = time.Hour
+	// beatportCredentialsCooldown is how long to wait after a rejection that
+	// retrying cannot fix. Long enough to stop hammering, short enough that a
+	// corrected password takes effect without a restart.
+	beatportCredentialsCooldown = 6 * time.Hour
+)
+
+// beatportAuthBackoff maps consecutive transient auth failures onto a delay before
+// the next attempt, mirroring radioBackoff's shape.
+//
+// Written out rather than using the min builtin: this package declares its own
+// int-only min in levenshtein.go, which shadows it and does not accept Durations.
+func beatportAuthBackoff(failures int) time.Duration {
+	if failures <= 0 {
+		return 0
+	}
+
+	shift := failures - 1
+	if shift > 8 {
+		shift = 8
+	}
+
+	backoff := beatportAuthBaseBackoff << shift
+	if backoff > beatportAuthMaxBackoff {
+		return beatportAuthMaxBackoff
+	}
+	return backoff
 }
 
 // NewBeatportClient creates a new Beatport API client
@@ -157,6 +207,29 @@ func NewBeatportClient(config *BeatportConfig) (*BeatportClient, error) {
 		config:     config,
 		clientID:   clientID,
 	}, nil
+}
+
+// truncateBody bounds a response body before it reaches the log.
+func truncateBody(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
+}
+
+// resetCookies gives both clients a fresh, shared cookie jar.
+//
+// They must keep sharing one: the OAuth authorize step relies on the sessionid the
+// login step set, so handing them separate jars would break the flow.
+func (bc *BeatportClient) resetCookies() error {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return err
+	}
+	bc.httpClient.Jar = jar
+	bc.apiClient.Jar = jar
+	return nil
 }
 
 // getBeatportClientID scrapes the client ID from the Beatport docs page
@@ -205,9 +278,27 @@ func getBeatportClientID() (string, error) {
 	return "", fmt.Errorf("could not find API_CLIENT_ID in any JavaScript file")
 }
 
-// Authenticate performs the full OAuth flow
+// Authenticate performs the full OAuth flow.
+//
+// The cookie jar is replaced first, and that is not housekeeping -- it is the fix
+// for the outage that ran from 2026-08-25 to 2026-08-31.
+//
+// Beatport's API is Django/DRF. A successful login sets csrftoken and sessionid
+// cookies, and once the client is holding a csrftoken, DRF starts enforcing CSRF on
+// every later POST to the same endpoint. A server-to-server client has no Referer or
+// trusted Origin to offer, so every re-authentication after the first was rejected
+// with 403 "CSRF Failed: Referer checking failed - no Referer.". The first login
+// after a process start always worked, which is exactly why the failure looked
+// intermittent, and then permanent once the process had been up long enough for the
+// initial token to expire.
+//
+// Starting from a clean jar reproduces the first-login conditions on every attempt.
 func (bc *BeatportClient) Authenticate() error {
 	slog.Info("Starting Beatport authentication...")
+
+	if err := bc.resetCookies(); err != nil {
+		return fmt.Errorf("failed to reset the beatport cookie jar: %w", err)
+	}
 
 	// Step 1: Login
 	loginData := map[string]string{
@@ -236,11 +327,24 @@ func (bc *BeatportClient) Authenticate() error {
 
 	loginBody, _ := io.ReadAll(loginResp.Body)
 	if loginResp.StatusCode != http.StatusOK && loginResp.StatusCode != http.StatusFound {
-		slog.Debug("Beatport login failed",
-			"status", loginResp.StatusCode,
-			"body", string(loginBody),
+		// Logged at WARN with the body attached, deliberately. This used to be a
+		// Debug line, and production runs at info -- so for six days the only
+		// evidence of the outage was "login failed with status 403", which reads
+		// like a bot block and is not what was happening at all. Beatport answers
+		// with 403 for a bad password, for a CSRF failure, and for a rate limit; the
+		// body is the only thing that tells them apart, so it must be visible.
+		slog.Warn("Beatport login failed",
+			slog.Int("status", loginResp.StatusCode),
+			slog.String("body", truncateBody(string(loginBody), 300)),
 		)
-		return fmt.Errorf("login failed with status %d", loginResp.StatusCode)
+
+		if loginResp.StatusCode == http.StatusForbidden || loginResp.StatusCode == http.StatusUnauthorized {
+			if strings.Contains(strings.ToLower(string(loginBody)), "incorrect username or password") {
+				return fmt.Errorf("%w (status %d)", ErrBeatportCredentialsRejected, loginResp.StatusCode)
+			}
+		}
+		return fmt.Errorf("login failed with status %d: %s",
+			loginResp.StatusCode, truncateBody(string(loginBody), 200))
 	}
 
 	slog.Debug("Beatport login successful, requesting authorization...")
@@ -321,12 +425,49 @@ func (bc *BeatportClient) Authenticate() error {
 	return nil
 }
 
-// EnsureAuthenticated checks and refreshes auth if needed
+// EnsureAuthenticated refreshes the access token when it is missing or close to
+// expiry, and holds a cooldown after a failure so that a broken credential cannot
+// turn every fetch cycle into another five login attempts.
 func (bc *BeatportClient) EnsureAuthenticated() error {
-	if bc.accessToken == "" || time.Now().After(bc.tokenExpiry.Add(-5*time.Minute)) {
-		return bc.Authenticate()
+	if bc.accessToken != "" && time.Now().Before(bc.tokenExpiry.Add(-5*time.Minute)) {
+		return nil
 	}
-	return nil
+
+	// Still inside the cooldown from the last failure: replay it rather than
+	// re-attempting. Callers see the same error and log the same line they would
+	// have, but Beatport sees nothing.
+	if time.Now().Before(bc.nextAuthAttempt) {
+		return bc.lastAuthErr
+	}
+
+	err := bc.Authenticate()
+	if err == nil {
+		bc.authFailures = 0
+		bc.lastAuthErr = nil
+		bc.nextAuthAttempt = time.Time{}
+		return nil
+	}
+
+	bc.authFailures++
+	bc.lastAuthErr = err
+
+	if errors.Is(err, ErrBeatportCredentialsRejected) {
+		bc.nextAuthAttempt = time.Now().Add(beatportCredentialsCooldown)
+		// Logged here rather than at every call site, so a permanent rejection
+		// produces one actionable line per cooldown instead of one per source.
+		slog.Error("Beatport rejected the configured credentials - update beatport_username/beatport_password in the bot config",
+			slog.String("username", bc.config.Username),
+			slog.Duration("retrying_in", beatportCredentialsCooldown))
+		return err
+	}
+
+	backoff := beatportAuthBackoff(bc.authFailures)
+	bc.nextAuthAttempt = time.Now().Add(backoff)
+	slog.Warn("Beatport authentication failed, backing off",
+		slog.Int("consecutive_failures", bc.authFailures),
+		slog.Duration("retrying_in", backoff),
+		slog.Any("err", err))
+	return err
 }
 
 // GetLabelTracks fetches tracks for a label from the API

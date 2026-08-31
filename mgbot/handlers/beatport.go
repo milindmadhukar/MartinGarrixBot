@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -15,7 +16,7 @@ import (
 )
 
 // GetBeatportReleases periodically fetches new songs from the Beatport API
-func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll bool) {
+func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 	// Credentials only change with a restart, so there is nothing to retry for.
 	if b.Cfg.Bot.BeatportUsername == "" || b.Cfg.Bot.BeatportPassword == "" {
 		slog.Warn("Beatport credentials not configured, skipping beatport releases fetcher")
@@ -39,11 +40,17 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 			}
 		}
 
-		maxTracks := b.Cfg.Bot.BeatportMaxTracks
-		if fetchAll {
-			maxTracks = 0 // 0 = unlimited
-			slog.Info("Fetching ALL beatport tracks (--fetch-all-beatport mode)")
+		// Authenticate once per cycle rather than letting each of the five source
+		// fetches below do it on demand. A rejected credential used to surface as
+		// five identical login attempts and five ERROR lines every 15 minutes; now
+		// it costs one attempt, and the client's cooldown suppresses even that.
+		if err := b.BeatportClient.EnsureAuthenticated(); err != nil {
+			slog.Error("Beatport authentication unavailable, skipping this cycle", slog.Any("err", err))
+			utils.RecordSourceFailure(utils.SourceBeatport, err)
+			continue
 		}
+
+		maxTracks := b.Cfg.Bot.BeatportMaxTracks
 
 		var allTracks []utils.BeatportTrack
 
@@ -78,6 +85,15 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 
 		slog.Info("Beatport total unique tracks fetched", slog.Int("count", len(trackMap)))
 
+		// Zero tracks after a successful auth means every source call failed or the
+		// catalogue shape changed. Either way it is not a healthy cycle, and saying
+		// so is what turns four days of "sync complete new=0" into an alert.
+		if len(trackMap) == 0 {
+			utils.RecordSourceFailure(utils.SourceBeatport, errors.New("no tracks returned by any configured source"))
+		} else {
+			utils.RecordSourceSuccess(utils.SourceBeatport)
+		}
+
 		// Load existing songs for similarity matching
 		existingSongs, err := b.Queries.GetAllSongsForMatching(context.Background())
 		if err != nil {
@@ -85,7 +101,11 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 			continue
 		}
 
-		// Create a batch notifier (only used when NOT in fetchAll mode)
+		// Built once for the whole cycle. The previous matcher rebuilt nothing and
+		// instead ran a Levenshtein comparison against all ~1400 rows for every one
+		// of the ~190 tracks fetched, every 15 minutes.
+		index := utils.NewSongIndex(existingSongs)
+
 		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeSTMPD)
 
 		newCount := 0
@@ -119,7 +139,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 					continue
 				}
 
-				err = b.Queries.UpdateSongWithBeatportData(context.Background(), db.UpdateSongWithBeatportDataParams{
+				rows, err := b.Queries.UpdateSongWithBeatportData(context.Background(), db.UpdateSongWithBeatportDataParams{
 					ID:      existingSong.ID,
 					Name:    track.Name,
 					Artists: artistsStr,
@@ -162,19 +182,40 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 					},
 				})
 
-				if err != nil {
+				switch {
+				case err != nil:
 					slog.Error("Failed to update song with beatport data",
 						slog.String("name", track.Name), slog.Any("err", err))
-				} else {
+				case rows > 0:
 					updatedCount++
+				default:
+					// The row already held exactly this data. Counting it as an
+					// update is what made every cycle report updated=~73 forever.
+					skippedCount++
 				}
 				continue
 			}
 
-			// Check similarity with existing songs (only if not found by beatport_id)
-			matchedSong := findSimilarExistingSong(existingSongs, track.Name, artistsStr)
+			// Not found by beatport_id: resolve against everything else that could
+			// identify this recording. Artists are compared as a set here, so
+			// beatport's "Ed Sheeran, Martin Garrix" now finds the STMPD row filed
+			// under "Martin Garrix & Ed Sheeran" -- the pairing the old whole-string
+			// Levenshtein match could never make.
+			matchedSong, matchTier := index.Lookup(utils.SongQuery{
+				Title:   track.Name,
+				MixName: track.MixName,
+				Artists: artistsStr,
+				BeatportID: pgtype.Int4{
+					Int32: int32(track.ID),
+					Valid: true,
+				},
+			})
 
 			if matchedSong != nil {
+				slog.Debug("Matched beatport track to existing song",
+					slog.String("name", track.Name),
+					slog.String("tier", string(matchTier)),
+					slog.Int64("song_id", matchedSong.ID))
 				// Check if updating would cause a duplicate key conflict
 				conflicts, _ := b.Queries.DoesSongExist(context.Background(), db.DoesSongExistParams{
 					Name:        track.Name,
@@ -188,7 +229,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 				}
 
 				// Similar song exists (from STMPD) — update it with beatport data
-				err = b.Queries.UpdateSongWithBeatportData(context.Background(), db.UpdateSongWithBeatportDataParams{
+				rows, err := b.Queries.UpdateSongWithBeatportData(context.Background(), db.UpdateSongWithBeatportDataParams{
 					ID:      matchedSong.ID,
 					Name:    track.Name,
 					Artists: artistsStr,
@@ -231,11 +272,16 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 					},
 				})
 
-				if err != nil {
+				switch {
+				case err != nil:
 					slog.Error("Failed to update song with beatport data",
 						slog.String("name", track.Name), slog.Any("err", err))
-				} else {
+				case rows > 0:
 					updatedCount++
+				default:
+					// The row already held exactly this data. Counting it as an
+					// update is what made every cycle report updated=~73 forever.
+					skippedCount++
 				}
 				continue
 			}
@@ -291,20 +337,26 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 
 			newCount++
 
-			// Add to existing songs list so subsequent tracks can match against it
-			existingSongs = append(existingSongs, db.GetAllSongsForMatchingRow{
+			// Register it so later tracks in this same batch -- the six remixes of
+			// one release arrive together -- match against it instead of inserting
+			// another copy.
+			index.Append(db.GetAllSongsForMatchingRow{
 				ID:      song.ID,
 				Name:    song.Name,
 				Artists: song.Artists,
+				MixName: song.MixName,
 				BeatportID: pgtype.Int4{
 					Int32: int32(track.ID),
 					Valid: true,
 				},
-				Source: "beatport",
+				Source: song.Source,
 			})
 
-			// Only send announcements in normal mode (not bulk import)
-			if !fetchAll {
+			// Announce only rows that have never been announced and are actually
+			// recent. Beatport lists extended mixes and every individual remix as
+			// separate tracks, so without the recency lock a catalogue re-read
+			// floods the channel.
+			if !song.AnnouncedAt.Valid && isRecentRelease(track.ReleaseDate) {
 				// Build announcement embed
 				title := fmt.Sprintf("%s - %s", artistsStr, track.Name)
 				if track.MixName != "" && track.MixName != "Original Mix" {
@@ -343,29 +395,29 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 
 				announcementEmbed := embedBuilder.Build()
 
-				// Add beatport link button
-				var components []discord.ContainerComponent
-				beatportURL := fmt.Sprintf("https://www.beatport.com/track/%d", track.ID)
-				components = append(components, discord.NewActionRow(
-					discord.NewLinkButton("Beatport", beatportURL),
-				))
-
-				// Also add streaming links if available
-				if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
-					buttons := utils.GetSongButtons(song)
-					if len(buttons) > 0 {
-						components[0] = discord.NewActionRow(
-							append([]discord.InteractiveComponent{
-								discord.NewLinkButton("Beatport", beatportURL),
-							}, buttons...)...,
-						)
-					}
-				}
+				// Lead with the beatport track link. This is built from the track id
+				// rather than read from songs.beatport_url, which holds a RELEASE
+				// URL from the STMPD dataset -- the track link is the more precise
+				// destination for a beatport announcement.
+				beatportURL := utils.BeatportTrackURL(int32(track.ID))
+				buttons := append(
+					[]discord.InteractiveComponent{discord.NewLinkButton("Beatport", beatportURL)},
+					utils.GetSongButtons(song)...,
+				)
+				components := utils.ChunkButtonRows(buttons)
 
 				notifier.AddItem(utils.NotificationItem{
 					Embed:      &announcementEmbed,
 					Components: components,
 				})
+
+				// Stamped when the item joins the batch rather than after the batch is
+				// sent. A failed send loses one announcement; not stamping would risk
+				// replaying the whole batch next cycle, and quiet is the safer failure.
+				if err := b.Queries.MarkSongAnnounced(context.Background(), song.ID); err != nil {
+					slog.Error("Failed to mark song announced",
+						slog.Int64("song_id", song.ID), slog.Any("err", err))
+				}
 			}
 		}
 
@@ -374,37 +426,8 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 			slog.Int("updated", updatedCount),
 			slog.Int("skipped", skippedCount))
 
-		// Send notifications
-		if !fetchAll {
-			if err := notifier.Send(); err != nil {
-				slog.Error("Failed to send batched beatport notifications", slog.Any("err", err))
-			}
-		} else {
-			slog.Info("Skipping notifications in --fetch-all-beatport mode")
-		}
-
-		// If fetchAll, only run once then switch to normal mode
-		if fetchAll {
-			slog.Info("Initial beatport bulk import complete, switching to normal periodic mode")
-			fetchAll = false
+		if err := notifier.Send(); err != nil {
+			slog.Error("Failed to send batched beatport notifications", slog.Any("err", err))
 		}
 	}
-}
-
-// findSimilarExistingSong uses Levenshtein similarity to find a matching song
-func findSimilarExistingSong(existingSongs []db.GetAllSongsForMatchingRow, trackName, trackArtists string) *db.GetAllSongsForMatchingRow {
-	const similarityThreshold = 0.85
-
-	// Build the combined string for the beatport track
-	beatportCombined := trackArtists + " - " + trackName
-
-	for i, existing := range existingSongs {
-		existingCombined := existing.Artists + " - " + existing.Name
-
-		if utils.IsCloseMatch(beatportCombined, existingCombined, similarityThreshold) {
-			return &existingSongs[i]
-		}
-	}
-
-	return nil
 }

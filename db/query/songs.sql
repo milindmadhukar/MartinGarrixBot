@@ -8,37 +8,49 @@ SELECT * FROM songs WHERE id = $1;
 SELECT * FROM songs WHERE beatport_id = $1;
 
 -- name: GetSongsLike :many
-SELECT name, artists, release_date
+-- Autocomplete offers one entry per song. Remix rows are excluded: ten "Told You
+-- So" choices is not a useful list, and the choice payload is capped at 100 bytes
+-- by Discord, which long remix names were overflowing.
+SELECT id, name, artists, release_date
 FROM songs
-WHERE LOWER(artists || ' - ' || name) LIKE LOWER($1)
+WHERE parent_song_id IS NULL
+  AND LOWER(artists || ' - ' || name) LIKE LOWER($1)
+ORDER BY release_date DESC
 LIMIT 20;
 
 -- name: GetRandomSongNames :many
-SELECT name, artists, release_date
+SELECT id, name, artists, release_date
 FROM songs
+WHERE parent_song_id IS NULL
 ORDER BY RANDOM()
 LIMIT 20;
 
 -- name: GetSongsWithLyricsLike :many
-SELECT name, artists, release_date 
+SELECT id, name, artists, release_date
 FROM songs
-WHERE lyrics IS NOT NULL AND
-LOWER(artists || ' - ' || name) LIKE LOWER($1)
+WHERE lyrics IS NOT NULL
+  AND parent_song_id IS NULL
+  AND LOWER(artists || ' - ' || name) LIKE LOWER($1)
+ORDER BY release_date DESC
 LIMIT 20;
 
 -- name: GetRandomSongNamesWithLyrics :many
-SELECT name, artists, release_date 
+SELECT id, name, artists, release_date
 FROM songs
-WHERE lyrics IS NOT NULL
+WHERE lyrics IS NOT NULL AND parent_song_id IS NULL
 ORDER BY RANDOM()
 LIMIT 20;
 
 -- name: GetRandomSongWithLyrics :one
+-- '%ytram%' was '%ytrram%'. The typo meant no Ytram song has ever been served by
+-- the quiz; config.toml's monitored-artist list confirms the correct spelling.
 SELECT * FROM songs
 WHERE lyrics IS NOT NULL
-AND (LOWER(artists) LIKE '%martin garrix%' 
+AND NOT is_instrumental
+AND parent_song_id IS NULL
+AND (LOWER(artists) LIKE '%martin garrix%'
    OR LOWER(artists) LIKE '%area21%'
-   OR LOWER(artists) LIKE '%ytrram%'
+   OR LOWER(artists) LIKE '%ytram%'
    OR LOWER(artists) LIKE '%grx%')
 ORDER BY RANDOM()
 LIMIT 1;
@@ -46,14 +58,76 @@ LIMIT 1;
 -- name: GetRandomSongWithLyricsEasy :one
 SELECT * FROM songs
 WHERE lyrics IS NOT NULL
+AND NOT is_instrumental
+AND parent_song_id IS NULL
 AND LOWER(artists) LIKE '%martin garrix%'
 ORDER BY RANDOM()
 LIMIT 1;
 
 -- name: InsertRelease :one
-INSERT INTO songs (name, artists, release_date, thumbnail_url, spotify_url, apple_music_url, youtube_url, source)
-VALUES ($1, $2, $3, $4, $5, $6, $7, 'stmpd')
+INSERT INTO songs (
+    name, artists, release_date, thumbnail_url, stmpd_slug,
+    spotify_url, apple_music_url, youtube_url, youtube_music_url,
+    deezer_url, tidal_url, amazon_music_url, beatport_url, beatport_release_id,
+    stmpd_synced_at, source
+) VALUES (
+    sqlc.arg(name), sqlc.arg(artists), sqlc.arg(release_date), sqlc.narg(thumbnail_url), sqlc.narg(stmpd_slug),
+    sqlc.narg(spotify_url), sqlc.narg(apple_music_url), sqlc.narg(youtube_url), sqlc.narg(youtube_music_url),
+    sqlc.narg(deezer_url), sqlc.narg(tidal_url), sqlc.narg(amazon_music_url),
+    sqlc.narg(beatport_url), sqlc.narg(beatport_release_id),
+    NOW(), 'stmpd'
+)
 RETURNING *;
+
+-- name: GetSongByStmpdSlug :one
+SELECT * FROM songs WHERE stmpd_slug = $1;
+
+-- name: UpdateSongWithStmpdRelease :execrows
+-- The full-fidelity counterpart to UpdateSongWithStmpdLinks: everything the STMPD
+-- dataset knows about a release, applied to a row that already exists.
+--
+-- release_date is COALESCEd rather than left alone because the dataset carries the
+-- exact date and many stored rows carry a "<year>-01-01" placeholder. Correcting it
+-- is safe now only because announcement is gated on songs.announced_at, which every
+-- pre-existing row already has stamped -- without that watermark this UPDATE would
+-- make the back catalogue look new.
+--
+-- thumbnail_url is only ever filled in, never overwritten: roughly 800 of the 1015
+-- releases have no artwork in the dataset, and an empty value there means "unknown",
+-- not "this release has none".
+UPDATE songs SET
+    stmpd_slug          = COALESCE(sqlc.narg(stmpd_slug),          stmpd_slug),
+    release_date        = COALESCE(sqlc.narg(release_date),        release_date),
+    spotify_url         = COALESCE(sqlc.narg(spotify_url),         spotify_url),
+    apple_music_url     = COALESCE(sqlc.narg(apple_music_url),     apple_music_url),
+    youtube_url         = COALESCE(sqlc.narg(youtube_url),         youtube_url),
+    youtube_music_url   = COALESCE(sqlc.narg(youtube_music_url),   youtube_music_url),
+    deezer_url          = COALESCE(sqlc.narg(deezer_url),          deezer_url),
+    tidal_url           = COALESCE(sqlc.narg(tidal_url),           tidal_url),
+    amazon_music_url    = COALESCE(sqlc.narg(amazon_music_url),    amazon_music_url),
+    beatport_url        = COALESCE(sqlc.narg(beatport_url),        beatport_url),
+    beatport_release_id = COALESCE(sqlc.narg(beatport_release_id), beatport_release_id),
+    thumbnail_url       = CASE WHEN COALESCE(thumbnail_url, '') = ''
+                               THEN sqlc.narg(thumbnail_url) ELSE thumbnail_url END,
+    stmpd_synced_at     = NOW()
+WHERE id = sqlc.arg(id)
+  AND (
+       stmpd_slug          IS DISTINCT FROM COALESCE(sqlc.narg(stmpd_slug),          stmpd_slug)
+    OR release_date        IS DISTINCT FROM COALESCE(sqlc.narg(release_date),        release_date)
+    OR spotify_url         IS DISTINCT FROM COALESCE(sqlc.narg(spotify_url),         spotify_url)
+    OR apple_music_url     IS DISTINCT FROM COALESCE(sqlc.narg(apple_music_url),     apple_music_url)
+    OR youtube_url         IS DISTINCT FROM COALESCE(sqlc.narg(youtube_url),         youtube_url)
+    OR youtube_music_url   IS DISTINCT FROM COALESCE(sqlc.narg(youtube_music_url),   youtube_music_url)
+    OR deezer_url          IS DISTINCT FROM COALESCE(sqlc.narg(deezer_url),          deezer_url)
+    OR tidal_url           IS DISTINCT FROM COALESCE(sqlc.narg(tidal_url),           tidal_url)
+    OR amazon_music_url    IS DISTINCT FROM COALESCE(sqlc.narg(amazon_music_url),    amazon_music_url)
+    OR beatport_url        IS DISTINCT FROM COALESCE(sqlc.narg(beatport_url),        beatport_url)
+    OR beatport_release_id IS DISTINCT FROM COALESCE(sqlc.narg(beatport_release_id), beatport_release_id)
+    -- Cast for the same reason as in UpdateSongWithStmpdLinks: IS NOT NULL leaves
+    -- the parameter's type undetermined and Postgres raises 42P08.
+    OR (COALESCE(thumbnail_url, '') = '' AND sqlc.narg(thumbnail_url)::text IS NOT NULL)
+    OR stmpd_synced_at IS NULL
+  );
 
 -- name: InsertBeatportSong :one
 INSERT INTO songs (
@@ -68,43 +142,162 @@ SELECT EXISTS(SELECT 1 FROM songs WHERE name = $1 AND artists = $2 AND release_d
 -- name: DoesBeatportSongExist :one
 SELECT EXISTS(SELECT 1 FROM songs WHERE beatport_id = $1);
 
--- name: UpdateSongWithBeatportData :exec
+-- name: UpdateSongWithBeatportData :execrows
+-- :execrows plus the IS DISTINCT FROM guard below make this a no-op when the row
+-- already holds this data. Without it every cycle rewrote the same ~73 rows and
+-- reported updated=73 forever, which hid whether anything had actually changed.
+-- thumbnail_url is COALESCEd rather than assigned: a beatport track with no square
+-- artwork arrives as NULL and must not erase artwork another source already found.
 UPDATE songs SET
-    name = $2,
-    artists = $3,
-    thumbnail_url = $4,
-    beatport_id = $5,
-    mix_name = $6,
-    release_date = $7,
-    release_name = $8,
-    genre = $9,
-    sub_genre = $10,
-    bpm = $11,
-    musical_key = $12,
-    length_ms = $13,
+    name          = sqlc.arg(name),
+    artists       = sqlc.arg(artists),
+    thumbnail_url = COALESCE(sqlc.narg(thumbnail_url), thumbnail_url),
+    beatport_id   = sqlc.narg(beatport_id),
+    mix_name      = sqlc.narg(mix_name),
+    release_date  = sqlc.arg(release_date),
+    release_name  = sqlc.narg(release_name),
+    genre         = sqlc.narg(genre),
+    sub_genre     = sqlc.narg(sub_genre),
+    bpm           = sqlc.narg(bpm),
+    musical_key   = sqlc.narg(musical_key),
+    length_ms     = sqlc.narg(length_ms),
     beatport_updated = TRUE
-WHERE id = $1;
+WHERE id = sqlc.arg(id)
+  AND (
+       name          IS DISTINCT FROM sqlc.arg(name)
+    OR artists       IS DISTINCT FROM sqlc.arg(artists)
+    OR thumbnail_url IS DISTINCT FROM COALESCE(sqlc.narg(thumbnail_url), thumbnail_url)
+    OR beatport_id   IS DISTINCT FROM sqlc.narg(beatport_id)
+    OR mix_name      IS DISTINCT FROM sqlc.narg(mix_name)
+    OR release_date  IS DISTINCT FROM sqlc.arg(release_date)
+    OR release_name  IS DISTINCT FROM sqlc.narg(release_name)
+    OR genre         IS DISTINCT FROM sqlc.narg(genre)
+    OR sub_genre     IS DISTINCT FROM sqlc.narg(sub_genre)
+    OR bpm           IS DISTINCT FROM sqlc.narg(bpm)
+    OR musical_key   IS DISTINCT FROM sqlc.narg(musical_key)
+    OR length_ms     IS DISTINCT FROM sqlc.narg(length_ms)
+    OR beatport_updated IS DISTINCT FROM TRUE
+  );
 
--- name: UpdateSongWithStmpdLinks :exec
+-- name: UpdateSongWithStmpdLinks :execrows
+-- This no longer touches beatport_updated. That flag is the beatport fetcher's own
+-- "already enriched, skip" sentinel; setting it here made the STMPD backfill skip
+-- every row beatport had ever touched, which is why 497 beatport rows had no links.
+-- stmpd_synced_at is this fetcher's separate record of having visited the row.
 UPDATE songs SET
-    spotify_url = COALESCE($2, spotify_url),
-    apple_music_url = COALESCE($3, apple_music_url),
-    youtube_url = COALESCE($4, youtube_url),
-    thumbnail_url = CASE WHEN thumbnail_url IS NULL OR thumbnail_url = '' THEN $5 ELSE thumbnail_url END,
-    beatport_updated = TRUE
-WHERE id = $1;
+    spotify_url     = COALESCE(sqlc.narg(spotify_url),     spotify_url),
+    apple_music_url = COALESCE(sqlc.narg(apple_music_url), apple_music_url),
+    youtube_url     = COALESCE(sqlc.narg(youtube_url),     youtube_url),
+    thumbnail_url   = CASE WHEN thumbnail_url IS NULL OR thumbnail_url = ''
+                           THEN sqlc.narg(thumbnail_url) ELSE thumbnail_url END,
+    stmpd_synced_at = NOW()
+WHERE id = sqlc.arg(id)
+  AND (
+       spotify_url     IS DISTINCT FROM COALESCE(sqlc.narg(spotify_url),     spotify_url)
+    OR apple_music_url IS DISTINCT FROM COALESCE(sqlc.narg(apple_music_url), apple_music_url)
+    OR youtube_url     IS DISTINCT FROM COALESCE(sqlc.narg(youtube_url),     youtube_url)
+    -- Only a reason to write when there is actually a thumbnail to write. Testing
+    -- emptiness alone would match forever on a row neither side has artwork for,
+    -- re-stamping it every cycle and reintroducing the churn this guard removes.
+    --
+    -- The cast is required, not cosmetic: IS NOT NULL accepts any type, so this is
+    -- the one place the parameter appears without a type to infer from, and Postgres
+    -- rejects the whole statement with 42P08 at execution time.
+    OR (COALESCE(thumbnail_url, '') = '' AND sqlc.narg(thumbnail_url)::text IS NOT NULL)
+    OR stmpd_synced_at IS NULL
+  );
 
 -- name: MarkBeatportUpdated :exec
 UPDATE songs SET beatport_updated = TRUE WHERE id = $1;
 
 -- name: GetAllSongsForMatching :many
-SELECT id, name, artists, beatport_id, source
+SELECT id, name, artists, source, beatport_id, beatport_release_id,
+       stmpd_slug, match_key, base_key, mix_name, spotify_url, stmpd_synced_at
 FROM songs;
 
+-- name: SetSongKeys :execrows
+UPDATE songs SET match_key = $2, base_key = $3
+WHERE id = $1 AND (match_key IS DISTINCT FROM $2 OR base_key IS DISTINCT FROM $3);
+
+-- name: GetSongsForKeying :many
+SELECT id, name, artists, mix_name FROM songs ORDER BY id;
+
 -- name: GetRandomSongForRadio :one
+-- Canonical rows only, so the rotation does not play six versions of one track.
 SELECT id, name, artists, thumbnail_url, youtube_url
 FROM songs
 WHERE youtube_url IS NOT NULL
+  AND parent_song_id IS NULL
   AND (length_ms IS NULL OR length_ms <= 600000)
 ORDER BY RANDOM()
 LIMIT 1;
+-- name: MarkSongAnnounced :exec
+UPDATE songs SET announced_at = NOW() WHERE id = $1 AND announced_at IS NULL;
+
+-- name: GetSongsNeverAnnounced :many
+SELECT id, name, artists, release_date FROM songs WHERE announced_at IS NULL;
+
+-- name: MergeSongRows :exec
+-- Fold `loser` into `winner`, keeping the first non-null of each field. Used when a
+-- release_date correction would collide with the unique_release constraint: the
+-- collision means a twin row already holds that identity, so the two are the same
+-- song arriving from two sources. Nothing has a foreign key to songs, so the loser
+-- can be deleted afterwards.
+UPDATE songs w SET
+    spotify_url     = COALESCE(w.spotify_url,     l.spotify_url),
+    apple_music_url = COALESCE(w.apple_music_url, l.apple_music_url),
+    youtube_url     = COALESCE(w.youtube_url,     l.youtube_url),
+    thumbnail_url   = COALESCE(NULLIF(w.thumbnail_url, ''), l.thumbnail_url),
+    lyrics          = COALESCE(w.lyrics,          l.lyrics),
+    beatport_id     = COALESCE(w.beatport_id,     l.beatport_id),
+    bpm             = COALESCE(w.bpm,             l.bpm),
+    musical_key     = COALESCE(w.musical_key,     l.musical_key),
+    length_ms       = COALESCE(w.length_ms,       l.length_ms),
+    genre           = COALESCE(w.genre,           l.genre),
+    sub_genre       = COALESCE(w.sub_genre,       l.sub_genre),
+    mix_name        = COALESCE(w.mix_name,        l.mix_name),
+    release_name    = COALESCE(w.release_name,    l.release_name),
+    announced_at    = LEAST(w.announced_at,       l.announced_at),
+    first_seen_at   = LEAST(w.first_seen_at,      l.first_seen_at),
+    stmpd_synced_at = COALESCE(w.stmpd_synced_at, l.stmpd_synced_at),
+    beatport_updated = w.beatport_updated OR l.beatport_updated
+FROM songs l
+WHERE w.id = sqlc.arg(winner_id) AND l.id = sqlc.arg(loser_id);
+
+-- name: DeleteSong :exec
+DELETE FROM songs WHERE id = $1;
+
+-- name: GetSongsMissingLinks :many
+-- The backfill queue: rows the STMPD sync has never successfully applied to. After
+-- migration 000009 this is exactly the set of rows carrying no streaming links.
+SELECT id, name, artists, release_date, source, beatport_id
+FROM songs WHERE stmpd_synced_at IS NULL ORDER BY id;
+
+-- name: CountLinklessSongs :one
+SELECT count(*) FROM songs
+WHERE spotify_url IS NULL AND apple_music_url IS NULL AND youtube_url IS NULL;
+
+-- name: SetSongParent :execrows
+UPDATE songs SET parent_song_id = sqlc.narg(parent_song_id)
+WHERE id = sqlc.arg(id) AND parent_song_id IS DISTINCT FROM sqlc.narg(parent_song_id);
+
+-- name: SetSongInstrumental :execrows
+UPDATE songs SET is_instrumental = $2 WHERE id = $1 AND is_instrumental IS DISTINCT FROM $2;
+
+-- name: GetSongsForParentLinking :many
+SELECT id, name, artists, mix_name, release_date, source, base_key,
+       spotify_url, youtube_url, apple_music_url, lyrics, parent_song_id
+FROM songs ORDER BY id;
+
+-- name: GetSongMixes :many
+-- The renditions hanging off a canonical song, for the track card to list.
+SELECT id, name, mix_name, artists FROM songs
+WHERE parent_song_id = $1 ORDER BY release_date, id;
+
+-- name: CopyLyricsToRemixes :execrows
+-- Lyrics are entered by hand against the canonical row. A remix of a vocal track has
+-- the same words, so fan them out rather than making someone paste them ten times.
+UPDATE songs t SET lyrics = s.lyrics
+FROM songs s
+WHERE s.id = $1 AND t.parent_song_id = s.id AND t.lyrics IS NULL
+  AND s.lyrics IS NOT NULL AND NOT t.is_instrumental;

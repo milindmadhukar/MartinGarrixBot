@@ -144,11 +144,7 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 				followUpMessage := discord.NewMessageCreateBuilder().
 					SetEmbeds(followUpResponseEmbed)
 
-				if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
-					followUpMessage = followUpMessage.AddActionRow(
-						utils.GetSongButtons(song)...,
-					)
-				}
+				followUpMessage = followUpMessage.AddContainerComponents(utils.GetSongButtonRows(song)...)
 
 				_, err := b.Client.Rest().CreateFollowupMessage(e.ApplicationID(), e.Token(),
 					followUpMessage.Build(),

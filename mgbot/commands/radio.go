@@ -211,10 +211,10 @@ func handleRadioNowPlaying(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) er
 
 	messageBuilder := discord.NewMessageCreateBuilder().SetEmbeds(embed.Build())
 
-	// Add buttons if any streaming links are available
-	if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
-		messageBuilder.AddActionRow(utils.GetSongButtons(song)...)
-	}
+	// Add buttons if any streaming links are available. Chunked into rows: a song
+	// with all eight links would otherwise exceed Discord's 5-per-row cap and the
+	// whole message would be rejected.
+	messageBuilder.AddContainerComponents(utils.GetSongButtonRows(song)...)
 
 	return e.CreateMessage(messageBuilder.Build())
 }

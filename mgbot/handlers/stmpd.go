@@ -2,15 +2,9 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
-	"net/url"
-	"slices"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -20,392 +14,221 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
 
-// TODO: Maybe find some way to get the release date of the song?
-// Announce anniversary of the song?
+// TODO: Announce anniversary of the song?
 
 // TODO: Find some way to add lyrics to all stmpd songs
 // Then we can do a stmpd level difficulty quiz lmao
 
 // TODO: Add a way to remove songs manually (say before release remove)
-// Add a way to add songs manually and annouce??
+// Add a way to add songs manually and annouect??
 
 // TODO: All sets kb, when asked AI can query and send link in chat?
 
-const stmpdArchiveURL = "https://stmpdrcrds.com/archive"
+// stmpdLookbackDays bounds what the periodic fetcher asks the dataset for.
+//
+// This is a time window rather than a count. The previous fetcher kept the five
+// newest releases per cycle, which quietly discarded anything beyond that: the
+// label published eight releases in the sixty days to 2026-08-21, so three of them
+// were never eligible to be seen at all. Sixty days is far more than the label's
+// release cadence and still a tiny query.
+const stmpdLookbackDays = 60
 
-// stmpdClient bounds the archive request. This fetcher no longer uses the shared
-// colly collector: the archive is a Next.js app whose release data arrives as a
-// JSON payload, so there is no HTML worth traversing.
-var stmpdClient = &http.Client{Timeout: 30 * time.Second}
-
-// stmpdArchiveRelease mirrors the release objects STMPD's archive page embeds in
-// its Next.js payload. The old CSS-selector scrape broke when the site was
-// rebuilt; this payload carries the same fields (plus an exact release date) and
-// does not depend on class names surviving a redesign.
-type stmpdArchiveRelease struct {
-	ID          string `json:"_id"`
-	Title       string `json:"title"`
-	Artists     string `json:"artists"`
-	Version     string `json:"version"`
-	ReleaseDate string `json:"releaseDate"`
-	ArtworkURL  string `json:"artworkUrl"`
-	Slug        struct {
-		Current string `json:"current"`
-	} `json:"slug"`
-	StreamingLinks struct {
-		Spotify    string `json:"spotify"`
-		AppleMusic string `json:"appleMusic"`
-		YouTube    string `json:"youtube"`
-	} `json:"streamingLinks"`
+// stmpdReleaseParams renders a dataset release as the columns both the insert and
+// the update take.
+type stmpdReleaseParams struct {
+	Name              string
+	Artists           string
+	ReleaseDate       string
+	Slug              pgtype.Text
+	Thumbnail         pgtype.Text
+	Spotify           pgtype.Text
+	AppleMusic        pgtype.Text
+	YouTube           pgtype.Text
+	YouTubeMusic      pgtype.Text
+	Deezer            pgtype.Text
+	Tidal             pgtype.Text
+	AmazonMusic       pgtype.Text
+	BeatportURL       pgtype.Text
+	BeatportReleaseID pgtype.Int4
 }
 
-// nextFlightPayload reassembles the Next.js RSC payload, which the page streams
-// as a series of self.__next_f.push([1,"<json-string-chunk>"]) calls. Each chunk
-// is a JSON string literal, so decoding and concatenating them yields the
-// original text the server sent.
-func nextFlightPayload(body string) string {
-	const marker = `self.__next_f.push([1,`
-
-	var sb strings.Builder
-	for idx := 0; idx < len(body); {
-		k := strings.Index(body[idx:], marker)
-		if k < 0 {
-			break
-		}
-
-		p := idx + k + len(marker)
-		for p < len(body) && body[p] != '"' && body[p] != ']' {
-			p++
-		}
-		if p >= len(body) || body[p] != '"' {
-			idx = p + 1
-			continue
-		}
-
-		// Walk to the closing quote, stepping over backslash escapes.
-		q := p + 1
-		for q < len(body) && body[q] != '"' {
-			if body[q] == '\\' {
-				q++
-			}
-			q++
-		}
-		if q >= len(body) {
-			break
-		}
-
-		var chunk string
-		if err := json.Unmarshal([]byte(body[p:q+1]), &chunk); err == nil {
-			sb.WriteString(chunk)
-		}
-		idx = q + 1
+func newStmpdReleaseParams(r utils.SanityRelease) stmpdReleaseParams {
+	l := r.StreamingLinks
+	return stmpdReleaseParams{
+		Name:              r.Name(),
+		Artists:           r.Artists,
+		ReleaseDate:       r.ReleaseDate,
+		Slug:              utils.Text(r.Slug),
+		Thumbnail:         utils.Text(r.Artwork()),
+		Spotify:           utils.Text(l.Spotify),
+		AppleMusic:        utils.Text(l.AppleMusic),
+		YouTube:           utils.Text(l.YouTube),
+		YouTubeMusic:      utils.Text(l.YouTubeMusic),
+		Deezer:            utils.Text(l.Deezer),
+		Tidal:             utils.Text(l.Tidal),
+		AmazonMusic:       utils.Text(l.AmazonMusic),
+		BeatportURL:       utils.Text(l.Beatport),
+		BeatportReleaseID: utils.BeatportReleaseID(l.Beatport),
 	}
-
-	return sb.String()
 }
 
-// extractJSONArray returns the JSON array following key, tracking string state so
-// that brackets inside titles or URLs do not end the array early.
-func extractJSONArray(s, key string) (string, error) {
-	k := strings.Index(s, key)
-	if k < 0 {
-		return "", fmt.Errorf("key %q not found in payload", key)
+func (p stmpdReleaseParams) insert() db.InsertReleaseParams {
+	return db.InsertReleaseParams{
+		Name: p.Name, Artists: p.Artists, ReleaseDate: p.ReleaseDate,
+		StmpdSlug: p.Slug, ThumbnailUrl: p.Thumbnail,
+		SpotifyUrl: p.Spotify, AppleMusicUrl: p.AppleMusic,
+		YoutubeUrl: p.YouTube, YoutubeMusicUrl: p.YouTubeMusic,
+		DeezerUrl: p.Deezer, TidalUrl: p.Tidal, AmazonMusicUrl: p.AmazonMusic,
+		BeatportUrl: p.BeatportURL, BeatportReleaseID: p.BeatportReleaseID,
 	}
-
-	rel := strings.Index(s[k:], "[")
-	if rel < 0 {
-		return "", fmt.Errorf("no array found after key %q", key)
-	}
-	start := k + rel
-
-	var depth int
-	var inStr, esc bool
-	for i := start; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case esc:
-			esc = false
-		case c == '\\':
-			esc = true
-		case c == '"':
-			inStr = !inStr
-		case inStr:
-			// brackets inside strings are data, not structure
-		case c == '[':
-			depth++
-		case c == ']':
-			depth--
-			if depth == 0 {
-				return s[start : i+1], nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("unterminated array after key %q", key)
 }
 
-// upscaleArtwork asks Sanity's CDN for a larger rendition than the 400px one the
-// page uses for its grid thumbnails, so Discord embeds are not blurry.
-func upscaleArtwork(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return raw
+func (p stmpdReleaseParams) update(id int64) db.UpdateSongWithStmpdReleaseParams {
+	return db.UpdateSongWithStmpdReleaseParams{
+		ID: id, StmpdSlug: p.Slug, ReleaseDate: utils.Text(p.ReleaseDate),
+		ThumbnailUrl: p.Thumbnail,
+		SpotifyUrl:   p.Spotify, AppleMusicUrl: p.AppleMusic,
+		YoutubeUrl: p.YouTube, YoutubeMusicUrl: p.YouTubeMusic,
+		DeezerUrl: p.Deezer, TidalUrl: p.Tidal, AmazonMusicUrl: p.AmazonMusic,
+		BeatportUrl: p.BeatportURL, BeatportReleaseID: p.BeatportReleaseID,
 	}
-
-	q := u.Query()
-	if q.Get("w") == "" && q.Get("h") == "" {
-		return raw
-	}
-	q.Set("w", "1000")
-	q.Set("h", "1000")
-	u.RawQuery = q.Encode()
-
-	return u.String()
 }
 
-// fetchStmpdReleases returns the archive's releases, newest first.
-func fetchStmpdReleases() ([]utils.StmpdRelease, error) {
-	req, err := http.NewRequest("GET", stmpdArchiveURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stmpd request: %w", err)
-	}
-	req.Header.Set("User-Agent", "MartinGarrixBot (+https://github.com/milindmadhukar/MartinGarrixBot)")
-
-	resp, err := stmpdClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch stmpd archive: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("stmpd archive returned %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read stmpd archive body: %w", err)
-	}
-
-	payload := nextFlightPayload(string(body))
-	if payload == "" {
-		return nil, fmt.Errorf("no next.js payload found in stmpd archive")
-	}
-
-	rawArray, err := extractJSONArray(payload, `"initialReleases"`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to locate releases in stmpd payload: %w", err)
-	}
-
-	var parsed []stmpdArchiveRelease
-	if err := json.Unmarshal([]byte(rawArray), &parsed); err != nil {
-		return nil, fmt.Errorf("failed to decode stmpd releases: %w", err)
-	}
-
-	releases := make([]utils.StmpdRelease, 0, len(parsed))
-	for _, p := range parsed {
-		if p.Title == "" {
-			continue
-		}
-
-		name := p.Title
-		if p.Version != "" {
-			name = fmt.Sprintf("%s (%s)", p.Title, p.Version)
-		}
-
-		release := utils.StmpdRelease{
-			Name:          name,
-			Artists:       p.Artists,
-			Thumbnail:     upscaleArtwork(p.ArtworkURL),
-			SpotifyURL:    p.StreamingLinks.Spotify,
-			AppleMusicUrl: p.StreamingLinks.AppleMusic,
-			YoutubeURL:    p.StreamingLinks.YouTube,
-		}
-
-		// releaseDate is a full ISO date, but only the year is kept: the existing
-		// rows were written as "<year>-01-01" and DoesSongExist matches on the
-		// date, so switching to the exact date would make every stored song look
-		// new and re-announce it.
-		if len(p.ReleaseDate) >= 4 {
-			if year, err := strconv.Atoi(p.ReleaseDate[:4]); err == nil {
-				release.ReleaseYear = year
-			}
-		}
-
-		releases = append(releases, release)
-	}
-
-	return releases, nil
-}
-
+// GetAllStmpdReleases keeps the songs table in step with the STMPD catalogue.
+//
+// Identity is resolved slug first. The slug is unique and stable across all 1015
+// dataset releases, so a release the bot has already stored is recognised as such
+// regardless of how its name, artists or date have since been rewritten -- which is
+// what allows this fetcher to correct a stored release_date instead of tiptoeing
+// around the (name, artists, release_date) uniqueness constraint.
 func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
+	client := utils.NewSanityClient()
+
 	for ; ; <-ticker.C {
 		slog.Info("Running STMPD RCRDS releases fetcher")
 
-		releases, err := fetchStmpdReleases()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		newCount, linkedCount, skippedCount := runStmpdCycle(ctx, b, client)
+		cancel()
+
+		slog.Info("STMPD sync complete",
+			slog.Int("new", newCount),
+			slog.Int("linked", linkedCount),
+			slog.Int("skipped", skippedCount))
+	}
+}
+
+func runStmpdCycle(ctx context.Context, b *mgbot.MartinGarrixBot, client *utils.SanityClient) (newCount, linkedCount, skippedCount int) {
+	releases, err := client.FetchStmpdReleases(ctx, utils.SinceDaysAgo(stmpdLookbackDays))
+	if err != nil {
+		slog.Error("Failed to fetch STMPD releases", slog.Any("err", err))
+		utils.RecordSourceFailure(utils.SourceSTMPD, err)
+		return
+	}
+
+	if len(releases) == 0 {
+		slog.Warn("STMPD dataset returned no releases in the lookback window")
+		utils.RecordSourceFailure(utils.SourceSTMPD, errors.New("dataset returned no releases"))
+		return
+	}
+
+	utils.RecordSourceSuccess(utils.SourceSTMPD)
+
+	existingSongs, err := b.Queries.GetAllSongsForMatching(ctx)
+	if err != nil {
+		slog.Error("Failed to load existing songs for STMPD matching", slog.Any("err", err))
+		return
+	}
+
+	// Built once for the whole cycle. Every tier but the last is a map lookup.
+	index := utils.NewSongIndex(existingSongs)
+
+	notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeSTMPD)
+
+	for _, release := range releases {
+		params := newStmpdReleaseParams(release)
+
+		// The slug resolves a release the bot already stores regardless of how its
+		// name, artists or date have since been rewritten; the remaining tiers are
+		// what let a beatport-sourced row be recognised and gain its links.
+		if matched, tier := index.Lookup(release.Query()); matched != nil {
+			rows, err := b.Queries.UpdateSongWithStmpdRelease(ctx, params.update(matched.ID))
+			if err == nil {
+				index.Claim(matched, release.Slug)
+			}
+			switch {
+			case err != nil:
+				slog.Error("Failed to apply STMPD release to existing song",
+					slog.String("name", params.Name),
+					slog.String("tier", string(tier)),
+					slog.Any("err", err))
+			case rows > 0:
+				linkedCount++
+				slog.Info("Applied STMPD release to existing song",
+					slog.String("name", params.Name),
+					slog.String("artists", params.Artists),
+					slog.String("tier", string(tier)),
+					slog.Int64("song_id", matched.ID))
+			default:
+				skippedCount++
+			}
+			continue
+		}
+
+		// Genuinely new.
+		song, err := b.Queries.InsertRelease(ctx, params.insert())
 		if err != nil {
-			slog.Error("Failed to fetch STMPD releases", slog.Any("err", err))
+			// A row already holds this (name, artists, release_date). That is a
+			// normal outcome, not a fault -- logging it at ERROR produced 1539 of
+			// the error lines in the production log.
+			if db.ErrorCode(err) == db.UniqueViolation {
+				slog.Debug("STMPD release already stored",
+					slog.String("name", params.Name), slog.String("artists", params.Artists))
+				skippedCount++
+				continue
+			}
+			slog.Error("Failed to insert release for "+params.Name, slog.Any("err", err))
 			continue
 		}
 
-		if len(releases) == 0 {
-			slog.Warn("STMPD archive returned no releases - the page layout may have changed again")
+		newCount++
+		index.Append(db.GetAllSongsForMatchingRow{
+			ID: song.ID, Name: song.Name, Artists: song.Artists, Source: song.Source,
+			StmpdSlug: song.StmpdSlug, SpotifyUrl: song.SpotifyUrl,
+			BeatportReleaseID: song.BeatportReleaseID, MixName: song.MixName,
+		})
+
+		// Two independent locks on announcing. announced_at is stamped on every
+		// pre-existing row, so nothing already in the table can be replayed; the
+		// recency window means even an unstamped row cannot push an old release
+		// into the channel.
+		if song.AnnouncedAt.Valid || !isRecentRelease(song.ReleaseDate) {
 			continue
 		}
 
-		slices.Reverse(releases)
-		if len(releases) > 5 {
-			releases = releases[len(releases)-5:]
-		}
+		announcementEmbed := discord.NewEmbedBuilder().
+			SetTitle(fmt.Sprintf("%s - %s", params.Artists, params.Name)).
+			SetImage(params.Thumbnail.String).
+			SetFooter(fmt.Sprintf("Released %s", song.ReleaseDate), "").
+			Build()
 
-		// Load existing songs for similarity matching
-		existingSongs, err := b.Queries.GetAllSongsForMatching(context.Background())
-		if err != nil {
-			slog.Error("Failed to load existing songs for STMPD matching", slog.Any("err", err))
-			continue
-		}
+		notifier.AddItem(utils.NotificationItem{
+			Embed:      &announcementEmbed,
+			Components: utils.GetSongButtonRows(song),
+		})
 
-		// Create a batch notifier for this cycle
-		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeSTMPD)
-
-		for _, release := range releases {
-			// Convert release year to release_date format
-			releaseDate := fmt.Sprintf("%d-01-01", release.ReleaseYear)
-
-			// First check exact match in DB
-			doesExist, err := b.Queries.DoesSongExist(context.Background(), db.DoesSongExistParams{
-				Name:        release.Name,
-				Artists:     release.Artists,
-				ReleaseDate: releaseDate,
-			})
-
-			if err != nil {
-				slog.Error("Failed to check if song exists", slog.Any("err", err))
-				continue
-			}
-
-			if doesExist {
-				continue
-			}
-
-			// Check similarity with existing songs (especially beatport songs)
-			matchedSong := findSimilarExistingSong(existingSongs, release.Name, release.Artists)
-
-			if matchedSong != nil && matchedSong.BeatportID.Valid {
-				// Check if already updated — avoid re-updating every run
-				fullSong, lookupErr := b.Queries.GetSongByID(context.Background(), matchedSong.ID)
-				if lookupErr == nil && fullSong.BeatportUpdated {
-					continue
-				}
-
-				// A similar beatport song exists — update it with STMPD links silently
-				err = b.Queries.UpdateSongWithStmpdLinks(context.Background(), db.UpdateSongWithStmpdLinksParams{
-					ID: matchedSong.ID,
-					SpotifyUrl: pgtype.Text{
-						String: release.SpotifyURL,
-						Valid:  release.SpotifyURL != "",
-					},
-					AppleMusicUrl: pgtype.Text{
-						String: release.AppleMusicUrl,
-						Valid:  release.AppleMusicUrl != "",
-					},
-					YoutubeUrl: pgtype.Text{
-						String: release.YoutubeURL,
-						Valid:  release.YoutubeURL != "",
-					},
-					ThumbnailUrl: pgtype.Text{
-						String: release.Thumbnail,
-						Valid:  release.Thumbnail != "",
-					},
-				})
-
-				if err != nil {
-					slog.Error("Failed to update song with STMPD links",
-						slog.String("name", release.Name), slog.Any("err", err))
-				} else {
-					slog.Debug("Updated beatport song with STMPD links",
-						slog.String("name", release.Name),
-						slog.String("artists", release.Artists),
-						slog.Int64("song_id", matchedSong.ID))
-				}
-				continue
-			}
-
-			// No similar song exists — insert new STMPD song
-			releaseParams := db.InsertReleaseParams{
-				Name:        release.Name,
-				Artists:     release.Artists,
-				ReleaseDate: releaseDate,
-			}
-
-			if release.SpotifyURL != "" {
-				releaseParams.SpotifyUrl = pgtype.Text{
-					String: release.SpotifyURL,
-					Valid:  true,
-				}
-			}
-
-			if release.AppleMusicUrl != "" {
-				releaseParams.AppleMusicUrl = pgtype.Text{
-					String: release.AppleMusicUrl,
-					Valid:  true,
-				}
-			}
-
-			if release.YoutubeURL != "" {
-				releaseParams.YoutubeUrl = pgtype.Text{
-					String: release.YoutubeURL,
-					Valid:  true,
-				}
-			}
-
-			if release.Thumbnail != "" {
-				releaseParams.ThumbnailUrl = pgtype.Text{
-					String: release.Thumbnail,
-					Valid:  true,
-				}
-			}
-
-			song, err := b.Queries.InsertRelease(
-				context.Background(), releaseParams,
-			)
-
-			if err != nil {
-				slog.Error("Failed to insert release for "+release.Name, slog.Any("err", err))
-				continue
-			}
-
-			// Add to existing songs list
-			existingSongs = append(existingSongs, db.GetAllSongsForMatchingRow{
-				ID:      song.ID,
-				Name:    song.Name,
-				Artists: song.Artists,
-				Source:  "stmpd",
-			})
-
-			announcementEmbed := discord.NewEmbedBuilder().
-				SetTitle(fmt.Sprintf("%s - %s", release.Artists, release.Name)).
-				SetImage(release.Thumbnail).
-				SetFooter(fmt.Sprintf("Release Year: %d", release.ReleaseYear), "").
-				Build()
-
-			// Prepare the components for this song
-			var components []discord.ContainerComponent
-			if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
-				components = []discord.ContainerComponent{
-					discord.NewActionRow(utils.GetSongButtons(song)...),
-				}
-			}
-
-			// Add this release to the batch
-			notifier.AddItem(utils.NotificationItem{
-				Embed:      &announcementEmbed,
-				Components: components,
-			})
-		}
-
-		// Send all batched notifications once
-		if err := notifier.Send(); err != nil {
-			slog.Error("Failed to send batched STMPD notifications", slog.Any("err", err))
+		// Stamped when the item joins the batch rather than after the batch is
+		// sent. A failed send loses one announcement; not stamping would risk
+		// replaying the whole batch next cycle, and quiet is the safer failure.
+		if err := b.Queries.MarkSongAnnounced(ctx, song.ID); err != nil {
+			slog.Error("Failed to mark song announced",
+				slog.Int64("song_id", song.ID), slog.Any("err", err))
 		}
 	}
+
+	if err := notifier.Send(); err != nil {
+		slog.Error("Failed to send batched STMPD notifications", slog.Any("err", err))
+	}
+
+	return newCount, linkedCount, skippedCount
 }

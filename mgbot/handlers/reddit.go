@@ -200,6 +200,9 @@ func GetRedditPosts(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		// or a Reddit outage should cost one cycle, not every future one.
 		if err := runRedditCycle(b, endpoint); err != nil {
 			slog.Error("Reddit post fetch cycle failed", slog.Any("err", err))
+			utils.RecordSourceFailure(utils.SourceReddit, err)
+		} else {
+			utils.RecordSourceSuccess(utils.SourceReddit)
 		}
 	}
 } // TODO: Maybe some logic to restart if it panics?

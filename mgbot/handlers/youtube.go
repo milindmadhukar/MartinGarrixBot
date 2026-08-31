@@ -24,6 +24,12 @@ func GetYoutubeVideos(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		// Create a batch notifier for this cycle
 		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeYoutube)
 
+		var lastYoutubeErr error
+
+		// A cycle counts as healthy if at least one playlist responded. All three
+		// failing means the API key or quota is the problem, not one bad playlist.
+		playlistsOK := 0
+
 		for _, playlistID := range playlistIDs {
 			resp, err := b.YoutubeService.PlaylistItems.
 				List([]string{"snippet"}).
@@ -32,8 +38,10 @@ func GetYoutubeVideos(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 
 			if err != nil {
 				slog.Error("Failed to fetch youtube videos", slog.Any("err", err))
+				lastYoutubeErr = err
 				continue
 			}
+			playlistsOK++
 
 			slices.Reverse(resp.Items)
 
@@ -53,6 +61,12 @@ func GetYoutubeVideos(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 					Content: content,
 				})
 			}
+		}
+
+		if playlistsOK == 0 {
+			utils.RecordSourceFailure(utils.SourceYouTube, lastYoutubeErr)
+		} else {
+			utils.RecordSourceSuccess(utils.SourceYouTube)
 		}
 
 		// Send all batched notifications once

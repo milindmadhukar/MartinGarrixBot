@@ -38,7 +38,6 @@ func main() {
 	shouldSyncCommands := flag.Bool("sync-commands", false, "Whether to sync commands to discord")
 	path := flag.String("config", "config.toml", "path to config")
 	shouldClearCommands := flag.Bool("clear-commands", false, "Whether to clear commands from discord")
-	fetchAllBeatport := flag.Bool("fetch-all-beatport", false, "Fetch all beatport songs (initial bulk import, no announcements)")
 	flag.Parse()
 
 	cfg, err := mgbot.LoadConfig(*path)
@@ -115,7 +114,7 @@ func main() {
 				go handlers.GetRedditPosts(b, time.NewTicker(3*time.Minute))
 				go handlers.GetYoutubeVideos(b, time.NewTicker(3*time.Minute))
 				go handlers.GetAllStmpdReleases(b, time.NewTicker(15*time.Minute))
-				go handlers.GetBeatportReleases(b, time.NewTicker(15*time.Minute), *fetchAllBeatport)
+				go handlers.GetBeatportReleases(b, time.NewTicker(15*time.Minute))
 				go handlers.GetAllTourShows(b, time.NewTicker(10*time.Minute))
 
 				// Auto-start radio in all configured guilds (only if Lavalink is connected)

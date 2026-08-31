@@ -3,9 +3,12 @@ package mgbot
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
 
 // startedAt is stamped at process start so /health can report uptime.
@@ -92,6 +95,19 @@ func (b *MartinGarrixBot) handleHealth(w http.ResponseWriter, r *http.Request) {
 		degraded = append(degraded, "lavalink")
 	}
 
+	// --- Content sources (optional: reported, never fatal) ---
+	// A dead feed does not stop the bot doing its job, so it must not fail the
+	// container healthcheck and trigger a restart that cannot fix it. It does need
+	// to be visible: the beatport outage of 2026-08-25 ran for four days precisely
+	// because nothing aggregated "this source has returned nothing since Tuesday".
+	for name, st := range utils.SourceHealthSnapshot() {
+		checks["source:"+name] = CheckResult{
+			OK:     !st.Degraded(),
+			Detail: sourceDetail(st),
+		}
+	}
+	degraded = append(degraded, utils.DegradedSources()...)
+
 	healthy := checks["discord"].OK && checks["database"].OK
 
 	resp := HealthResponse{
@@ -118,6 +134,19 @@ func (b *MartinGarrixBot) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		slog.Error("Failed to write health response", slog.Any("err", err))
 	}
+}
+
+// sourceDetail renders a source's state as a short human-readable string, since
+// this endpoint is read by a person debugging as often as by a monitor.
+func sourceDetail(st utils.SourceState) string {
+	if !st.EverSucceeded {
+		return "optional; no successful fetch yet (may be unconfigured)"
+	}
+	if st.ConsecutiveFailures == 0 {
+		return fmt.Sprintf("optional; last success %s ago", time.Since(st.LastSuccess).Truncate(time.Second))
+	}
+	return fmt.Sprintf("optional; %d consecutive failures, last success %s ago: %s",
+		st.ConsecutiveFailures, time.Since(st.LastSuccess).Truncate(time.Second), st.LastError)
 }
 
 func gatewayDetail(ready bool) string {

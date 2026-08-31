@@ -10,3 +10,4 @@ config.docker.toml
 # jar only risks a fresh deploy running a stale version alongside the declared one.
 /lavalink/plugins/*.jar
 /martin-garrix-bot
+config.prod.toml

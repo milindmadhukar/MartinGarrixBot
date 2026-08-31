@@ -31,3 +31,22 @@ run:
 
 kill:
 	@pgrep -f "mgbot_bin\|garrixbot" | xargs kill || true
+# --- maintenance scripts (see scripts/README.md) ---------------------------------
+# CONFIG defaults to the bot's own config; override for a non-default database:
+#   make backfill-stmpd CONFIG=config.docker.toml
+CONFIG ?= config.toml
+
+rekey_songs:
+	go run ./scripts/rekey-songs -config=$(CONFIG)
+
+backfill_stmpd_dry:
+	go run ./scripts/backfill-stmpd -config=$(CONFIG) -dry-run
+
+backfill_stmpd:
+	go run ./scripts/backfill-stmpd -config=$(CONFIG)
+
+link_remix_parents:
+	go run ./scripts/link-remix-parents -config=$(CONFIG)
+
+import_beatport:
+	go run ./scripts/import-beatport -config=$(CONFIG)
