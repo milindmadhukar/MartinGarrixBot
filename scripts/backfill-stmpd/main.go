@@ -167,14 +167,24 @@ func processRelease(ctx context.Context, env *script.Env, index *utils.SongIndex
 func mergeTwin(ctx context.Context, env *script.Env, release utils.SanityRelease, matched *db.GetAllSongsForMatchingRow, params db.UpdateSongWithStmpdReleaseParams, c *counters) {
 	name := release.Name()
 
+	// Look the twin up by the MATCHED ROW's name and artists, not the release's.
+	// unique_release covers (name, artists, release_date), and this update only
+	// changes the date -- so the row it collides with is the one already holding
+	// this row's own name and artists at the new date. The release's own spelling
+	// can differ ("Understand Me" stored, "Understand Me (The Remixes)" published)
+	// and looking it up that way finds nothing.
 	twin, err := env.Queries.GetSong(ctx, db.GetSongParams{
-		Name:        name,
-		Artists:     release.Artists,
+		Name:        matched.Name,
+		Artists:     matched.Artists,
 		ReleaseDate: release.ReleaseDate,
 	})
 	if err != nil {
 		slog.Error("date correction conflicted but no twin row was found",
-			slog.String("name", name), slog.Any("err", err))
+			slog.String("release", name),
+			slog.String("row_name", matched.Name),
+			slog.String("row_artists", matched.Artists),
+			slog.String("target_date", release.ReleaseDate),
+			slog.Any("err", err))
 		c.failed++
 		return
 	}

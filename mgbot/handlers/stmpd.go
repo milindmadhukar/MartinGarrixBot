@@ -202,7 +202,18 @@ func runStmpdCycle(ctx context.Context, b *mgbot.MartinGarrixBot, client *utils.
 		// pre-existing row, so nothing already in the table can be replayed; the
 		// recency window means even an unstamped row cannot push an old release
 		// into the channel.
-		if song.AnnouncedAt.Valid || !isRecentRelease(song.ReleaseDate) {
+		// Stamp the watermark either way, so NULL keeps meaning "still pending"
+		// rather than accumulating rows that were inserted but never announced.
+		if err := b.Queries.MarkSongAnnounced(ctx, song.ID); err != nil {
+			slog.Error("Failed to mark song announced",
+				slog.Int64("song_id", song.ID), slog.Any("err", err))
+		}
+
+		// Only recency decides here: the row was inserted a moment ago, so it has
+		// never been announced by definition. The announced_at watermark is what
+		// protects every OTHER path -- a date correction, a re-insert, a restored
+		// backup -- from replaying the back catalogue.
+		if !isRecentRelease(song.ReleaseDate) {
 			continue
 		}
 
@@ -217,13 +228,6 @@ func runStmpdCycle(ctx context.Context, b *mgbot.MartinGarrixBot, client *utils.
 			Components: utils.GetSongButtonRows(song),
 		})
 
-		// Stamped when the item joins the batch rather than after the batch is
-		// sent. A failed send loses one announcement; not stamping would risk
-		// replaying the whole batch next cycle, and quiet is the safer failure.
-		if err := b.Queries.MarkSongAnnounced(ctx, song.ID); err != nil {
-			slog.Error("Failed to mark song announced",
-				slog.Int64("song_id", song.ID), slog.Any("err", err))
-		}
 	}
 
 	if err := notifier.Send(); err != nil {

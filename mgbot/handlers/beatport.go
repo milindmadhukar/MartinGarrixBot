@@ -330,6 +330,15 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			})
 
 			if err != nil {
+				// A row already holds this (name, artists, release_date). Beatport
+				// lists the same recording under several ids, so this is the normal
+				// steady state, not a fault.
+				if db.ErrorCode(err) == db.UniqueViolation {
+					slog.Debug("Beatport track already stored",
+						slog.String("name", track.Name), slog.String("artists", artistsStr))
+					skippedCount++
+					continue
+				}
 				slog.Error("Failed to insert beatport song",
 					slog.String("name", track.Name), slog.Any("err", err))
 				continue
@@ -356,7 +365,18 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			// recent. Beatport lists extended mixes and every individual remix as
 			// separate tracks, so without the recency lock a catalogue re-read
 			// floods the channel.
-			if !song.AnnouncedAt.Valid && isRecentRelease(track.ReleaseDate) {
+			// Stamp the watermark either way. A row we deliberately chose not to
+			// announce is finished with, so leaving it NULL would erode the meaning
+			// of the column: NULL should mean "still pending", not "old catalogue".
+			if err := b.Queries.MarkSongAnnounced(context.Background(), song.ID); err != nil {
+				slog.Error("Failed to mark song announced",
+					slog.Int64("song_id", song.ID), slog.Any("err", err))
+			}
+
+			// Only recency decides here: the row was inserted a moment ago, so it
+			// has never been announced by definition. The announced_at watermark is
+			// what protects every other path from replaying the back catalogue.
+			if isRecentRelease(track.ReleaseDate) {
 				// Build announcement embed
 				title := fmt.Sprintf("%s - %s", artistsStr, track.Name)
 				if track.MixName != "" && track.MixName != "Original Mix" {
@@ -411,13 +431,6 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 					Components: components,
 				})
 
-				// Stamped when the item joins the batch rather than after the batch is
-				// sent. A failed send loses one announcement; not stamping would risk
-				// replaying the whole batch next cycle, and quiet is the safer failure.
-				if err := b.Queries.MarkSongAnnounced(context.Background(), song.ID); err != nil {
-					slog.Error("Failed to mark song announced",
-						slog.Int64("song_id", song.ID), slog.Any("err", err))
-				}
 			}
 		}
 
