@@ -228,22 +228,23 @@ func (ix *SongIndex) Lookup(q SongQuery) (*db.GetAllSongsForMatchingRow, MatchTi
 	// should land on that rather than on whichever remix happens to be indexed
 	// first. Six rows share the "Catharina" base key in production, so first-wins
 	// here would be close to a coin toss.
-	var fallback *db.GetAllSongsForMatchingRow
+	// Renditions must agree. This tier used to pair a release with a row whose
+	// variant differed whenever either side recorded none, on the theory that STMPD
+	// publishing "Catharina" and beatport listing "Catharina (Extended Mix)" are the
+	// same record. In practice it mis-assigned in both directions: the "La La La
+	// (Drove Remix)" release took over the row holding the plain original and
+	// overwrote its date, and 73 rows ended up carrying the slug of a release whose
+	// rendition they do not have. A remix is a distinct recording; if no row matches
+	// one, the right outcome is a new row that link-remix-parents then files under
+	// the original -- not the original's row quietly changing identity.
 	for _, i := range ix.byBaseKey[artistSet+"|"+base] {
 		if ix.claimedByAnother(i, q) {
 			note(i)
 			continue
 		}
-		otherVariant := storedVariant(ix.rows[i])
-		switch {
-		case variant == otherVariant:
+		if variant == storedVariant(ix.rows[i]) {
 			return &ix.rows[i], MatchBaseKeyVariant
-		case (variant == "" || otherVariant == "") && fallback == nil:
-			fallback = &ix.rows[i]
 		}
-	}
-	if fallback != nil {
-		return fallback, MatchBaseKeyVariant
 	}
 
 	// Last resort: a close title within an artist set that already agrees exactly.
@@ -260,7 +261,9 @@ func (ix *SongIndex) Lookup(q SongQuery) (*db.GetAllSongsForMatchingRow, MatchTi
 			continue
 		}
 		otherBase, otherVariant := SplitVariant(ix.rows[i].Name, "", ix.rows[i].MixName.String)
-		if variant != otherVariant && variant != "" && otherVariant != "" {
+		// Same asymmetry as the base-key tier: a rendition must not match a row that
+		// records a different one, nor a row that records none at all.
+		if variant != otherVariant && variant != "" {
 			continue
 		}
 		if digitsOf(base) != digitsOf(otherBase) {

@@ -38,7 +38,8 @@ const stmpdLookbackDays = 60
 type stmpdReleaseParams struct {
 	Name              string
 	Artists           string
-	ReleaseDate       string
+	Version           pgtype.Text
+	ReleaseDate       pgtype.Text
 	Slug              pgtype.Text
 	Thumbnail         pgtype.Text
 	Spotify           pgtype.Text
@@ -57,7 +58,8 @@ func newStmpdReleaseParams(r utils.SanityRelease) stmpdReleaseParams {
 	return stmpdReleaseParams{
 		Name:              r.Name(),
 		Artists:           r.Artists,
-		ReleaseDate:       r.ReleaseDate,
+		Version:           utils.Text(r.Version),
+		ReleaseDate:       utils.Text(r.ReleaseDate),
 		Slug:              utils.Text(r.Slug),
 		Thumbnail:         utils.Text(r.Artwork()),
 		Spotify:           utils.Text(l.Spotify),
@@ -85,7 +87,7 @@ func (p stmpdReleaseParams) insert() db.InsertReleaseParams {
 
 func (p stmpdReleaseParams) update(id int64) db.UpdateSongWithStmpdReleaseParams {
 	return db.UpdateSongWithStmpdReleaseParams{
-		ID: id, StmpdSlug: p.Slug, ReleaseDate: utils.Text(p.ReleaseDate),
+		ID: id, StmpdSlug: p.Slug, ReleaseDate: p.ReleaseDate, MixName: p.Version,
 		ThumbnailUrl: p.Thumbnail,
 		SpotifyUrl:   p.Spotify, AppleMusicUrl: p.AppleMusic,
 		YoutubeUrl: p.YouTube, YoutubeMusicUrl: p.YouTubeMusic,
@@ -169,6 +171,14 @@ func runStmpdCycle(ctx context.Context, b *mgbot.MartinGarrixBot, client *utils.
 					slog.String("artists", params.Artists),
 					slog.String("tier", string(tier)),
 					slog.Int64("song_id", matched.ID))
+
+				// The row may have just been promoted: someone added the track
+				// because they heard it played, and it has now actually come out.
+				// UpdateSongWithStmpdRelease clears announced_at in that case, so
+				// re-reading tells us whether this is news.
+				if updated, err := b.Queries.GetSongByID(ctx, matched.ID); err == nil {
+					announceSong(ctx, b, notifier, updated, params.Thumbnail.String)
+				}
 			default:
 				skippedCount++
 			}
@@ -198,36 +208,7 @@ func runStmpdCycle(ctx context.Context, b *mgbot.MartinGarrixBot, client *utils.
 			BeatportReleaseID: song.BeatportReleaseID, MixName: song.MixName,
 		})
 
-		// Two independent locks on announcing. announced_at is stamped on every
-		// pre-existing row, so nothing already in the table can be replayed; the
-		// recency window means even an unstamped row cannot push an old release
-		// into the channel.
-		// Stamp the watermark either way, so NULL keeps meaning "still pending"
-		// rather than accumulating rows that were inserted but never announced.
-		if err := b.Queries.MarkSongAnnounced(ctx, song.ID); err != nil {
-			slog.Error("Failed to mark song announced",
-				slog.Int64("song_id", song.ID), slog.Any("err", err))
-		}
-
-		// Only recency decides here: the row was inserted a moment ago, so it has
-		// never been announced by definition. The announced_at watermark is what
-		// protects every OTHER path -- a date correction, a re-insert, a restored
-		// backup -- from replaying the back catalogue.
-		if !isRecentRelease(song.ReleaseDate) {
-			continue
-		}
-
-		announcementEmbed := discord.NewEmbedBuilder().
-			SetTitle(fmt.Sprintf("%s - %s", params.Artists, params.Name)).
-			SetImage(params.Thumbnail.String).
-			SetFooter(fmt.Sprintf("Released %s", song.ReleaseDate), "").
-			Build()
-
-		notifier.AddItem(utils.NotificationItem{
-			Embed:      &announcementEmbed,
-			Components: utils.GetSongButtonRows(song),
-		})
-
+		announceSong(ctx, b, notifier, song, params.Thumbnail.String)
 	}
 
 	if err := notifier.Send(); err != nil {
@@ -235,4 +216,52 @@ func runStmpdCycle(ctx context.Context, b *mgbot.MartinGarrixBot, client *utils.
 	}
 
 	return newCount, linkedCount, skippedCount
+}
+
+// announceSong posts a song to the release channel if it has never been announced and
+// is actually recent, and stamps the watermark either way.
+//
+// Two independent locks. announced_at was stamped on every row that existed before
+// the watermark was introduced, so nothing already in the catalogue can be replayed;
+// the recency window means even an unstamped row cannot push an old release into the
+// channel. Both have to pass.
+//
+// The one case where a row that already existed does announce is promotion: a track
+// someone added because they heard it played, which has since been released. The
+// update clears announced_at precisely so this can happen.
+func announceSong(ctx context.Context, b *mgbot.MartinGarrixBot, notifier *utils.BatchNotifier, song db.Song, thumbnail string) {
+	if song.AnnouncedAt.Valid || !isRecentRelease(song.ReleaseDate) {
+		// Stamp it so that NULL keeps meaning "still pending" rather than
+		// accumulating rows that were considered and deliberately passed over.
+		if !song.AnnouncedAt.Valid {
+			if err := b.Queries.MarkSongAnnounced(ctx, song.ID); err != nil {
+				slog.Error("Failed to mark song announced",
+					slog.Int64("song_id", song.ID), slog.Any("err", err))
+			}
+		}
+		return
+	}
+
+	if thumbnail == "" {
+		thumbnail = song.ThumbnailUrl.String
+	}
+
+	embed := discord.NewEmbedBuilder().
+		SetTitle(fmt.Sprintf("%s - %s", song.Artists, song.Name)).
+		SetImage(thumbnail).
+		SetFooter("Released "+song.ReleaseDate.String, "").
+		Build()
+
+	notifier.AddItem(utils.NotificationItem{
+		Embed:      &embed,
+		Components: utils.GetSongButtonRows(song),
+	})
+
+	// Stamped when the item joins the batch rather than after the batch is sent. A
+	// failed send loses one announcement; not stamping would risk replaying the whole
+	// batch next cycle, and quiet is the safer failure.
+	if err := b.Queries.MarkSongAnnounced(ctx, song.ID); err != nil {
+		slog.Error("Failed to mark song announced",
+			slog.Int64("song_id", song.ID), slog.Any("err", err))
+	}
 }

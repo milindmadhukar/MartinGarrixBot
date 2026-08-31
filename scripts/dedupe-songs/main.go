@@ -29,8 +29,28 @@ import (
 	"github.com/milindmadhukar/MartinGarrixBot/scripts/internal/script"
 )
 
-// placeholderDate is what the original importer wrote when it had no release date.
-const placeholderDate = "1970-01-01"
+// distinctSlugs counts how many different STMPD releases a group claims to be.
+func distinctSlugs(group []db.GetDuplicateMatchKeyRowsRow) int {
+	seen := map[string]struct{}{}
+	for _, r := range group {
+		if r.StmpdSlug.Valid && r.StmpdSlug.String != "" {
+			seen[r.StmpdSlug.String] = struct{}{}
+		}
+	}
+	return len(seen)
+}
+
+// hasDate reports whether a row's release date is actually known. It is NULL for an
+// unreleased song and for one whose date could not be established.
+func hasDate(d pgtype.Text) bool { return d.Valid && d.String != "" }
+
+// dateOf renders a possibly-absent date for logging.
+func dateOf(d pgtype.Text) string {
+	if !hasDate(d) {
+		return "(none)"
+	}
+	return d.String
+}
 
 func main() {
 	maxGap := flag.Int("max-date-gap", 120,
@@ -70,6 +90,23 @@ func main() {
 			continue
 		}
 
+		// Two rows each holding a different STMPD slug are two different releases,
+		// however identically they key. "La La La" and "La La La (Drove Remix)" are
+		// filed under separate slugs but reduce to the same match_key because the
+		// remix name lives in neither the title nor mix_name on one of them.
+		//
+		// Merging them drops one slug, and the next backfill re-creates a row for
+		// the release that lost it -- so the two scripts undo each other on every
+		// run. The catalogue is the authority here, not the key.
+		if slugs := distinctSlugs(group); slugs > 1 {
+			deferred++
+			slog.Warn("left alone: these are separate releases in the STMPD catalogue",
+				slog.String("match_key", key),
+				slog.Int("distinct_slugs", slugs),
+				slog.Any("rows", describe(group)))
+			continue
+		}
+
 		if gap, ok := dateGap(group); !ok || gap > *maxGap {
 			deferred++
 			slog.Warn("left alone: release dates disagree by too much to merge blind",
@@ -89,9 +126,9 @@ func main() {
 				slog.Info("would merge",
 					slog.String("match_key", key),
 					slog.Int64("keep", winner.ID), slog.String("keep_name", winner.Name),
-					slog.String("keep_date", winner.ReleaseDate),
+					slog.String("keep_date", dateOf(winner.ReleaseDate)),
 					slog.Int64("drop", r.ID), slog.String("drop_name", r.Name),
-					slog.String("drop_date", r.ReleaseDate))
+					slog.String("drop_date", dateOf(r.ReleaseDate)))
 				merged++
 				continue
 			}
@@ -173,14 +210,14 @@ func better(a, b db.GetDuplicateMatchKeyRowsRow) bool {
 	if s := boolCmp(hasLinks(a), hasLinks(b)); s != 0 {
 		return s > 0
 	}
-	// A real date beats the placeholder. Without this the placeholder sorts as the
-	// earliest date of all and wins the "earliest release" rule below, so the merged
-	// row would keep 1970-01-01 and throw away a date we actually know.
-	if s := boolCmp(a.ReleaseDate != placeholderDate, b.ReleaseDate != placeholderDate); s != 0 {
+	// A known date beats an absent one. Without this a row with no date sorts as the
+	// earliest of all and wins the "earliest release" rule below, so the merged row
+	// would keep the absence and throw away a date we actually know.
+	if s := boolCmp(hasDate(a.ReleaseDate), hasDate(b.ReleaseDate)); s != 0 {
 		return s > 0
 	}
-	if a.ReleaseDate != b.ReleaseDate {
-		return a.ReleaseDate < b.ReleaseDate
+	if a.ReleaseDate.String != b.ReleaseDate.String {
+		return a.ReleaseDate.String < b.ReleaseDate.String
 	}
 	return a.ID < b.ID
 }
@@ -206,10 +243,10 @@ func hasLinks(r db.GetDuplicateMatchKeyRowsRow) bool {
 func dateGap(group []db.GetDuplicateMatchKeyRowsRow) (int, bool) {
 	var min, max time.Time
 	for _, r := range group {
-		if r.ReleaseDate == placeholderDate {
+		if !hasDate(r.ReleaseDate) {
 			continue
 		}
-		t, err := time.Parse(time.DateOnly, r.ReleaseDate)
+		t, err := time.Parse(time.DateOnly, r.ReleaseDate.String)
 		if err != nil {
 			return 0, false
 		}
@@ -229,7 +266,7 @@ func dateGap(group []db.GetDuplicateMatchKeyRowsRow) (int, bool) {
 func describe(group []db.GetDuplicateMatchKeyRowsRow) []string {
 	out := make([]string, 0, len(group))
 	for _, r := range group {
-		out = append(out, r.ReleaseDate+" "+r.Source+" #"+itoa(r.ID)+" "+r.Name)
+		out = append(out, dateOf(r.ReleaseDate)+" "+r.Source+" #"+itoa(r.ID)+" "+r.Name)
 	}
 	return out
 }

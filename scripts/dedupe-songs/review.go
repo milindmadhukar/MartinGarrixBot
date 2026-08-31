@@ -69,7 +69,7 @@ func reportSuspects(ctx context.Context, env *script.Env, path string) {
 		for _, r := range group {
 			_ = w.Write([]string{
 				reason, title, strconv.FormatInt(r.ID, 10), r.Name, r.Artists,
-				r.ReleaseDate, r.Source, strconv.FormatBool(reviewHasLinks(r)),
+				dateOf(r.ReleaseDate), r.Source, strconv.FormatBool(reviewHasLinks(r)),
 			})
 		}
 	}

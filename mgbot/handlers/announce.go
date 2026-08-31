@@ -3,6 +3,8 @@ package handlers
 import (
 	"log/slog"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // announceWindow bounds how far back a release can be dated and still be worth
@@ -12,16 +14,21 @@ import (
 // row, a restored backup -- cannot push a years-old release into the channel.
 const announceWindow = 21 * 24 * time.Hour
 
-// isRecentRelease reports whether a songs.release_date value is recent enough to
-// announce. release_date is a TEXT column holding an ISO date; legacy rows carry
-// "1970-01-01" or "<year>-01-01" placeholders, which fall outside the window and
-// are therefore never announced. An unparseable date is treated as not recent:
+// isRecentRelease reports whether a songs.release_date is recent enough to announce.
+//
+// A NULL date is never recent. It means either that the song is unreleased -- someone
+// added it because they heard it played -- or that we could not establish a date, and
+// neither is something to announce. An unparseable date is treated the same way:
 // staying quiet on bad data is always the safe direction here.
-func isRecentRelease(releaseDate string) bool {
-	d, err := time.Parse(time.DateOnly, releaseDate)
+func isRecentRelease(releaseDate pgtype.Text) bool {
+	if !releaseDate.Valid || releaseDate.String == "" {
+		return false
+	}
+
+	d, err := time.Parse(time.DateOnly, releaseDate.String)
 	if err != nil {
 		slog.Debug("Unparseable release_date, not announcing",
-			slog.String("release_date", releaseDate))
+			slog.String("release_date", releaseDate.String))
 		return false
 	}
 	return time.Since(d) <= announceWindow

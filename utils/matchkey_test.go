@@ -171,3 +171,55 @@ func TestFeatureInTitleDoesNotCollapseDistinctSongs(t *testing.T) {
 		t.Error("a solo recording must not key the same as one with a featured artist")
 	}
 }
+
+func TestSameRecordingRejectsAppleSearchNearMisses(t *testing.T) {
+	// The case that makes verification non-optional: Apple has no "Drinks Up" by
+	// AREA21, so its search returns the nearest AREA21 song instead. The artist is a
+	// perfect match; only the title reveals that this is a different record.
+	if SameRecording("Drinks Up", "AREA21", "Glad You Came", "AREA21") {
+		t.Error("a different song by the same artist must not be accepted")
+	}
+	// "Bass" and "The Bass" are different releases, and we would rather miss a date
+	// than write the wrong one.
+	if SameRecording("Bass", "Julian Jordan", "The Bass (Mixed)", "Julian Jordan") {
+		t.Error("a near-miss title must not be accepted")
+	}
+}
+
+func TestSameRecordingAcceptsGenuineMatches(t *testing.T) {
+	cases := []struct{ ta, aa, tb, ab string }{
+		// Apple spells the feature into the title; the row spells it into the artists.
+		{"We Are The People", "Martin Garrix ft. Bono & The Edge",
+			"We Are the People (feat. Bono & The Edge)", "Martin Garrix"},
+		{"Losing Ground", "Seth Hills ft. ALBA", "Losing Ground (feat. ALBA)", "Seth Hills"},
+		// A rendition suffix on one side only.
+		{"Gold Skies (ft. Aleesia)", "Sander van Doorn, Martin Garrix, DVBBS",
+			"Gold Skies (feat. Aleesia) [Radio Edit]", "Sander van Doorn, Martin Garrix & DVBBS"},
+		{"Helicopter", "Martin Garrix & Firebeatz", "Helicopter", "Martin Garrix & Firebeatz"},
+	}
+	for _, c := range cases {
+		if !SameRecording(c.ta, c.aa, c.tb, c.ab) {
+			t.Errorf("should match:\n  %q by %q\n  %q by %q", c.ta, c.aa, c.tb, c.ab)
+		}
+	}
+}
+
+func TestSameRecordingRejectsUnrelatedArtists(t *testing.T) {
+	if SameRecording("Together", "Martin Garrix", "Together", "Some Other Act") {
+		t.Error("the same title by unrelated artists must not be accepted")
+	}
+}
+
+func TestRemixMustNotClaimTheOriginalsRow(t *testing.T) {
+	// Guards the La La La corruption: the "Drove Remix" release matched the row
+	// holding the plain original through the base-key tier, overwrote its release
+	// date with the remix's, and pushed the original out into a new row.
+	//
+	// This is a key-level assertion of the same asymmetry SongIndex enforces: a
+	// rendition and an original are not interchangeable.
+	original := MatchKey("La La La", "", "Original Mix", "AREA21")
+	remix := MatchKey("La La La", "Drove Remix", "", "AREA21")
+	if original == remix {
+		t.Errorf("a remix must not key the same as the original it derives from: %q", original)
+	}
+}

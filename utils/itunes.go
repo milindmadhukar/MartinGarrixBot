@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -97,6 +98,58 @@ func (r ItunesResult) Date() string {
 		return ""
 	}
 	return day
+}
+
+const itunesSearchURL = "https://itunes.apple.com/search"
+
+// Search returns song results for a free-text query, best match first.
+//
+// Unlike Lookup this is a guess: Apple returns its nearest match even when it has
+// nothing for the query at all. Searching "AREA21 Drinks Up" comes back with
+// "AREA21 - Glad You Came". Every result must therefore be verified against the row
+// it is meant to describe before its date is believed.
+func (c *ItunesClient) Search(ctx context.Context, term string, limit int) ([]ItunesResult, error) {
+	if wait := itunesRateLimit - time.Since(c.last); wait > 0 {
+		select {
+		case <-time.After(wait):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	c.last = time.Now()
+
+	q := url.Values{}
+	q.Set("term", term)
+	q.Set("entity", "song")
+	q.Set("limit", strconv.Itoa(limit))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, itunesSearchURL+"?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", stmpdUserAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("itunes search failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("itunes search returned status %d: %s", resp.StatusCode, truncate(string(body), 120))
+	}
+
+	var parsed struct {
+		Results []ItunesResult `json:"results"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("failed to decode itunes search response: %w", err)
+	}
+	return parsed.Results, nil
 }
 
 // ItunesClient looks up release metadata by id.

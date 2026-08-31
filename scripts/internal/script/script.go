@@ -11,12 +11,14 @@ package script
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
@@ -24,6 +26,13 @@ import (
 
 // Env is everything a maintenance script needs: a database handle and whether it is
 // allowed to write.
+//
+// Under -dry-run, Queries is bound to a transaction that is rolled back on cleanup
+// instead of to the pool. Writes therefore execute for real -- constraints fire,
+// no-op updates report zero rows, duplicate inserts are rejected -- and then vanish.
+// A dry run that merely skips the writes cannot tell you any of that: it reported
+// 1013 rows written where the real run wrote none, and inserts the database would
+// have refused. The point of a dry run is to be believed.
 type Env struct {
 	Pool    *pgxpool.Pool
 	Queries *db.Queries
@@ -70,10 +79,33 @@ func Setup(name string) (*Env, context.Context, func()) {
 	}
 
 	env := &Env{Pool: pool, Queries: db.New(pool), Config: cfg, DryRun: *dryRun}
-	return env, ctx, func() {
+
+	release := func() {
 		pool.Close()
 		cancel()
 	}
+
+	if *dryRun {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			release()
+			fatal("failed to open the dry-run transaction", err)
+		}
+		env.Queries = db.New(tx)
+		release = func() {
+			// Rollback is the whole mechanism, so a failure to roll back is not
+			// something to swallow: it would mean a "dry" run had committed.
+			if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+				slog.Error("DRY RUN FAILED TO ROLL BACK - inspect the database", slog.Any("err", err))
+			} else {
+				slog.Info("Dry run rolled back; nothing was written")
+			}
+			pool.Close()
+			cancel()
+		}
+	}
+
+	return env, ctx, release
 }
 
 func fatal(msg string, err error) {

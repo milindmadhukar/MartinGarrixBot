@@ -144,6 +144,13 @@ func chooseParent(rows []db.GetSongsForParentLinkingRow, group []int) int {
 	sort.SliceStable(candidates, func(a, b int) bool {
 		ra, rb := rows[candidates[a]], rows[candidates[b]]
 
+		// A collection is a release, not a song, so it must never become the entry a
+		// song's remixes hang off. "Catharina (Remixes)" is a child of "Catharina",
+		// not its parent.
+		if ra.IsCollection != rb.IsCollection {
+			return !ra.IsCollection
+		}
+
 		va := storedVariant(ra) != ""
 		vb := storedVariant(rb) != ""
 		if va != vb {
@@ -160,13 +167,22 @@ func chooseParent(rows []db.GetSongsForParentLinkingRow, group []int) int {
 			return la
 		}
 
-		if ra.ReleaseDate != rb.ReleaseDate {
-			return ra.ReleaseDate < rb.ReleaseDate
+		// A known date beats an absent one; an unreleased row should not become the
+		// canonical entry for a song that has actually come out.
+		if ra.ReleaseDate.Valid != rb.ReleaseDate.Valid {
+			return ra.ReleaseDate.Valid
+		}
+		if ra.ReleaseDate.String != rb.ReleaseDate.String {
+			return ra.ReleaseDate.String < rb.ReleaseDate.String
 		}
 		return ra.ID < rb.ID
 	})
 
 	best := candidates[0]
+
+	if rows[best].IsCollection {
+		return -1
+	}
 
 	// A group whose best candidate is itself a named rendition has no original in
 	// the table. Inventing a parent from among the remixes would be arbitrary, so

@@ -1,5 +1,8 @@
 -- name: GetSong :one
-SELECT * FROM songs WHERE name = $1 AND artists = $2 AND release_date = $3;
+-- IS NOT DISTINCT FROM, not "=": release_date is NULL for unreleased songs and for
+-- ones whose date we could not establish, and "=" never matches NULL.
+SELECT * FROM songs
+WHERE name = $1 AND artists = $2 AND release_date IS NOT DISTINCT FROM sqlc.narg(release_date);
 
 -- name: GetSongByID :one
 SELECT * FROM songs WHERE id = $1;
@@ -47,6 +50,7 @@ LIMIT 20;
 SELECT * FROM songs
 WHERE lyrics IS NOT NULL
 AND NOT is_instrumental
+AND NOT is_collection
 AND parent_song_id IS NULL
 AND (LOWER(artists) LIKE '%martin garrix%'
    OR LOWER(artists) LIKE '%area21%'
@@ -59,6 +63,7 @@ LIMIT 1;
 SELECT * FROM songs
 WHERE lyrics IS NOT NULL
 AND NOT is_instrumental
+AND NOT is_collection
 AND parent_song_id IS NULL
 AND LOWER(artists) LIKE '%martin garrix%'
 ORDER BY RANDOM()
@@ -98,6 +103,13 @@ SELECT * FROM songs WHERE stmpd_slug = $1;
 UPDATE songs SET
     stmpd_slug          = COALESCE(sqlc.narg(stmpd_slug),          stmpd_slug),
     release_date        = COALESCE(sqlc.narg(release_date),        release_date),
+    -- The catalogue's `version` field, which nothing used to carry across. A legacy
+    -- row for "La La La (Drove Remix)" was stored as plain "La La La", so it keyed
+    -- identically to the original: it showed up as a second, indistinguishable entry
+    -- in autocomplete, and dedupe wanted to merge the two and delete one. Recording
+    -- the rendition instead makes it a remix of the original, exactly like the
+    -- Catharina remixes, which carry theirs in mix_name already.
+    mix_name            = COALESCE(mix_name, sqlc.narg(mix_name)),
     spotify_url         = COALESCE(sqlc.narg(spotify_url),         spotify_url),
     apple_music_url     = COALESCE(sqlc.narg(apple_music_url),     apple_music_url),
     youtube_url         = COALESCE(sqlc.narg(youtube_url),         youtube_url),
@@ -109,11 +121,23 @@ UPDATE songs SET
     beatport_release_id = COALESCE(sqlc.narg(beatport_release_id), beatport_release_id),
     thumbnail_url       = CASE WHEN COALESCE(thumbnail_url, '') = ''
                                THEN sqlc.narg(thumbnail_url) ELSE thumbnail_url END,
+    -- A song someone added because they heard it played, which has now actually
+    -- come out. Clearing announced_at re-arms the announcement: the row is old, but
+    -- the release is news, and this is the one case where re-announcing is right.
+    --
+    -- The ::text casts are load-bearing. IS NOT NULL accepts any type, so these are
+    -- the only places the parameter appears without a type to infer from, and
+    -- Postgres rejects the whole statement with 42P08 at execution time.
+    is_unreleased = CASE WHEN sqlc.narg(release_date)::text IS NOT NULL THEN FALSE ELSE is_unreleased END,
+    announced_at  = CASE WHEN is_unreleased AND sqlc.narg(release_date)::text IS NOT NULL
+                         THEN NULL ELSE announced_at END,
     stmpd_synced_at     = NOW()
 WHERE id = sqlc.arg(id)
   AND (
-       stmpd_slug          IS DISTINCT FROM COALESCE(sqlc.narg(stmpd_slug),          stmpd_slug)
+       (is_unreleased AND sqlc.narg(release_date)::text IS NOT NULL)
+    OR stmpd_slug          IS DISTINCT FROM COALESCE(sqlc.narg(stmpd_slug),          stmpd_slug)
     OR release_date        IS DISTINCT FROM COALESCE(sqlc.narg(release_date),        release_date)
+    OR mix_name            IS DISTINCT FROM COALESCE(mix_name, sqlc.narg(mix_name))
     OR spotify_url         IS DISTINCT FROM COALESCE(sqlc.narg(spotify_url),         spotify_url)
     OR apple_music_url     IS DISTINCT FROM COALESCE(sqlc.narg(apple_music_url),     apple_music_url)
     OR youtube_url         IS DISTINCT FROM COALESCE(sqlc.narg(youtube_url),         youtube_url)
@@ -137,7 +161,8 @@ INSERT INTO songs (
 RETURNING *;
 
 -- name: DoesSongExist :one
-SELECT EXISTS(SELECT 1 FROM songs WHERE name = $1 AND artists = $2 AND release_date = $3);
+SELECT EXISTS(SELECT 1 FROM songs
+  WHERE name = $1 AND artists = $2 AND release_date IS NOT DISTINCT FROM sqlc.narg(release_date));
 
 -- name: DoesBeatportSongExist :one
 SELECT EXISTS(SELECT 1 FROM songs WHERE beatport_id = $1);
@@ -223,11 +248,14 @@ WHERE id = $1 AND (match_key IS DISTINCT FROM $2 OR base_key IS DISTINCT FROM $3
 SELECT id, name, artists, mix_name FROM songs ORDER BY id;
 
 -- name: GetRandomSongForRadio :one
--- Canonical rows only, so the rotation does not play six versions of one track.
+-- Canonical rows only, so the rotation does not play six versions of one track, and
+-- no collections: an EP, an album or a remix package is a release containing songs,
+-- not a song, and queueing one asks the player to stream a whole record as a track.
 SELECT id, name, artists, thumbnail_url, youtube_url
 FROM songs
 WHERE youtube_url IS NOT NULL
   AND parent_song_id IS NULL
+  AND NOT is_collection
   AND (length_ms IS NULL OR length_ms <= 600000)
 ORDER BY RANDOM()
 LIMIT 1;
@@ -298,7 +326,7 @@ UPDATE songs SET is_instrumental = $2 WHERE id = $1 AND is_instrumental IS DISTI
 
 -- name: GetSongsForParentLinking :many
 SELECT id, name, artists, mix_name, release_date, source, base_key,
-       spotify_url, youtube_url, apple_music_url, lyrics, parent_song_id
+       spotify_url, youtube_url, apple_music_url, lyrics, parent_song_id, is_collection
 FROM songs ORDER BY id;
 
 -- name: GetSongMixes :many
@@ -315,10 +343,12 @@ WHERE s.id = $1 AND t.parent_song_id = s.id AND t.lyrics IS NULL
   AND s.lyrics IS NOT NULL AND NOT t.is_instrumental;
 
 -- name: GetSongsWithPlaceholderDate :many
--- Legacy rows carrying the 1970-01-01 sentinel the old importer wrote when it had no
--- date. Ordered so the ones we can actually resolve come first.
+-- Rows whose release date is not a real date: the 1970-01-01 sentinel the original
+-- importer wrote when it had none, and rows dated the 1st of January, which is what
+-- the year-only scrape produced before the dataset gave exact dates.
+-- Ordered so the ones resolvable from a stored link come first.
 SELECT id, name, artists, release_date, apple_music_url, spotify_url
-FROM songs WHERE release_date = '1970-01-01'
+FROM songs WHERE release_date = '1970-01-01' OR release_date LIKE '%-01-01'
 ORDER BY (apple_music_url IS NULL), id;
 
 -- name: SetSongReleaseDate :execrows
@@ -369,3 +399,19 @@ SELECT id, name, artists, release_date, source, base_key, match_key,
        spotify_url, youtube_url, apple_music_url, beatport_id
 FROM songs WHERE parent_song_id IS NULL AND base_key IS NOT NULL AND base_key <> '|'
 ORDER BY base_key, id;
+
+-- name: MarkSongUnreleased :exec
+-- For adding a track that has been played but not put out. The date must go with it:
+-- the unreleased_has_no_date constraint will not allow one without the other.
+UPDATE songs SET is_unreleased = TRUE, release_date = NULL WHERE id = $1;
+
+-- name: GetUnreleasedSongs :many
+SELECT id, name, artists, lyrics IS NOT NULL AS has_lyrics, first_seen_at
+FROM songs WHERE is_unreleased ORDER BY first_seen_at DESC, id;
+
+-- name: SetSongCollection :execrows
+UPDATE songs SET is_collection = $2 WHERE id = $1 AND is_collection IS DISTINCT FROM $2;
+
+-- name: ClearStmpdSlug :execrows
+-- Detach a release identity from a row it does not belong to.
+UPDATE songs SET stmpd_slug = NULL WHERE id = $1;

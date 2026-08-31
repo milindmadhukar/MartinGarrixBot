@@ -278,3 +278,45 @@ func ArtistsSubsume(outer, inner string) bool {
 	}
 	return true
 }
+
+// SameRecording reports whether two (title, artists) pairs describe the same
+// recording, strictly enough to trust a search result with.
+//
+// Base titles must be equal after normalization -- not merely similar. Apple's search
+// answers "AREA21 Drinks Up" with "AREA21 - Glad You Came", which shares the artist
+// exactly and would sail past any artist-only check; only the title catches it.
+//
+// Artists need to overlap rather than match exactly, because the two sides routinely
+// credit a different subset of the same collaboration: a row filed under "Martin
+// Garrix ft. Bono & The Edge" is the same record Apple lists under "Martin Garrix".
+func SameRecording(titleA, artistsA, titleB, artistsB string) bool {
+	baseA, _ := SplitVariant(titleA, "", "")
+	baseB, _ := SplitVariant(titleB, "", "")
+	if baseA == "" || baseA != baseB {
+		return false
+	}
+
+	setA := SplitArtists(artistsA + featureSuffix(titleA))
+	setB := SplitArtists(artistsB + featureSuffix(titleB))
+	if len(setA) == 0 || len(setB) == 0 {
+		return false
+	}
+
+	in := make(map[string]struct{}, len(setA))
+	for _, a := range setA {
+		in[a] = struct{}{}
+	}
+	for _, b := range setB {
+		if _, ok := in[b]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func featureSuffix(title string) string {
+	if _, featured := splitFeature(title); featured != "" {
+		return ", " + featured
+	}
+	return ""
+}

@@ -106,6 +106,7 @@ func processRelease(ctx context.Context, env *script.Env, index *utils.SongIndex
 	name := release.Name()
 
 	matched, tier := index.Lookup(release.Query())
+
 	if matched == nil {
 		insertRelease(ctx, env, index, release, c)
 		return
@@ -176,7 +177,7 @@ func mergeTwin(ctx context.Context, env *script.Env, release utils.SanityRelease
 	twin, err := env.Queries.GetSong(ctx, db.GetSongParams{
 		Name:        matched.Name,
 		Artists:     matched.Artists,
-		ReleaseDate: release.ReleaseDate,
+		ReleaseDate: utils.Text(release.ReleaseDate),
 	})
 	if err != nil {
 		slog.Error("date correction conflicted but no twin row was found",
@@ -228,6 +229,16 @@ func insertRelease(ctx context.Context, env *script.Env, index *utils.SongIndex,
 	name := release.Name()
 
 	if env.DryRun {
+		// Ask the database whether the insert would actually happen. Without this the
+		// dry run reports inserts that the real run rejects as duplicates, which
+		// overstates exactly the number a reviewer is checking before committing.
+		exists, err := env.Queries.DoesSongExist(ctx, db.DoesSongExistParams{
+			Name: name, Artists: release.Artists, ReleaseDate: utils.Text(release.ReleaseDate),
+		})
+		if err == nil && exists {
+			c.unchanged++
+			return
+		}
 		slog.Info("would insert release",
 			slog.String("name", name), slog.String("artists", release.Artists),
 			slog.String("release_date", release.ReleaseDate))
@@ -271,7 +282,7 @@ func insertRelease(ctx context.Context, env *script.Env, index *utils.SongIndex,
 func insertParams(r utils.SanityRelease) db.InsertReleaseParams {
 	l := r.StreamingLinks
 	return db.InsertReleaseParams{
-		Name: r.Name(), Artists: r.Artists, ReleaseDate: r.ReleaseDate,
+		Name: r.Name(), Artists: r.Artists, ReleaseDate: utils.Text(r.ReleaseDate),
 		StmpdSlug: utils.Text(r.Slug), ThumbnailUrl: utils.Text(r.Artwork()),
 		SpotifyUrl: utils.Text(l.Spotify), AppleMusicUrl: utils.Text(l.AppleMusic),
 		YoutubeUrl: utils.Text(l.YouTube), YoutubeMusicUrl: utils.Text(l.YouTubeMusic),
@@ -292,6 +303,7 @@ func updateParams(id int64, r utils.SanityRelease, correctDate bool) db.UpdateSo
 
 	return db.UpdateSongWithStmpdReleaseParams{
 		ID: id, StmpdSlug: utils.Text(r.Slug), ReleaseDate: releaseDate,
+		MixName:      utils.Text(r.Version),
 		ThumbnailUrl: utils.Text(r.Artwork()),
 		SpotifyUrl:   utils.Text(l.Spotify), AppleMusicUrl: utils.Text(l.AppleMusic),
 		YoutubeUrl: utils.Text(l.YouTube), YoutubeMusicUrl: utils.Text(l.YouTubeMusic),

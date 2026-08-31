@@ -31,6 +31,19 @@ func (q *Queries) AdoptSongIdentifiers(ctx context.Context, arg AdoptSongIdentif
 	return err
 }
 
+const clearStmpdSlug = `-- name: ClearStmpdSlug :execrows
+UPDATE songs SET stmpd_slug = NULL WHERE id = $1
+`
+
+// Detach a release identity from a row it does not belong to.
+func (q *Queries) ClearStmpdSlug(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, clearStmpdSlug, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const copyLyricsToRemixes = `-- name: CopyLyricsToRemixes :execrows
 UPDATE songs t SET lyrics = s.lyrics
 FROM songs s
@@ -81,13 +94,14 @@ func (q *Queries) DoesBeatportSongExist(ctx context.Context, beatportID pgtype.I
 }
 
 const doesSongExist = `-- name: DoesSongExist :one
-SELECT EXISTS(SELECT 1 FROM songs WHERE name = $1 AND artists = $2 AND release_date = $3)
+SELECT EXISTS(SELECT 1 FROM songs
+  WHERE name = $1 AND artists = $2 AND release_date IS NOT DISTINCT FROM $3)
 `
 
 type DoesSongExistParams struct {
-	Name        string `json:"name"`
-	Artists     string `json:"artists"`
-	ReleaseDate string `json:"releaseDate"`
+	Name        string      `json:"name"`
+	Artists     string      `json:"artists"`
+	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
 func (q *Queries) DoesSongExist(ctx context.Context, arg DoesSongExistParams) (bool, error) {
@@ -162,7 +176,7 @@ type GetCanonicalSongsForReviewRow struct {
 	ID            int64       `json:"id"`
 	Name          string      `json:"name"`
 	Artists       string      `json:"artists"`
-	ReleaseDate   string      `json:"releaseDate"`
+	ReleaseDate   pgtype.Text `json:"releaseDate"`
 	Source        string      `json:"source"`
 	BaseKey       pgtype.Text `json:"baseKey"`
 	MatchKey      pgtype.Text `json:"matchKey"`
@@ -224,7 +238,7 @@ type GetDuplicateMatchKeyRowsRow struct {
 	Name          string      `json:"name"`
 	Artists       string      `json:"artists"`
 	MixName       pgtype.Text `json:"mixName"`
-	ReleaseDate   string      `json:"releaseDate"`
+	ReleaseDate   pgtype.Text `json:"releaseDate"`
 	Source        string      `json:"source"`
 	MatchKey      pgtype.Text `json:"matchKey"`
 	StmpdSlug     pgtype.Text `json:"stmpdSlug"`
@@ -282,6 +296,7 @@ SELECT id, name, artists, thumbnail_url, youtube_url
 FROM songs
 WHERE youtube_url IS NOT NULL
   AND parent_song_id IS NULL
+  AND NOT is_collection
   AND (length_ms IS NULL OR length_ms <= 600000)
 ORDER BY RANDOM()
 LIMIT 1
@@ -295,7 +310,9 @@ type GetRandomSongForRadioRow struct {
 	YoutubeUrl   pgtype.Text `json:"youtubeUrl"`
 }
 
-// Canonical rows only, so the rotation does not play six versions of one track.
+// Canonical rows only, so the rotation does not play six versions of one track, and
+// no collections: an EP, an album or a remix package is a release containing songs,
+// not a song, and queueing one asks the player to stream a whole record as a track.
 func (q *Queries) GetRandomSongForRadio(ctx context.Context) (GetRandomSongForRadioRow, error) {
 	row := q.db.QueryRow(ctx, getRandomSongForRadio)
 	var i GetRandomSongForRadioRow
@@ -318,10 +335,10 @@ LIMIT 20
 `
 
 type GetRandomSongNamesRow struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Artists     string `json:"artists"`
-	ReleaseDate string `json:"releaseDate"`
+	ID          int64       `json:"id"`
+	Name        string      `json:"name"`
+	Artists     string      `json:"artists"`
+	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
 func (q *Queries) GetRandomSongNames(ctx context.Context) ([]GetRandomSongNamesRow, error) {
@@ -358,10 +375,10 @@ LIMIT 20
 `
 
 type GetRandomSongNamesWithLyricsRow struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Artists     string `json:"artists"`
-	ReleaseDate string `json:"releaseDate"`
+	ID          int64       `json:"id"`
+	Name        string      `json:"name"`
+	Artists     string      `json:"artists"`
+	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
 func (q *Queries) GetRandomSongNamesWithLyrics(ctx context.Context) ([]GetRandomSongNamesWithLyricsRow, error) {
@@ -390,9 +407,10 @@ func (q *Queries) GetRandomSongNamesWithLyrics(ctx context.Context) ([]GetRandom
 }
 
 const getRandomSongWithLyrics = `-- name: GetRandomSongWithLyrics :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental FROM songs
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection FROM songs
 WHERE lyrics IS NOT NULL
 AND NOT is_instrumental
+AND NOT is_collection
 AND parent_song_id IS NULL
 AND (LOWER(artists) LIKE '%martin garrix%'
    OR LOWER(artists) LIKE '%area21%'
@@ -442,14 +460,16 @@ func (q *Queries) GetRandomSongWithLyrics(ctx context.Context) (Song, error) {
 		&i.BaseKey,
 		&i.ParentSongID,
 		&i.IsInstrumental,
+		&i.IsCollection,
 	)
 	return i, err
 }
 
 const getRandomSongWithLyricsEasy = `-- name: GetRandomSongWithLyricsEasy :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental FROM songs
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection FROM songs
 WHERE lyrics IS NOT NULL
 AND NOT is_instrumental
+AND NOT is_collection
 AND parent_song_id IS NULL
 AND LOWER(artists) LIKE '%martin garrix%'
 ORDER BY RANDOM()
@@ -494,20 +514,24 @@ func (q *Queries) GetRandomSongWithLyricsEasy(ctx context.Context) (Song, error)
 		&i.BaseKey,
 		&i.ParentSongID,
 		&i.IsInstrumental,
+		&i.IsCollection,
 	)
 	return i, err
 }
 
 const getSong = `-- name: GetSong :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental FROM songs WHERE name = $1 AND artists = $2 AND release_date = $3
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection FROM songs
+WHERE name = $1 AND artists = $2 AND release_date IS NOT DISTINCT FROM $3
 `
 
 type GetSongParams struct {
-	Name        string `json:"name"`
-	Artists     string `json:"artists"`
-	ReleaseDate string `json:"releaseDate"`
+	Name        string      `json:"name"`
+	Artists     string      `json:"artists"`
+	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
+// IS NOT DISTINCT FROM, not "=": release_date is NULL for unreleased songs and for
+// ones whose date we could not establish, and "=" never matches NULL.
 func (q *Queries) GetSong(ctx context.Context, arg GetSongParams) (Song, error) {
 	row := q.db.QueryRow(ctx, getSong, arg.Name, arg.Artists, arg.ReleaseDate)
 	var i Song
@@ -546,12 +570,13 @@ func (q *Queries) GetSong(ctx context.Context, arg GetSongParams) (Song, error) 
 		&i.BaseKey,
 		&i.ParentSongID,
 		&i.IsInstrumental,
+		&i.IsCollection,
 	)
 	return i, err
 }
 
 const getSongByBeatportID = `-- name: GetSongByBeatportID :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental FROM songs WHERE beatport_id = $1
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection FROM songs WHERE beatport_id = $1
 `
 
 func (q *Queries) GetSongByBeatportID(ctx context.Context, beatportID pgtype.Int4) (Song, error) {
@@ -592,12 +617,13 @@ func (q *Queries) GetSongByBeatportID(ctx context.Context, beatportID pgtype.Int
 		&i.BaseKey,
 		&i.ParentSongID,
 		&i.IsInstrumental,
+		&i.IsCollection,
 	)
 	return i, err
 }
 
 const getSongByID = `-- name: GetSongByID :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental FROM songs WHERE id = $1
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection FROM songs WHERE id = $1
 `
 
 func (q *Queries) GetSongByID(ctx context.Context, id int64) (Song, error) {
@@ -638,12 +664,13 @@ func (q *Queries) GetSongByID(ctx context.Context, id int64) (Song, error) {
 		&i.BaseKey,
 		&i.ParentSongID,
 		&i.IsInstrumental,
+		&i.IsCollection,
 	)
 	return i, err
 }
 
 const getSongByStmpdSlug = `-- name: GetSongByStmpdSlug :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental FROM songs WHERE stmpd_slug = $1
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection FROM songs WHERE stmpd_slug = $1
 `
 
 func (q *Queries) GetSongByStmpdSlug(ctx context.Context, stmpdSlug pgtype.Text) (Song, error) {
@@ -684,6 +711,7 @@ func (q *Queries) GetSongByStmpdSlug(ctx context.Context, stmpdSlug pgtype.Text)
 		&i.BaseKey,
 		&i.ParentSongID,
 		&i.IsInstrumental,
+		&i.IsCollection,
 	)
 	return i, err
 }
@@ -764,7 +792,7 @@ func (q *Queries) GetSongsForKeying(ctx context.Context) ([]GetSongsForKeyingRow
 
 const getSongsForParentLinking = `-- name: GetSongsForParentLinking :many
 SELECT id, name, artists, mix_name, release_date, source, base_key,
-       spotify_url, youtube_url, apple_music_url, lyrics, parent_song_id
+       spotify_url, youtube_url, apple_music_url, lyrics, parent_song_id, is_collection
 FROM songs ORDER BY id
 `
 
@@ -773,7 +801,7 @@ type GetSongsForParentLinkingRow struct {
 	Name          string      `json:"name"`
 	Artists       string      `json:"artists"`
 	MixName       pgtype.Text `json:"mixName"`
-	ReleaseDate   string      `json:"releaseDate"`
+	ReleaseDate   pgtype.Text `json:"releaseDate"`
 	Source        string      `json:"source"`
 	BaseKey       pgtype.Text `json:"baseKey"`
 	SpotifyUrl    pgtype.Text `json:"spotifyUrl"`
@@ -781,6 +809,7 @@ type GetSongsForParentLinkingRow struct {
 	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
 	Lyrics        pgtype.Text `json:"lyrics"`
 	ParentSongID  pgtype.Int8 `json:"parentSongId"`
+	IsCollection  bool        `json:"isCollection"`
 }
 
 func (q *Queries) GetSongsForParentLinking(ctx context.Context) ([]GetSongsForParentLinkingRow, error) {
@@ -805,6 +834,7 @@ func (q *Queries) GetSongsForParentLinking(ctx context.Context) ([]GetSongsForPa
 			&i.AppleMusicUrl,
 			&i.Lyrics,
 			&i.ParentSongID,
+			&i.IsCollection,
 		); err != nil {
 			return nil, err
 		}
@@ -826,10 +856,10 @@ LIMIT 20
 `
 
 type GetSongsLikeRow struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Artists     string `json:"artists"`
-	ReleaseDate string `json:"releaseDate"`
+	ID          int64       `json:"id"`
+	Name        string      `json:"name"`
+	Artists     string      `json:"artists"`
+	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
 // Autocomplete offers one entry per song. Remix rows are excluded: ten "Told You
@@ -869,7 +899,7 @@ type GetSongsMissingLinksRow struct {
 	ID          int64       `json:"id"`
 	Name        string      `json:"name"`
 	Artists     string      `json:"artists"`
-	ReleaseDate string      `json:"releaseDate"`
+	ReleaseDate pgtype.Text `json:"releaseDate"`
 	Source      string      `json:"source"`
 	BeatportID  pgtype.Int4 `json:"beatportId"`
 }
@@ -908,10 +938,10 @@ SELECT id, name, artists, release_date FROM songs WHERE announced_at IS NULL
 `
 
 type GetSongsNeverAnnouncedRow struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Artists     string `json:"artists"`
-	ReleaseDate string `json:"releaseDate"`
+	ID          int64       `json:"id"`
+	Name        string      `json:"name"`
+	Artists     string      `json:"artists"`
+	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
 func (q *Queries) GetSongsNeverAnnounced(ctx context.Context) ([]GetSongsNeverAnnouncedRow, error) {
@@ -950,10 +980,10 @@ LIMIT 20
 `
 
 type GetSongsWithLyricsLikeRow struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Artists     string `json:"artists"`
-	ReleaseDate string `json:"releaseDate"`
+	ID          int64       `json:"id"`
+	Name        string      `json:"name"`
+	Artists     string      `json:"artists"`
+	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
 func (q *Queries) GetSongsWithLyricsLike(ctx context.Context, lower string) ([]GetSongsWithLyricsLikeRow, error) {
@@ -983,7 +1013,7 @@ func (q *Queries) GetSongsWithLyricsLike(ctx context.Context, lower string) ([]G
 
 const getSongsWithPlaceholderDate = `-- name: GetSongsWithPlaceholderDate :many
 SELECT id, name, artists, release_date, apple_music_url, spotify_url
-FROM songs WHERE release_date = '1970-01-01'
+FROM songs WHERE release_date = '1970-01-01' OR release_date LIKE '%-01-01'
 ORDER BY (apple_music_url IS NULL), id
 `
 
@@ -991,13 +1021,15 @@ type GetSongsWithPlaceholderDateRow struct {
 	ID            int64       `json:"id"`
 	Name          string      `json:"name"`
 	Artists       string      `json:"artists"`
-	ReleaseDate   string      `json:"releaseDate"`
+	ReleaseDate   pgtype.Text `json:"releaseDate"`
 	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
 	SpotifyUrl    pgtype.Text `json:"spotifyUrl"`
 }
 
-// Legacy rows carrying the 1970-01-01 sentinel the old importer wrote when it had no
-// date. Ordered so the ones we can actually resolve come first.
+// Rows whose release date is not a real date: the 1970-01-01 sentinel the original
+// importer wrote when it had none, and rows dated the 1st of January, which is what
+// the year-only scrape produced before the dataset gave exact dates.
+// Ordered so the ones resolvable from a stored link come first.
 func (q *Queries) GetSongsWithPlaceholderDate(ctx context.Context) ([]GetSongsWithPlaceholderDateRow, error) {
 	rows, err := q.db.Query(ctx, getSongsWithPlaceholderDate)
 	if err != nil {
@@ -1025,18 +1057,57 @@ func (q *Queries) GetSongsWithPlaceholderDate(ctx context.Context) ([]GetSongsWi
 	return items, nil
 }
 
+const getUnreleasedSongs = `-- name: GetUnreleasedSongs :many
+SELECT id, name, artists, lyrics IS NOT NULL AS has_lyrics, first_seen_at
+FROM songs WHERE is_unreleased ORDER BY first_seen_at DESC, id
+`
+
+type GetUnreleasedSongsRow struct {
+	ID          int64              `json:"id"`
+	Name        string             `json:"name"`
+	Artists     string             `json:"artists"`
+	HasLyrics   interface{}        `json:"hasLyrics"`
+	FirstSeenAt pgtype.Timestamptz `json:"firstSeenAt"`
+}
+
+func (q *Queries) GetUnreleasedSongs(ctx context.Context) ([]GetUnreleasedSongsRow, error) {
+	rows, err := q.db.Query(ctx, getUnreleasedSongs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUnreleasedSongsRow
+	for rows.Next() {
+		var i GetUnreleasedSongsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Artists,
+			&i.HasLyrics,
+			&i.FirstSeenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertBeatportSong = `-- name: InsertBeatportSong :one
 INSERT INTO songs (
     name, artists, release_date, thumbnail_url, beatport_id, mix_name,
     release_name, genre, sub_genre, bpm, musical_key, length_ms, source
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'beatport')
-RETURNING id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental
+RETURNING id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection
 `
 
 type InsertBeatportSongParams struct {
 	Name         string      `json:"name"`
 	Artists      string      `json:"artists"`
-	ReleaseDate  string      `json:"releaseDate"`
+	ReleaseDate  pgtype.Text `json:"releaseDate"`
 	ThumbnailUrl pgtype.Text `json:"thumbnailUrl"`
 	BeatportID   pgtype.Int4 `json:"beatportId"`
 	MixName      pgtype.Text `json:"mixName"`
@@ -1099,6 +1170,7 @@ func (q *Queries) InsertBeatportSong(ctx context.Context, arg InsertBeatportSong
 		&i.BaseKey,
 		&i.ParentSongID,
 		&i.IsInstrumental,
+		&i.IsCollection,
 	)
 	return i, err
 }
@@ -1116,13 +1188,13 @@ INSERT INTO songs (
     $13, $14,
     NOW(), 'stmpd'
 )
-RETURNING id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental
+RETURNING id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection
 `
 
 type InsertReleaseParams struct {
 	Name              string      `json:"name"`
 	Artists           string      `json:"artists"`
-	ReleaseDate       string      `json:"releaseDate"`
+	ReleaseDate       pgtype.Text `json:"releaseDate"`
 	ThumbnailUrl      pgtype.Text `json:"thumbnailUrl"`
 	StmpdSlug         pgtype.Text `json:"stmpdSlug"`
 	SpotifyUrl        pgtype.Text `json:"spotifyUrl"`
@@ -1189,6 +1261,7 @@ func (q *Queries) InsertRelease(ctx context.Context, arg InsertReleaseParams) (S
 		&i.BaseKey,
 		&i.ParentSongID,
 		&i.IsInstrumental,
+		&i.IsCollection,
 	)
 	return i, err
 }
@@ -1208,6 +1281,17 @@ UPDATE songs SET announced_at = NOW() WHERE id = $1 AND announced_at IS NULL
 
 func (q *Queries) MarkSongAnnounced(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, markSongAnnounced, id)
+	return err
+}
+
+const markSongUnreleased = `-- name: MarkSongUnreleased :exec
+UPDATE songs SET is_unreleased = TRUE, release_date = NULL WHERE id = $1
+`
+
+// For adding a track that has been played but not put out. The date must go with it:
+// the unreleased_has_no_date constraint will not allow one without the other.
+func (q *Queries) MarkSongUnreleased(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markSongUnreleased, id)
 	return err
 }
 
@@ -1295,6 +1379,23 @@ func (q *Queries) RepointChildren(ctx context.Context, arg RepointChildrenParams
 	return result.RowsAffected(), nil
 }
 
+const setSongCollection = `-- name: SetSongCollection :execrows
+UPDATE songs SET is_collection = $2 WHERE id = $1 AND is_collection IS DISTINCT FROM $2
+`
+
+type SetSongCollectionParams struct {
+	ID           int64 `json:"id"`
+	IsCollection bool  `json:"isCollection"`
+}
+
+func (q *Queries) SetSongCollection(ctx context.Context, arg SetSongCollectionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSongCollection, arg.ID, arg.IsCollection)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setSongInstrumental = `-- name: SetSongInstrumental :execrows
 UPDATE songs SET is_instrumental = $2 WHERE id = $1 AND is_instrumental IS DISTINCT FROM $2
 `
@@ -1354,8 +1455,8 @@ UPDATE songs SET release_date = $2 WHERE id = $1 AND release_date IS DISTINCT FR
 `
 
 type SetSongReleaseDateParams struct {
-	ID          int64  `json:"id"`
-	ReleaseDate string `json:"releaseDate"`
+	ID          int64       `json:"id"`
+	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
 func (q *Queries) SetSongReleaseDate(ctx context.Context, arg SetSongReleaseDateParams) (int64, error) {
@@ -1405,7 +1506,7 @@ type UpdateSongWithBeatportDataParams struct {
 	ThumbnailUrl pgtype.Text `json:"thumbnailUrl"`
 	BeatportID   pgtype.Int4 `json:"beatportId"`
 	MixName      pgtype.Text `json:"mixName"`
-	ReleaseDate  string      `json:"releaseDate"`
+	ReleaseDate  pgtype.Text `json:"releaseDate"`
 	ReleaseName  pgtype.Text `json:"releaseName"`
 	Genre        pgtype.Text `json:"genre"`
 	SubGenre     pgtype.Text `json:"subGenre"`
@@ -1497,34 +1598,53 @@ const updateSongWithStmpdRelease = `-- name: UpdateSongWithStmpdRelease :execrow
 UPDATE songs SET
     stmpd_slug          = COALESCE($1,          stmpd_slug),
     release_date        = COALESCE($2,        release_date),
-    spotify_url         = COALESCE($3,         spotify_url),
-    apple_music_url     = COALESCE($4,     apple_music_url),
-    youtube_url         = COALESCE($5,         youtube_url),
-    youtube_music_url   = COALESCE($6,   youtube_music_url),
-    deezer_url          = COALESCE($7,          deezer_url),
-    tidal_url           = COALESCE($8,           tidal_url),
-    amazon_music_url    = COALESCE($9,    amazon_music_url),
-    beatport_url        = COALESCE($10,        beatport_url),
-    beatport_release_id = COALESCE($11, beatport_release_id),
+    -- The catalogue's ` + "`" + `version` + "`" + ` field, which nothing used to carry across. A legacy
+    -- row for "La La La (Drove Remix)" was stored as plain "La La La", so it keyed
+    -- identically to the original: it showed up as a second, indistinguishable entry
+    -- in autocomplete, and dedupe wanted to merge the two and delete one. Recording
+    -- the rendition instead makes it a remix of the original, exactly like the
+    -- Catharina remixes, which carry theirs in mix_name already.
+    mix_name            = COALESCE(mix_name, $3),
+    spotify_url         = COALESCE($4,         spotify_url),
+    apple_music_url     = COALESCE($5,     apple_music_url),
+    youtube_url         = COALESCE($6,         youtube_url),
+    youtube_music_url   = COALESCE($7,   youtube_music_url),
+    deezer_url          = COALESCE($8,          deezer_url),
+    tidal_url           = COALESCE($9,           tidal_url),
+    amazon_music_url    = COALESCE($10,    amazon_music_url),
+    beatport_url        = COALESCE($11,        beatport_url),
+    beatport_release_id = COALESCE($12, beatport_release_id),
     thumbnail_url       = CASE WHEN COALESCE(thumbnail_url, '') = ''
-                               THEN $12 ELSE thumbnail_url END,
+                               THEN $13 ELSE thumbnail_url END,
+    -- A song someone added because they heard it played, which has now actually
+    -- come out. Clearing announced_at re-arms the announcement: the row is old, but
+    -- the release is news, and this is the one case where re-announcing is right.
+    --
+    -- The ::text casts are load-bearing. IS NOT NULL accepts any type, so these are
+    -- the only places the parameter appears without a type to infer from, and
+    -- Postgres rejects the whole statement with 42P08 at execution time.
+    is_unreleased = CASE WHEN $2::text IS NOT NULL THEN FALSE ELSE is_unreleased END,
+    announced_at  = CASE WHEN is_unreleased AND $2::text IS NOT NULL
+                         THEN NULL ELSE announced_at END,
     stmpd_synced_at     = NOW()
-WHERE id = $13
+WHERE id = $14
   AND (
-       stmpd_slug          IS DISTINCT FROM COALESCE($1,          stmpd_slug)
+       (is_unreleased AND $2::text IS NOT NULL)
+    OR stmpd_slug          IS DISTINCT FROM COALESCE($1,          stmpd_slug)
     OR release_date        IS DISTINCT FROM COALESCE($2,        release_date)
-    OR spotify_url         IS DISTINCT FROM COALESCE($3,         spotify_url)
-    OR apple_music_url     IS DISTINCT FROM COALESCE($4,     apple_music_url)
-    OR youtube_url         IS DISTINCT FROM COALESCE($5,         youtube_url)
-    OR youtube_music_url   IS DISTINCT FROM COALESCE($6,   youtube_music_url)
-    OR deezer_url          IS DISTINCT FROM COALESCE($7,          deezer_url)
-    OR tidal_url           IS DISTINCT FROM COALESCE($8,           tidal_url)
-    OR amazon_music_url    IS DISTINCT FROM COALESCE($9,    amazon_music_url)
-    OR beatport_url        IS DISTINCT FROM COALESCE($10,        beatport_url)
-    OR beatport_release_id IS DISTINCT FROM COALESCE($11, beatport_release_id)
+    OR mix_name            IS DISTINCT FROM COALESCE(mix_name, $3)
+    OR spotify_url         IS DISTINCT FROM COALESCE($4,         spotify_url)
+    OR apple_music_url     IS DISTINCT FROM COALESCE($5,     apple_music_url)
+    OR youtube_url         IS DISTINCT FROM COALESCE($6,         youtube_url)
+    OR youtube_music_url   IS DISTINCT FROM COALESCE($7,   youtube_music_url)
+    OR deezer_url          IS DISTINCT FROM COALESCE($8,          deezer_url)
+    OR tidal_url           IS DISTINCT FROM COALESCE($9,           tidal_url)
+    OR amazon_music_url    IS DISTINCT FROM COALESCE($10,    amazon_music_url)
+    OR beatport_url        IS DISTINCT FROM COALESCE($11,        beatport_url)
+    OR beatport_release_id IS DISTINCT FROM COALESCE($12, beatport_release_id)
     -- Cast for the same reason as in UpdateSongWithStmpdLinks: IS NOT NULL leaves
     -- the parameter's type undetermined and Postgres raises 42P08.
-    OR (COALESCE(thumbnail_url, '') = '' AND $12::text IS NOT NULL)
+    OR (COALESCE(thumbnail_url, '') = '' AND $13::text IS NOT NULL)
     OR stmpd_synced_at IS NULL
   )
 `
@@ -1532,6 +1652,7 @@ WHERE id = $13
 type UpdateSongWithStmpdReleaseParams struct {
 	StmpdSlug         pgtype.Text `json:"stmpdSlug"`
 	ReleaseDate       pgtype.Text `json:"releaseDate"`
+	MixName           pgtype.Text `json:"mixName"`
 	SpotifyUrl        pgtype.Text `json:"spotifyUrl"`
 	AppleMusicUrl     pgtype.Text `json:"appleMusicUrl"`
 	YoutubeUrl        pgtype.Text `json:"youtubeUrl"`
@@ -1561,6 +1682,7 @@ func (q *Queries) UpdateSongWithStmpdRelease(ctx context.Context, arg UpdateSong
 	result, err := q.db.Exec(ctx, updateSongWithStmpdRelease,
 		arg.StmpdSlug,
 		arg.ReleaseDate,
+		arg.MixName,
 		arg.SpotifyUrl,
 		arg.AppleMusicUrl,
 		arg.YoutubeUrl,

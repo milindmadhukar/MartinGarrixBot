@@ -130,7 +130,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				conflicts, _ := b.Queries.DoesSongExist(context.Background(), db.DoesSongExistParams{
 					Name:        track.Name,
 					Artists:     artistsStr,
-					ReleaseDate: track.ReleaseDate,
+					ReleaseDate: utils.Text(track.ReleaseDate),
 				})
 				if conflicts {
 					// Another row already has this (name, artists, release_date) — just mark done
@@ -155,7 +155,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 						String: track.MixName,
 						Valid:  track.MixName != "",
 					},
-					ReleaseDate: track.ReleaseDate,
+					ReleaseDate: utils.Text(track.ReleaseDate),
 					ReleaseName: pgtype.Text{
 						String: track.Release.Name,
 						Valid:  track.Release.Name != "",
@@ -231,7 +231,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				conflicts, _ := b.Queries.DoesSongExist(context.Background(), db.DoesSongExistParams{
 					Name:        track.Name,
 					Artists:     artistsStr,
-					ReleaseDate: track.ReleaseDate,
+					ReleaseDate: utils.Text(track.ReleaseDate),
 				})
 				if conflicts {
 					_ = b.Queries.MarkBeatportUpdated(context.Background(), matchedSong.ID)
@@ -256,7 +256,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 						String: track.MixName,
 						Valid:  track.MixName != "",
 					},
-					ReleaseDate: track.ReleaseDate,
+					ReleaseDate: utils.Text(track.ReleaseDate),
 					ReleaseName: pgtype.Text{
 						String: track.Release.Name,
 						Valid:  track.Release.Name != "",
@@ -302,7 +302,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			song, err := b.Queries.InsertBeatportSong(context.Background(), db.InsertBeatportSongParams{
 				Name:        track.Name,
 				Artists:     artistsStr,
-				ReleaseDate: track.ReleaseDate,
+				ReleaseDate: utils.Text(track.ReleaseDate),
 				ThumbnailUrl: pgtype.Text{
 					String: track.ThumbnailURL,
 					Valid:  track.ThumbnailURL != "",
@@ -388,7 +388,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			// Only recency decides here: the row was inserted a moment ago, so it
 			// has never been announced by definition. The announced_at watermark is
 			// what protects every other path from replaying the back catalogue.
-			if isRecentRelease(track.ReleaseDate) {
+			if isRecentRelease(utils.Text(track.ReleaseDate)) {
 				// Build announcement embed
 				title := fmt.Sprintf("%s - %s", artistsStr, track.Name)
 				if track.MixName != "" && track.MixName != "Original Mix" {

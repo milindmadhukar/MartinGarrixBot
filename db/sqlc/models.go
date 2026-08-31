@@ -74,7 +74,7 @@ type Song struct {
 	IsUnreleased      bool               `json:"isUnreleased"`
 	BeatportID        pgtype.Int4        `json:"beatportId"`
 	MixName           pgtype.Text        `json:"mixName"`
-	ReleaseDate       string             `json:"releaseDate"`
+	ReleaseDate       pgtype.Text        `json:"releaseDate"`
 	ReleaseName       pgtype.Text        `json:"releaseName"`
 	Genre             pgtype.Text        `json:"genre"`
 	SubGenre          pgtype.Text        `json:"subGenre"`
@@ -97,6 +97,7 @@ type Song struct {
 	BaseKey           pgtype.Text        `json:"baseKey"`
 	ParentSongID      pgtype.Int8        `json:"parentSongId"`
 	IsInstrumental    bool               `json:"isInstrumental"`
+	IsCollection      bool               `json:"isCollection"`
 }
 
 type Tag struct {

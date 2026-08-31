@@ -143,7 +143,7 @@ func fetchAll(client *utils.BeatportClient, cfg *mgbot.Config) map[int]utils.Bea
 
 func insertParams(track utils.BeatportTrack, artists string) db.InsertBeatportSongParams {
 	return db.InsertBeatportSongParams{
-		Name: track.Name, Artists: artists, ReleaseDate: track.ReleaseDate,
+		Name: track.Name, Artists: artists, ReleaseDate: utils.Text(track.ReleaseDate),
 		ThumbnailUrl: utils.Text(track.ThumbnailURL),
 		BeatportID:   pgtype.Int4{Int32: int32(track.ID), Valid: true},
 		MixName:      utils.Text(track.MixName),
