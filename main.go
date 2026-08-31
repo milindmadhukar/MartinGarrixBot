@@ -9,6 +9,13 @@ import (
 	"syscall"
 	"time"
 
+	// The runtime image is bare alpine, which ships no tzdata, so every
+	// time.LoadLocation call failed with "unknown time zone Asia/Kolkata" -- and
+	// SetupLogger's fallback failed the same way, leaving time.Local nil, which Go
+	// treats as UTC. Embedding the database costs about 450KB and makes the bot's
+	// timezone handling independent of what the base image happens to carry.
+	_ "time/tzdata"
+
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/handler"
 	"github.com/disgoorg/snowflake/v2"

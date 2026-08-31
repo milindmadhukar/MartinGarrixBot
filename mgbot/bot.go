@@ -224,14 +224,22 @@ func SetupLogger(cfg LogConfig) {
 
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
-		slog.Error("Failed to load timezone, using Asia/Kolkata",
+		slog.Error("Failed to load timezone, falling back to Asia/Kolkata",
 			slog.String("timezone", timezone),
 			slog.Any("err", err))
-		loc, _ = time.LoadLocation("Asia/Kolkata")
+		loc, err = time.LoadLocation("Asia/Kolkata")
 	}
 
-	// Set the timezone globally for the application
-	time.Local = loc
+	// Only assign a location we actually resolved. Assigning the nil returned by a
+	// failed lookup does not leave the previous value in place -- Go reads a nil
+	// *Location as UTC -- so the old code turned a bad timezone into a silent switch
+	// to UTC, which is exactly what happened in production.
+	if err != nil || loc == nil {
+		slog.Error("Could not resolve any timezone, keeping the process default",
+			slog.String("default", time.Local.String()))
+	} else {
+		time.Local = loc
+	}
 
 	opts := &slog.HandlerOptions{
 		AddSource: cfg.AddSource,

@@ -14,6 +14,7 @@ services:
       # JVM heap. Override LAVALINK_HEAP in .env per host - the previous hardcoded
       # 6G exceeds total RAM on smaller boxes, which risks the OOM killer.
       - _JAVA_OPTIONS=-Xmx${LAVALINK_HEAP:-1G}
+      - TZ=Asia/Kolkata
       # OAuth refresh token for the YouTube plugin. Kept out of application.yml
       # because that file is committed; Lavalink is Spring Boot, so this env var
       # maps onto plugins.youtube.oauth.refreshToken via relaxed binding.
@@ -46,6 +47,10 @@ services:
       - ./mgbot-google-service.json:/etc/secrets/mgbot-google-service.json
       - ./garrixbot.log:/bot/garrixbot.log
     command: -config=/var/lib/config.toml --sync-commands=true
+    # The host clock is UTC and stays that way; every service on it declares its own
+    # display timezone, which is how frappe, traefik, authelia and wud are set up.
+    environment:
+      - TZ=Asia/Kolkata
     restart: unless-stopped
     networks:
       - garrixbot

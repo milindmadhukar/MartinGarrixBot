@@ -24,6 +24,11 @@ RUN export GOOS=$(echo ${TARGETPLATFORM} | cut -d'/' -f1) \
 
 FROM --platform=$TARGETPLATFORM alpine
 
+# The Go binary embeds its own copy of the tz database, so the bot does not need
+# this. It is here so that anything else running in the container -- a shell, date,
+# the healthcheck -- reports the same wall clock the logs do.
+RUN apk add --no-cache tzdata
+
 WORKDIR /bot
 
 COPY --from=build /build/bot /bot/mgbot
