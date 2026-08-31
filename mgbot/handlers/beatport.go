@@ -211,6 +211,17 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				},
 			})
 
+			// The recording is already stored under a different beatport track id.
+			// Beatport issues several ids per recording and songs.beatport_id holds
+			// one, so there is nothing to write and nothing to insert.
+			if matchTier == utils.MatchAlreadyRepresented {
+				slog.Debug("Beatport track already represented under another id",
+					slog.String("name", track.Name),
+					slog.Int64("song_id", matchedSong.ID))
+				skippedCount++
+				continue
+			}
+
 			if matchedSong != nil {
 				slog.Debug("Matched beatport track to existing song",
 					slog.String("name", track.Name),
@@ -277,6 +288,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 					slog.Error("Failed to update song with beatport data",
 						slog.String("name", track.Name), slog.Any("err", err))
 				case rows > 0:
+					index.ClaimBeatport(matchedSong, pgtype.Int4{Int32: int32(track.ID), Valid: true})
 					updatedCount++
 				default:
 					// The row already held exactly this data. Counting it as an
@@ -421,7 +433,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				// destination for a beatport announcement.
 				beatportURL := utils.BeatportTrackURL(int32(track.ID))
 				buttons := append(
-					[]discord.InteractiveComponent{discord.NewLinkButton("Beatport", beatportURL)},
+					[]discord.InteractiveComponent{utils.BeatportButton(beatportURL)},
 					utils.GetSongButtons(song)...,
 				)
 				components := utils.ChunkButtonRows(buttons)

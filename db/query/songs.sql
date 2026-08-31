@@ -301,3 +301,13 @@ UPDATE songs t SET lyrics = s.lyrics
 FROM songs s
 WHERE s.id = $1 AND t.parent_song_id = s.id AND t.lyrics IS NULL
   AND s.lyrics IS NOT NULL AND NOT t.is_instrumental;
+
+-- name: GetSongsWithPlaceholderDate :many
+-- Legacy rows carrying the 1970-01-01 sentinel the old importer wrote when it had no
+-- date. Ordered so the ones we can actually resolve come first.
+SELECT id, name, artists, release_date, apple_music_url, spotify_url
+FROM songs WHERE release_date = '1970-01-01'
+ORDER BY (apple_music_url IS NULL), id;
+
+-- name: SetSongReleaseDate :execrows
+UPDATE songs SET release_date = $2 WHERE id = $1 AND release_date IS DISTINCT FROM $2;

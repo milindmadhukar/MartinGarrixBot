@@ -20,6 +20,17 @@ const (
 	MatchKeyExact        MatchTier = "match_key"
 	MatchBaseKeyVariant  MatchTier = "base_key"
 	MatchFuzzyTitle      MatchTier = "fuzzy_title"
+
+	// MatchAlreadyRepresented means the recording is in the table, but under a
+	// different beatport track id, so this row cannot take the incoming id.
+	//
+	// Beatport issues several track ids for one recording -- the same "Can't You
+	// See (Original Mix)" appears under three, once per release it was bundled in.
+	// songs.beatport_id is uniquely indexed and can only hold one. Treating the
+	// others as unmatched would insert three copies of the song; letting them claim
+	// the row would have them overwrite each other every cycle. Neither is right:
+	// the song is present, so the correct action is to do nothing.
+	MatchAlreadyRepresented MatchTier = "already_represented"
 )
 
 // Exact returns whether a tier identifies a row by a stable external identifier
@@ -134,6 +145,22 @@ func (ix *SongIndex) Claim(row *db.GetAllSongsForMatchingRow, slug string) {
 	}
 }
 
+// ClaimBeatport records that a row now belongs to a beatport track, so later tracks
+// in the same cycle see the ownership immediately rather than on the next run.
+func (ix *SongIndex) ClaimBeatport(row *db.GetAllSongsForMatchingRow, id pgtype.Int4) {
+	if row == nil || !id.Valid {
+		return
+	}
+	row.BeatportID = id
+	for i := range ix.rows {
+		if ix.rows[i].ID == row.ID {
+			ix.rows[i].BeatportID = id
+			ix.byBeatportID[id.Int32] = i
+			return
+		}
+	}
+}
+
 // SongQuery is everything known about an incoming release that could identify it.
 type SongQuery struct {
 	Title             string
@@ -172,8 +199,20 @@ func (ix *SongIndex) Lookup(q SongQuery) (*db.GetAllSongsForMatchingRow, MatchTi
 	base, variant := SplitVariant(q.Title, q.Version, q.MixName)
 	artistSet := ArtistSetKey(q.Artists)
 
+	// Remembers a candidate that was skipped only because another beatport track id
+	// already owns it, so that a lookup finding nothing else can report the song as
+	// present rather than missing.
+	var owned *db.GetAllSongsForMatchingRow
+
+	note := func(i int) {
+		if owned == nil && ix.ownedByAnotherBeatportTrack(i, q) {
+			owned = &ix.rows[i]
+		}
+	}
+
 	for _, i := range ix.byMatchKey[artistSet+"|"+base+"|"+variant] {
 		if ix.claimedByAnother(i, q) {
+			note(i)
 			continue
 		}
 		return &ix.rows[i], MatchKeyExact
@@ -192,6 +231,7 @@ func (ix *SongIndex) Lookup(q SongQuery) (*db.GetAllSongsForMatchingRow, MatchTi
 	var fallback *db.GetAllSongsForMatchingRow
 	for _, i := range ix.byBaseKey[artistSet+"|"+base] {
 		if ix.claimedByAnother(i, q) {
+			note(i)
 			continue
 		}
 		otherVariant := storedVariant(ix.rows[i])
@@ -216,6 +256,7 @@ func (ix *SongIndex) Lookup(q SongQuery) (*db.GetAllSongsForMatchingRow, MatchTi
 	// against the 2025 edition, comfortably over any threshold worth having.
 	for _, i := range ix.byArtistSet[artistSet] {
 		if ix.claimedByAnother(i, q) {
+			note(i)
 			continue
 		}
 		otherBase, otherVariant := SplitVariant(ix.rows[i].Name, "", ix.rows[i].MixName.String)
@@ -230,7 +271,22 @@ func (ix *SongIndex) Lookup(q SongQuery) (*db.GetAllSongsForMatchingRow, MatchTi
 		}
 	}
 
+	if owned != nil {
+		return owned, MatchAlreadyRepresented
+	}
+
 	return nil, MatchNone
+}
+
+// ownedByAnotherBeatportTrack reports whether the only thing standing between this
+// query and the candidate row is that beatport has already filed the row under a
+// different track id.
+func (ix *SongIndex) ownedByAnotherBeatportTrack(i int, q SongQuery) bool {
+	if !q.BeatportID.Valid {
+		return false
+	}
+	b := ix.rows[i].BeatportID
+	return b.Valid && b.Int32 != q.BeatportID.Int32
 }
 
 // digitsOf returns the digits of s in order. Numbers in a title carry meaning that
@@ -247,23 +303,37 @@ func digitsOf(s string) string {
 }
 
 // claimedByAnother reports whether a candidate row already belongs to a different
-// STMPD release.
+// release or track than the one being looked up.
 //
-// The slug is unique per release, so a row carrying one is that release's row. Three
-// separate releases -- "Holding On To You", its remix and its acoustic version --
-// otherwise all resolve to the same row on the inferred tiers, and each write
-// overwrites the slug and date the previous one set. The result never settles: the
-// backfill reported 142 rows written on its second run and 72 on its third, and the
-// periodic fetcher would have rewritten the same rows every fifteen minutes forever.
+// Both catalogues carry a unique per-recording identifier -- an STMPD slug, a beatport
+// track id -- and a row holding one is that recording's row. Without this guard the
+// inferred tiers hand the same row to every sibling that shares its base title, and
+// each write stamps its own identifier over the last one. Nothing ever settles:
+// "Holding On To You", its remix and its acoustic version all resolved to one row and
+// took turns owning it, and on the beatport side 40 base-key groups were contested by
+// several track ids at once, which is what kept a supposedly-idempotent sync
+// reporting 50-odd updates every fifteen minutes.
 //
-// Only applies to queries that carry a slug of their own. A beatport track has none,
-// and enriching an STMPD-owned row with BPM and key is exactly what it should do.
+// The guard applies per identifier, and only when the query carries one. An STMPD
+// release looking at a row with no slug may claim it even if beatport already owns
+// it -- enriching a beatport row with streaming links is the whole point -- and vice
+// versa.
 func (ix *SongIndex) claimedByAnother(i int, q SongQuery) bool {
-	if q.StmpdSlug == "" {
-		return false
+	row := ix.rows[i]
+
+	if q.StmpdSlug != "" {
+		if s := row.StmpdSlug; s.Valid && s.String != "" && s.String != q.StmpdSlug {
+			return true
+		}
 	}
-	existing := ix.rows[i].StmpdSlug
-	return existing.Valid && existing.String != "" && existing.String != q.StmpdSlug
+
+	if q.BeatportID.Valid {
+		if b := row.BeatportID; b.Valid && b.Int32 != q.BeatportID.Int32 {
+			return true
+		}
+	}
+
+	return false
 }
 
 func storedVariant(r db.GetAllSongsForMatchingRow) string {

@@ -68,12 +68,22 @@ func songButtonConfigs(song db.Song) []buttonConfig {
 		{label: "Spotify", emoji: SpotifyEmoji, urlField: song.SpotifyUrl},
 		{label: "Youtube", emoji: YoutubeEmoji, urlField: song.YoutubeUrl},
 		{label: "Apple Music", emoji: AppleMusicEmoji, urlField: song.AppleMusicUrl},
-		{label: "Beatport", urlField: beatportLink(song)},
-		{label: "Deezer", urlField: song.DeezerUrl},
-		{label: "Tidal", urlField: song.TidalUrl},
-		{label: "Amazon Music", urlField: song.AmazonMusicUrl},
-		{label: "YouTube Music", urlField: song.YoutubeMusicUrl},
+		{label: "Beatport", emoji: BeatportEmoji, urlField: beatportLink(song)},
+		{label: "Deezer", emoji: DeezerEmoji, urlField: song.DeezerUrl},
+		{label: "Tidal", emoji: TidalEmoji, urlField: song.TidalUrl},
+		{label: "Amazon Music", emoji: AmazonMusicEmoji, urlField: song.AmazonMusicUrl},
+		{label: "YouTube Music", emoji: YoutubeMusicEmoji, urlField: song.YoutubeMusicUrl},
 	}
+}
+
+// BeatportButton builds a beatport link button for a URL the caller already has,
+// so the announcement path gets the same styling as the /links card.
+func BeatportButton(url string) discord.ButtonComponent {
+	return createButton(buttonConfig{
+		label:    "Beatport",
+		emoji:    BeatportEmoji,
+		urlField: pgtype.Text{String: url, Valid: true},
+	})
 }
 
 // GetSongButtons returns the link buttons for a song as a flat slice, for callers

@@ -835,6 +835,50 @@ func (q *Queries) GetSongsWithLyricsLike(ctx context.Context, lower string) ([]G
 	return items, nil
 }
 
+const getSongsWithPlaceholderDate = `-- name: GetSongsWithPlaceholderDate :many
+SELECT id, name, artists, release_date, apple_music_url, spotify_url
+FROM songs WHERE release_date = '1970-01-01'
+ORDER BY (apple_music_url IS NULL), id
+`
+
+type GetSongsWithPlaceholderDateRow struct {
+	ID            int64       `json:"id"`
+	Name          string      `json:"name"`
+	Artists       string      `json:"artists"`
+	ReleaseDate   string      `json:"releaseDate"`
+	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
+	SpotifyUrl    pgtype.Text `json:"spotifyUrl"`
+}
+
+// Legacy rows carrying the 1970-01-01 sentinel the old importer wrote when it had no
+// date. Ordered so the ones we can actually resolve come first.
+func (q *Queries) GetSongsWithPlaceholderDate(ctx context.Context) ([]GetSongsWithPlaceholderDateRow, error) {
+	rows, err := q.db.Query(ctx, getSongsWithPlaceholderDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSongsWithPlaceholderDateRow
+	for rows.Next() {
+		var i GetSongsWithPlaceholderDateRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Artists,
+			&i.ReleaseDate,
+			&i.AppleMusicUrl,
+			&i.SpotifyUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertBeatportSong = `-- name: InsertBeatportSong :one
 INSERT INTO songs (
     name, artists, release_date, thumbnail_url, beatport_id, mix_name,
@@ -1107,6 +1151,23 @@ type SetSongParentParams struct {
 
 func (q *Queries) SetSongParent(ctx context.Context, arg SetSongParentParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setSongParent, arg.ParentSongID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setSongReleaseDate = `-- name: SetSongReleaseDate :execrows
+UPDATE songs SET release_date = $2 WHERE id = $1 AND release_date IS DISTINCT FROM $2
+`
+
+type SetSongReleaseDateParams struct {
+	ID          int64  `json:"id"`
+	ReleaseDate string `json:"releaseDate"`
+}
+
+func (q *Queries) SetSongReleaseDate(ctx context.Context, arg SetSongReleaseDateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSongReleaseDate, arg.ID, arg.ReleaseDate)
 	if err != nil {
 		return 0, err
 	}
