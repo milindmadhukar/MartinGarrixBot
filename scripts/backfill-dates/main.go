@@ -35,9 +35,16 @@ func main() {
 	slog.Info("Songs carrying the 1970-01-01 placeholder", slog.Int("count", len(rows)))
 
 	client := utils.NewItunesClient()
-	var resolved, unresolvable, notFound, merged, failed, suspicious int
+	var resolved, unresolvable, notFound, merged, failed, suspicious, playlist int
 
 	for _, row := range rows {
+		if utils.IsApplePlaylistURL(row.AppleMusicUrl.String) {
+			playlist++
+			slog.Warn("apple link points at a playlist, not a release - the button sends users to the wrong place",
+				slog.Int64("song_id", row.ID), slog.String("name", row.Name))
+			continue
+		}
+
 		id := utils.AppleIDFromURL(row.AppleMusicUrl.String)
 		if id == "" {
 			unresolvable++
@@ -119,6 +126,7 @@ func main() {
 		slog.Int("resolved", resolved),
 		slog.Int("merged_into_twin", merged),
 		slog.Int("no_apple_link", unresolvable),
+		slog.Int("apple_link_is_a_playlist", playlist),
 		slog.Int("apple_had_no_record", notFound),
 		slog.Int("title_mismatch_warnings", suspicious),
 		slog.Int("failed", failed))

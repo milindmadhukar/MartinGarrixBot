@@ -60,6 +60,16 @@ func AppleIDFromURL(rawURL string) string {
 	return ""
 }
 
+// IsApplePlaylistURL reports whether a URL points at a playlist rather than a release.
+//
+// 27 rows share a single playlist link in place of a real album or track URL. A
+// playlist has no release date, and its id is not something the lookup endpoint
+// understands, so these must be reported as bad links rather than silently counted
+// among the ones with no Apple link at all.
+func IsApplePlaylistURL(rawURL string) bool {
+	return strings.Contains(rawURL, "/playlist/") || strings.Contains(rawURL, "pl.")
+}
+
 // ItunesResult is one entry from a lookup response.
 type ItunesResult struct {
 	WrapperType    string `json:"wrapperType"`
