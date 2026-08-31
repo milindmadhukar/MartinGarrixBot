@@ -151,6 +151,61 @@ func (q *Queries) GetAllSongsForMatching(ctx context.Context) ([]GetAllSongsForM
 	return items, nil
 }
 
+const getCanonicalSongsForReview = `-- name: GetCanonicalSongsForReview :many
+SELECT id, name, artists, release_date, source, base_key, match_key,
+       spotify_url, youtube_url, apple_music_url, beatport_id
+FROM songs WHERE parent_song_id IS NULL AND base_key IS NOT NULL AND base_key <> '|'
+ORDER BY base_key, id
+`
+
+type GetCanonicalSongsForReviewRow struct {
+	ID            int64       `json:"id"`
+	Name          string      `json:"name"`
+	Artists       string      `json:"artists"`
+	ReleaseDate   string      `json:"releaseDate"`
+	Source        string      `json:"source"`
+	BaseKey       pgtype.Text `json:"baseKey"`
+	MatchKey      pgtype.Text `json:"matchKey"`
+	SpotifyUrl    pgtype.Text `json:"spotifyUrl"`
+	YoutubeUrl    pgtype.Text `json:"youtubeUrl"`
+	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
+	BeatportID    pgtype.Int4 `json:"beatportId"`
+}
+
+// Songs as a user sees them, for reporting likely-duplicate groups that are not safe
+// to merge automatically.
+func (q *Queries) GetCanonicalSongsForReview(ctx context.Context) ([]GetCanonicalSongsForReviewRow, error) {
+	rows, err := q.db.Query(ctx, getCanonicalSongsForReview)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCanonicalSongsForReviewRow
+	for rows.Next() {
+		var i GetCanonicalSongsForReviewRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Artists,
+			&i.ReleaseDate,
+			&i.Source,
+			&i.BaseKey,
+			&i.MatchKey,
+			&i.SpotifyUrl,
+			&i.YoutubeUrl,
+			&i.AppleMusicUrl,
+			&i.BeatportID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getDuplicateMatchKeyRows = `-- name: GetDuplicateMatchKeyRows :many
 SELECT id, name, artists, mix_name, release_date, source, match_key,
        stmpd_slug, beatport_id, spotify_url, apple_music_url, youtube_url,

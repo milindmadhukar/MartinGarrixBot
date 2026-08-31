@@ -129,6 +129,19 @@ links, then the earliest real date — a `1970-01-01` placeholder never wins on 
 - **Idempotent:** yes
 - **Writes:** merges and deletes rows; repoints any remixes onto the surviving row
 
+`-report-suspects=out.csv` writes the duplicates an exact `match_key` *cannot* catch
+and exits without changing anything. These are rows that agree on the title but
+disagree on who made it, in three shapes needing different judgement:
+
+| reason | example | note |
+|---|---|---|
+| `feature-omitted` | `Moksi Ft. Adam McInnis` vs `Moksi` | one side drops the featured artist |
+| `artist-alias-or-corrupt` | `Duncan` vs `Düncan Musique` | same act, two spellings |
+| `artist-alias-or-corrupt` | `Able HeartDetonate`, `rionosremixes` | the title bled into the artists field — fix the row, do not merge |
+
+A shared title plus a subset credit is *not* proof of a duplicate, which is why this
+reports rather than merges.
+
 ### `import-beatport`
 
 One-off unbounded import of the Beatport catalogue — the bot's former

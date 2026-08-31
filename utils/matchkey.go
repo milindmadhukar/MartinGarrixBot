@@ -158,29 +158,40 @@ func SplitVariant(title, version, mixName string) (base, variant string) {
 var featureMarkers = []string{"(feat.", "[feat.", "(ft.", "[ft.", "(featuring",
 	" feat. ", " ft. ", " featuring "}
 
-// stripFeature removes a featured-artist clause from a title.
+// splitFeature separates a title from any featured-artist clause it carries.
 //
-// The two sources disagree about where the feature belongs: STMPD files "Set Me Free"
-// with artists "Martin Garrix & Arcando feat. Bonn", while beatport files the track as
-// "Set Me Free feat. Bonn" with Bonn in the artists as well. Keeping the clause in the
-// title makes those two titles differ, and 122 of the rows still missing links after
-// the first backfill differed in exactly this way.
+// The sources disagree about where a feature belongs. STMPD files "Set Me Free" with
+// artists "Martin Garrix & Arcando feat. Bonn"; beatport files the same track as
+// "Set Me Free feat. Bonn" with Bonn in the artists too. But a third shape exists and
+// is the one that matters here: "Love Runs Out (feat. G-Eazy & Sasha Alex Sloan)"
+// credited to "Martin Garrix" alone, with the featured artists appearing *only* in
+// the title.
 //
-// Dropping it loses nothing: the featured artist is in the artist set on both sides,
-// and the artist set is part of every key, so two genuinely different songs cannot be
-// conflated by this alone.
-func stripFeature(title string) string {
+// So the clause cannot simply be discarded. Dropping it from the title is right --
+// otherwise the titles differ -- but its artists have to be folded into the artist
+// set, or that row keys as a Martin Garrix solo track and never matches the copies
+// that credit all three.
+func splitFeature(title string) (base, featured string) {
 	lower := strings.ToLower(title)
-	cut := -1
+	cut, markerLen := -1, 0
 	for _, marker := range featureMarkers {
 		if i := strings.Index(lower, marker); i >= 0 && (cut < 0 || i < cut) {
-			cut = i
+			cut, markerLen = i, len(marker)
 		}
 	}
 	if cut <= 0 {
-		return title
+		return title, ""
 	}
-	return strings.TrimSpace(title[:cut])
+
+	featured = strings.TrimSpace(title[cut+markerLen:])
+	featured = strings.TrimRight(featured, ")]")
+	return strings.TrimSpace(title[:cut]), featured
+}
+
+// stripFeature returns just the title part, for callers that do not need the credit.
+func stripFeature(title string) string {
+	base, _ := splitFeature(title)
+	return base
 }
 
 // lastGroup returns the index range of the final (...) or [...] group in s.
@@ -210,18 +221,27 @@ func isVariantPhrase(s string) bool {
 	return false
 }
 
+// creditKey renders the full set of artists on a recording, including any credited
+// only inside the title.
+func creditKey(title, artists string) string {
+	if _, featured := splitFeature(title); featured != "" {
+		artists = artists + ", " + featured
+	}
+	return ArtistSetKey(artists)
+}
+
 // MatchKey identifies one specific recording: this song, in this rendition, by this
 // set of artists.
 func MatchKey(title, version, mixName, artists string) string {
 	base, variant := SplitVariant(title, version, mixName)
-	return ArtistSetKey(artists) + "|" + base + "|" + variant
+	return creditKey(title, artists) + "|" + base + "|" + variant
 }
 
 // BaseKey identifies a song irrespective of rendition, so that every remix of
 // "Told You So" shares one key with the original.
 func BaseKey(title, artists string) string {
 	base, _ := SplitVariant(title, "", "")
-	return ArtistSetKey(artists) + "|" + base
+	return creditKey(title, artists) + "|" + base
 }
 
 // TitleKey is the base title alone, without the artist set.

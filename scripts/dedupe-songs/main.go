@@ -35,9 +35,16 @@ const placeholderDate = "1970-01-01"
 func main() {
 	maxGap := flag.Int("max-date-gap", 120,
 		"maximum days between two rows' release dates for them to be merged automatically")
+	reportPath := flag.String("report-suspects", "",
+		"write likely duplicates that are NOT safe to merge automatically to this CSV, and exit")
 
 	env, ctx, cleanup := script.Setup("dedupe-songs")
 	defer cleanup()
+
+	if *reportPath != "" {
+		reportSuspects(ctx, env, *reportPath)
+		return
+	}
 
 	rows, err := env.Queries.GetDuplicateMatchKeyRows(ctx)
 	if err != nil {

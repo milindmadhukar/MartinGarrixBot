@@ -361,3 +361,11 @@ UPDATE songs SET
     beatport_id = COALESCE(beatport_id, sqlc.narg(beatport_id)),
     stmpd_slug  = COALESCE(stmpd_slug,  sqlc.narg(stmpd_slug))
 WHERE id = sqlc.arg(id);
+
+-- name: GetCanonicalSongsForReview :many
+-- Songs as a user sees them, for reporting likely-duplicate groups that are not safe
+-- to merge automatically.
+SELECT id, name, artists, release_date, source, base_key, match_key,
+       spotify_url, youtube_url, apple_music_url, beatport_id
+FROM songs WHERE parent_song_id IS NULL AND base_key IS NOT NULL AND base_key <> '|'
+ORDER BY base_key, id;

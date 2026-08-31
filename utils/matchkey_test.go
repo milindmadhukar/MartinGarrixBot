@@ -150,3 +150,24 @@ func TestFeatureClauseIsNormalizedAwayAcrossSources(t *testing.T) {
 		t.Errorf("feature placement changed the key:\n beatport = %q\n stmpd    = %q", beatport, stmpd)
 	}
 }
+
+func TestFeatureCreditedOnlyInTheTitleStillCounts(t *testing.T) {
+	// The shape that produced three separate "Love Runs Out" entries in autocomplete:
+	// one row credits the featured artists only in the title, one only in the artists
+	// field. Both name the same recording and must key identically.
+	titleOnly := MatchKey("Love Runs Out (feat. G-Eazy & Sasha Alex Sloan)", "", "", "Martin Garrix")
+	inArtists := MatchKey("Love Runs Out", "", "Original Mix", "Martin Garrix, G-Eazy, Sasha Alex Sloan")
+	if titleOnly != inArtists {
+		t.Errorf("feature placement changed the key:\n title-only = %q\n in-artists = %q", titleOnly, inArtists)
+	}
+}
+
+func TestFeatureInTitleDoesNotCollapseDistinctSongs(t *testing.T) {
+	// Folding the title's credit into the artist set must not make a solo track and a
+	// collaboration look the same.
+	solo := MatchKey("Love Runs Out", "", "", "Martin Garrix")
+	collab := MatchKey("Love Runs Out (feat. G-Eazy)", "", "", "Martin Garrix")
+	if solo == collab {
+		t.Error("a solo recording must not key the same as one with a featured artist")
+	}
+}
