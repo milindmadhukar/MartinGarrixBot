@@ -50,3 +50,9 @@ link_remix_parents:
 
 import_beatport:
 	go run ./scripts/import-beatport -config=$(CONFIG)
+
+backfill_dates_dry:
+	go run ./scripts/backfill-dates -config=$(CONFIG) -dry-run
+
+backfill_dates:
+	go run ./scripts/backfill-dates -config=$(CONFIG)

@@ -78,6 +78,32 @@ construction and a `base_key` match would never fire.
 - **Idempotent:** yes
 - **Writes:** `parent_song_id`, `is_instrumental`
 
+### `backfill-dates`
+
+Replaces the `1970-01-01` placeholder release dates with real ones.
+
+The placeholder is what the original importer wrote when it had no date, and it is
+not cosmetic: `release_date` drives the announcement recency window, the "released"
+footer on a track card, and any date ordering, so a row stuck at 1970 sorts to the
+bottom of the catalogue forever.
+
+Dates come from Apple's public lookup API, resolved from the numeric id already
+embedded in each row's own `apple_music_url` — not from a search. The date therefore
+belongs to the exact recording the row already links to, and no fuzzy matching is
+involved. Rows with no Apple link are reported, never guessed at.
+
+Paced at one request every 3 seconds, so a full pass takes a few minutes.
+
+- **Requires:** nothing beyond the base schema
+- **Idempotent:** yes — a second run resolves 0
+- **Writes:** `release_date`; merges and deletes a row when the corrected date
+  collides with an existing twin
+
+Its summary distinguishes three kinds of unresolvable row: no Apple link at all, an
+Apple link pointing at a *playlist* rather than a release (a data problem worth
+fixing — those buttons send users to the wrong place), and a link Apple no longer
+has a record for.
+
 ### `import-beatport`
 
 One-off unbounded import of the Beatport catalogue — the bot's former
