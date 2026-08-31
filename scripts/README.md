@@ -104,6 +104,31 @@ Apple link pointing at a *playlist* rather than a release (a data problem worth
 fixing — those buttons send users to the wrong place), and a link Apple no longer
 has a record for.
 
+### `dedupe-songs`
+
+Folds together rows that represent the same recording, identified by an exact
+`match_key` (artist set + base title + rendition).
+
+They exist for two reasons: the two sources disagree about where a rendition belongs
+— STMPD publishes "Grove (Rework)" as a title while beatport files "Grove" with
+`mix_name` "Rework" — and for months the old matcher could not pair rows across
+sources at all, so the beatport importer inserted its own copy of songs already
+present. The symptom is one song offering two identical-looking `/links` entries.
+
+**Not every duplicate is safe to merge blind.** Where two rows disagree on the release
+date, one date is about to be discarded, and a wide gap can mean a genuine re-release.
+Merging is therefore bounded by `-max-date-gap` (default 120 days, which covers the
+normal disagreement between beatport's publish date and STMPD's release date);
+anything wider is logged for a human and left untouched.
+
+The surviving row is chosen by provenance: an STMPD slug first, then hand-entered
+lyrics (they exist nowhere else and must not be what disappears), then streaming
+links, then the earliest real date — a `1970-01-01` placeholder never wins on date.
+
+- **Requires:** `rekey-songs`
+- **Idempotent:** yes
+- **Writes:** merges and deletes rows; repoints any remixes onto the surviving row
+
 ### `import-beatport`
 
 One-off unbounded import of the Beatport catalogue — the bot's former

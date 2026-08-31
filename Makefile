@@ -56,3 +56,9 @@ backfill_dates_dry:
 
 backfill_dates:
 	go run ./scripts/backfill-dates -config=$(CONFIG)
+
+dedupe_songs_dry:
+	go run ./scripts/dedupe-songs -config=$(CONFIG) -dry-run
+
+dedupe_songs:
+	go run ./scripts/dedupe-songs -config=$(CONFIG)

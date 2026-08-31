@@ -249,7 +249,6 @@ UPDATE songs w SET
     youtube_url     = COALESCE(w.youtube_url,     l.youtube_url),
     thumbnail_url   = COALESCE(NULLIF(w.thumbnail_url, ''), l.thumbnail_url),
     lyrics          = COALESCE(w.lyrics,          l.lyrics),
-    beatport_id     = COALESCE(w.beatport_id,     l.beatport_id),
     bpm             = COALESCE(w.bpm,             l.bpm),
     musical_key     = COALESCE(w.musical_key,     l.musical_key),
     length_ms       = COALESCE(w.length_ms,       l.length_ms),
@@ -257,6 +256,19 @@ UPDATE songs w SET
     sub_genre       = COALESCE(w.sub_genre,       l.sub_genre),
     mix_name        = COALESCE(w.mix_name,        l.mix_name),
     release_name    = COALESCE(w.release_name,    l.release_name),
+    -- The columns below were added after this query was first written. Leaving them
+    -- out silently discarded the loser's slug and its deezer/tidal/amazon links.
+    -- beatport_id and stmpd_slug are handled by Release/AdoptSongIdentifiers:
+    -- both are uniquely indexed and cannot be copied while the loser still holds them.
+    youtube_music_url   = COALESCE(w.youtube_music_url,   l.youtube_music_url),
+    deezer_url          = COALESCE(w.deezer_url,          l.deezer_url),
+    tidal_url           = COALESCE(w.tidal_url,           l.tidal_url),
+    amazon_music_url    = COALESCE(w.amazon_music_url,    l.amazon_music_url),
+    beatport_url        = COALESCE(w.beatport_url,        l.beatport_url),
+    beatport_release_id = COALESCE(w.beatport_release_id, l.beatport_release_id),
+    -- A real date always beats the 1970-01-01 placeholder, whichever row holds it.
+    release_date    = CASE WHEN w.release_date = '1970-01-01' AND l.release_date <> '1970-01-01'
+                           THEN l.release_date ELSE w.release_date END,
     announced_at    = LEAST(w.announced_at,       l.announced_at),
     first_seen_at   = LEAST(w.first_seen_at,      l.first_seen_at),
     stmpd_synced_at = COALESCE(w.stmpd_synced_at, l.stmpd_synced_at),
@@ -311,3 +323,41 @@ ORDER BY (apple_music_url IS NULL), id;
 
 -- name: SetSongReleaseDate :execrows
 UPDATE songs SET release_date = $2 WHERE id = $1 AND release_date IS DISTINCT FROM $2;
+
+-- name: GetDuplicateMatchKeyRows :many
+-- Every row belonging to a match_key held by more than one row. A match_key is the
+-- artist set, the base title and the rendition, so two rows sharing one are the same
+-- recording stored twice -- usually once per source, with the variant in `name` on
+-- one side and in `mix_name` on the other.
+SELECT id, name, artists, mix_name, release_date, source, match_key,
+       stmpd_slug, beatport_id, spotify_url, apple_music_url, youtube_url,
+       lyrics, parent_song_id, thumbnail_url
+FROM songs
+WHERE match_key IN (
+    SELECT match_key FROM songs
+    WHERE match_key IS NOT NULL AND match_key <> '||'
+    GROUP BY match_key HAVING count(*) > 1
+)
+ORDER BY match_key, id;
+
+-- name: RepointChildren :execrows
+-- Move a merged-away row's remixes onto the row that survives.
+UPDATE songs SET parent_song_id = sqlc.arg(new_parent)
+WHERE parent_song_id = sqlc.arg(old_parent);
+
+-- name: ReleaseSongIdentifiers :exec
+-- Clear the uniquely-indexed identifiers from a row that is about to be merged away.
+--
+-- beatport_id and stmpd_slug each carry a partial unique index, so copying them onto
+-- the surviving row while this one still holds them violates the index. The caller
+-- captured the values first and reassigns them with AdoptSongIdentifiers once this
+-- row no longer claims them.
+UPDATE songs SET beatport_id = NULL, stmpd_slug = NULL WHERE id = $1;
+
+-- name: AdoptSongIdentifiers :exec
+-- Give the surviving row the identifiers released above, without overwriting any it
+-- already has of its own.
+UPDATE songs SET
+    beatport_id = COALESCE(beatport_id, sqlc.narg(beatport_id)),
+    stmpd_slug  = COALESCE(stmpd_slug,  sqlc.narg(stmpd_slug))
+WHERE id = sqlc.arg(id);

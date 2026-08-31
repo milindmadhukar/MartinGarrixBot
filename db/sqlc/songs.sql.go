@@ -11,6 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const adoptSongIdentifiers = `-- name: AdoptSongIdentifiers :exec
+UPDATE songs SET
+    beatport_id = COALESCE(beatport_id, $1),
+    stmpd_slug  = COALESCE(stmpd_slug,  $2)
+WHERE id = $3
+`
+
+type AdoptSongIdentifiersParams struct {
+	BeatportID pgtype.Int4 `json:"beatportId"`
+	StmpdSlug  pgtype.Text `json:"stmpdSlug"`
+	ID         int64       `json:"id"`
+}
+
+// Give the surviving row the identifiers released above, without overwriting any it
+// already has of its own.
+func (q *Queries) AdoptSongIdentifiers(ctx context.Context, arg AdoptSongIdentifiersParams) error {
+	_, err := q.db.Exec(ctx, adoptSongIdentifiers, arg.BeatportID, arg.StmpdSlug, arg.ID)
+	return err
+}
+
 const copyLyricsToRemixes = `-- name: CopyLyricsToRemixes :execrows
 UPDATE songs t SET lyrics = s.lyrics
 FROM songs s
@@ -120,6 +140,77 @@ func (q *Queries) GetAllSongsForMatching(ctx context.Context) ([]GetAllSongsForM
 			&i.MixName,
 			&i.SpotifyUrl,
 			&i.StmpdSyncedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDuplicateMatchKeyRows = `-- name: GetDuplicateMatchKeyRows :many
+SELECT id, name, artists, mix_name, release_date, source, match_key,
+       stmpd_slug, beatport_id, spotify_url, apple_music_url, youtube_url,
+       lyrics, parent_song_id, thumbnail_url
+FROM songs
+WHERE match_key IN (
+    SELECT match_key FROM songs
+    WHERE match_key IS NOT NULL AND match_key <> '||'
+    GROUP BY match_key HAVING count(*) > 1
+)
+ORDER BY match_key, id
+`
+
+type GetDuplicateMatchKeyRowsRow struct {
+	ID            int64       `json:"id"`
+	Name          string      `json:"name"`
+	Artists       string      `json:"artists"`
+	MixName       pgtype.Text `json:"mixName"`
+	ReleaseDate   string      `json:"releaseDate"`
+	Source        string      `json:"source"`
+	MatchKey      pgtype.Text `json:"matchKey"`
+	StmpdSlug     pgtype.Text `json:"stmpdSlug"`
+	BeatportID    pgtype.Int4 `json:"beatportId"`
+	SpotifyUrl    pgtype.Text `json:"spotifyUrl"`
+	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
+	YoutubeUrl    pgtype.Text `json:"youtubeUrl"`
+	Lyrics        pgtype.Text `json:"lyrics"`
+	ParentSongID  pgtype.Int8 `json:"parentSongId"`
+	ThumbnailUrl  pgtype.Text `json:"thumbnailUrl"`
+}
+
+// Every row belonging to a match_key held by more than one row. A match_key is the
+// artist set, the base title and the rendition, so two rows sharing one are the same
+// recording stored twice -- usually once per source, with the variant in `name` on
+// one side and in `mix_name` on the other.
+func (q *Queries) GetDuplicateMatchKeyRows(ctx context.Context) ([]GetDuplicateMatchKeyRowsRow, error) {
+	rows, err := q.db.Query(ctx, getDuplicateMatchKeyRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetDuplicateMatchKeyRowsRow
+	for rows.Next() {
+		var i GetDuplicateMatchKeyRowsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Artists,
+			&i.MixName,
+			&i.ReleaseDate,
+			&i.Source,
+			&i.MatchKey,
+			&i.StmpdSlug,
+			&i.BeatportID,
+			&i.SpotifyUrl,
+			&i.AppleMusicUrl,
+			&i.YoutubeUrl,
+			&i.Lyrics,
+			&i.ParentSongID,
+			&i.ThumbnailUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1072,7 +1163,6 @@ UPDATE songs w SET
     youtube_url     = COALESCE(w.youtube_url,     l.youtube_url),
     thumbnail_url   = COALESCE(NULLIF(w.thumbnail_url, ''), l.thumbnail_url),
     lyrics          = COALESCE(w.lyrics,          l.lyrics),
-    beatport_id     = COALESCE(w.beatport_id,     l.beatport_id),
     bpm             = COALESCE(w.bpm,             l.bpm),
     musical_key     = COALESCE(w.musical_key,     l.musical_key),
     length_ms       = COALESCE(w.length_ms,       l.length_ms),
@@ -1080,6 +1170,19 @@ UPDATE songs w SET
     sub_genre       = COALESCE(w.sub_genre,       l.sub_genre),
     mix_name        = COALESCE(w.mix_name,        l.mix_name),
     release_name    = COALESCE(w.release_name,    l.release_name),
+    -- The columns below were added after this query was first written. Leaving them
+    -- out silently discarded the loser's slug and its deezer/tidal/amazon links.
+    -- beatport_id and stmpd_slug are handled by Release/AdoptSongIdentifiers:
+    -- both are uniquely indexed and cannot be copied while the loser still holds them.
+    youtube_music_url   = COALESCE(w.youtube_music_url,   l.youtube_music_url),
+    deezer_url          = COALESCE(w.deezer_url,          l.deezer_url),
+    tidal_url           = COALESCE(w.tidal_url,           l.tidal_url),
+    amazon_music_url    = COALESCE(w.amazon_music_url,    l.amazon_music_url),
+    beatport_url        = COALESCE(w.beatport_url,        l.beatport_url),
+    beatport_release_id = COALESCE(w.beatport_release_id, l.beatport_release_id),
+    -- A real date always beats the 1970-01-01 placeholder, whichever row holds it.
+    release_date    = CASE WHEN w.release_date = '1970-01-01' AND l.release_date <> '1970-01-01'
+                           THEN l.release_date ELSE w.release_date END,
     announced_at    = LEAST(w.announced_at,       l.announced_at),
     first_seen_at   = LEAST(w.first_seen_at,      l.first_seen_at),
     stmpd_synced_at = COALESCE(w.stmpd_synced_at, l.stmpd_synced_at),
@@ -1101,6 +1204,40 @@ type MergeSongRowsParams struct {
 func (q *Queries) MergeSongRows(ctx context.Context, arg MergeSongRowsParams) error {
 	_, err := q.db.Exec(ctx, mergeSongRows, arg.WinnerID, arg.LoserID)
 	return err
+}
+
+const releaseSongIdentifiers = `-- name: ReleaseSongIdentifiers :exec
+UPDATE songs SET beatport_id = NULL, stmpd_slug = NULL WHERE id = $1
+`
+
+// Clear the uniquely-indexed identifiers from a row that is about to be merged away.
+//
+// beatport_id and stmpd_slug each carry a partial unique index, so copying them onto
+// the surviving row while this one still holds them violates the index. The caller
+// captured the values first and reassigns them with AdoptSongIdentifiers once this
+// row no longer claims them.
+func (q *Queries) ReleaseSongIdentifiers(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, releaseSongIdentifiers, id)
+	return err
+}
+
+const repointChildren = `-- name: RepointChildren :execrows
+UPDATE songs SET parent_song_id = $1
+WHERE parent_song_id = $2
+`
+
+type RepointChildrenParams struct {
+	NewParent pgtype.Int8 `json:"newParent"`
+	OldParent pgtype.Int8 `json:"oldParent"`
+}
+
+// Move a merged-away row's remixes onto the row that survives.
+func (q *Queries) RepointChildren(ctx context.Context, arg RepointChildrenParams) (int64, error) {
+	result, err := q.db.Exec(ctx, repointChildren, arg.NewParent, arg.OldParent)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setSongInstrumental = `-- name: SetSongInstrumental :execrows
