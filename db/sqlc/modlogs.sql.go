@@ -22,7 +22,7 @@ INSERT INTO modlogs (
     active
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7
-) RETURNING id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active
+) RETURNING id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active, audit_log_id
 `
 
 type CreateModlogParams struct {
@@ -56,8 +56,48 @@ func (q *Queries) CreateModlog(ctx context.Context, arg CreateModlogParams) (Mod
 		&i.GuildID,
 		&i.ExpiresAt,
 		&i.Active,
+		&i.AuditLogID,
 	)
 	return i, err
+}
+
+const createModlogFromAudit = `-- name: CreateModlogFromAudit :exec
+INSERT INTO modlogs (
+    user_id, moderator_id, guild_id, log_type, reason, expires_at, active, audit_log_id
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8
+)
+ON CONFLICT (audit_log_id) WHERE audit_log_id IS NOT NULL DO NOTHING
+`
+
+type CreateModlogFromAuditParams struct {
+	UserID      int64            `json:"userId"`
+	ModeratorID int64            `json:"moderatorId"`
+	GuildID     int64            `json:"guildId"`
+	LogType     string           `json:"logType"`
+	Reason      pgtype.Text      `json:"reason"`
+	ExpiresAt   pgtype.Timestamp `json:"expiresAt"`
+	Active      pgtype.Bool      `json:"active"`
+	AuditLogID  pgtype.Int8      `json:"auditLogId"`
+}
+
+// Insert a moderation action observed through Discord's audit log.
+//
+// ON CONFLICT DO NOTHING against the partial unique index on audit_log_id:
+// Discord can redeliver a gateway event, and replaying one must not create a
+// second identical case.
+func (q *Queries) CreateModlogFromAudit(ctx context.Context, arg CreateModlogFromAuditParams) error {
+	_, err := q.db.Exec(ctx, createModlogFromAudit,
+		arg.UserID,
+		arg.ModeratorID,
+		arg.GuildID,
+		arg.LogType,
+		arg.Reason,
+		arg.ExpiresAt,
+		arg.Active,
+		arg.AuditLogID,
+	)
+	return err
 }
 
 const deactivateModlog = `-- name: DeactivateModlog :exec
@@ -72,7 +112,7 @@ func (q *Queries) DeactivateModlog(ctx context.Context, id int64) error {
 }
 
 const getActiveTempBanForUser = `-- name: GetActiveTempBanForUser :one
-SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active FROM modlogs
+SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active, audit_log_id FROM modlogs
 WHERE user_id = $1 
   AND guild_id = $2 
   AND log_type = 'tempban' 
@@ -99,12 +139,13 @@ func (q *Queries) GetActiveTempBanForUser(ctx context.Context, arg GetActiveTemp
 		&i.GuildID,
 		&i.ExpiresAt,
 		&i.Active,
+		&i.AuditLogID,
 	)
 	return i, err
 }
 
 const getActiveTempMuteForUser = `-- name: GetActiveTempMuteForUser :one
-SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active FROM modlogs
+SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active, audit_log_id FROM modlogs
 WHERE user_id = $1 
   AND guild_id = $2 
   AND log_type = 'tempmute' 
@@ -131,12 +172,13 @@ func (q *Queries) GetActiveTempMuteForUser(ctx context.Context, arg GetActiveTem
 		&i.GuildID,
 		&i.ExpiresAt,
 		&i.Active,
+		&i.AuditLogID,
 	)
 	return i, err
 }
 
 const getActiveTemporaryActions = `-- name: GetActiveTemporaryActions :many
-SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active FROM modlogs
+SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active, audit_log_id FROM modlogs
 WHERE guild_id = $1 
   AND active = true 
   AND expires_at IS NOT NULL 
@@ -163,6 +205,7 @@ func (q *Queries) GetActiveTemporaryActions(ctx context.Context, guildID int64) 
 			&i.GuildID,
 			&i.ExpiresAt,
 			&i.Active,
+			&i.AuditLogID,
 		); err != nil {
 			return nil, err
 		}
@@ -175,7 +218,7 @@ func (q *Queries) GetActiveTemporaryActions(ctx context.Context, guildID int64) 
 }
 
 const getExpiredTemporaryActions = `-- name: GetExpiredTemporaryActions :many
-SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active FROM modlogs
+SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active, audit_log_id FROM modlogs
 WHERE guild_id = $1 
   AND active = true 
   AND expires_at IS NOT NULL 
@@ -201,6 +244,7 @@ func (q *Queries) GetExpiredTemporaryActions(ctx context.Context, guildID int64)
 			&i.GuildID,
 			&i.ExpiresAt,
 			&i.Active,
+			&i.AuditLogID,
 		); err != nil {
 			return nil, err
 		}
@@ -213,7 +257,7 @@ func (q *Queries) GetExpiredTemporaryActions(ctx context.Context, guildID int64)
 }
 
 const getModlogByID = `-- name: GetModlogByID :one
-SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active FROM modlogs
+SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active, audit_log_id FROM modlogs
 WHERE id = $1
 `
 
@@ -230,12 +274,13 @@ func (q *Queries) GetModlogByID(ctx context.Context, id int64) (Modlog, error) {
 		&i.GuildID,
 		&i.ExpiresAt,
 		&i.Active,
+		&i.AuditLogID,
 	)
 	return i, err
 }
 
 const getModlogsByGuild = `-- name: GetModlogsByGuild :many
-SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active FROM modlogs
+SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active, audit_log_id FROM modlogs
 WHERE guild_id = $1
 ORDER BY time DESC
 LIMIT $2 OFFSET $3
@@ -266,6 +311,7 @@ func (q *Queries) GetModlogsByGuild(ctx context.Context, arg GetModlogsByGuildPa
 			&i.GuildID,
 			&i.ExpiresAt,
 			&i.Active,
+			&i.AuditLogID,
 		); err != nil {
 			return nil, err
 		}
@@ -278,7 +324,7 @@ func (q *Queries) GetModlogsByGuild(ctx context.Context, arg GetModlogsByGuildPa
 }
 
 const getModlogsByUser = `-- name: GetModlogsByUser :many
-SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active FROM modlogs
+SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active, audit_log_id FROM modlogs
 WHERE user_id = $1 AND guild_id = $2
 ORDER BY time DESC
 LIMIT $3 OFFSET $4
@@ -315,6 +361,7 @@ func (q *Queries) GetModlogsByUser(ctx context.Context, arg GetModlogsByUserPara
 			&i.GuildID,
 			&i.ExpiresAt,
 			&i.Active,
+			&i.AuditLogID,
 		); err != nil {
 			return nil, err
 		}

@@ -15,7 +15,7 @@ const createGuild = `-- name: CreateGuild :one
 INSERT INTO guilds(guild_id)
 VALUES ($1)
 ON CONFLICT (guild_id) DO NOTHING
-RETURNING guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone
+RETURNING guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone, voice_logs_channel, member_logs_channel
 `
 
 func (q *Queries) CreateGuild(ctx context.Context, guildID int64) (Guild, error) {
@@ -45,12 +45,14 @@ func (q *Queries) CreateGuild(ctx context.Context, guildID int64) (Guild, error)
 		&i.AnniversaryNotificationsRole,
 		&i.AnniversaryHour,
 		&i.AnniversaryTimezone,
+		&i.VoiceLogsChannel,
+		&i.MemberLogsChannel,
 	)
 	return i, err
 }
 
 const getGuild = `-- name: GetGuild :one
-SELECT guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone FROM guilds WHERE guild_id = $1
+SELECT guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone, voice_logs_channel, member_logs_channel FROM guilds WHERE guild_id = $1
 `
 
 func (q *Queries) GetGuild(ctx context.Context, guildID int64) (Guild, error) {
@@ -80,8 +82,34 @@ func (q *Queries) GetGuild(ctx context.Context, guildID int64) (Guild, error) {
 		&i.AnniversaryNotificationsRole,
 		&i.AnniversaryHour,
 		&i.AnniversaryTimezone,
+		&i.VoiceLogsChannel,
+		&i.MemberLogsChannel,
 	)
 	return i, err
+}
+
+const getMemberLogsChannel = `-- name: GetMemberLogsChannel :one
+SELECT member_logs_channel FROM guilds WHERE guild_id = $1
+`
+
+func (q *Queries) GetMemberLogsChannel(ctx context.Context, guildID int64) (pgtype.Int8, error) {
+	row := q.db.QueryRow(ctx, getMemberLogsChannel, guildID)
+	var member_logs_channel pgtype.Int8
+	err := row.Scan(&member_logs_channel)
+	return member_logs_channel, err
+}
+
+const getModlogsChannel = `-- name: GetModlogsChannel :one
+SELECT modlogs_channel FROM guilds WHERE guild_id = $1
+`
+
+// sendModlogToChannel used to SELECT * on guilds just to read one column, on
+// every moderation action.
+func (q *Queries) GetModlogsChannel(ctx context.Context, guildID int64) (pgtype.Int8, error) {
+	row := q.db.QueryRow(ctx, getModlogsChannel, guildID)
+	var modlogs_channel pgtype.Int8
+	err := row.Scan(&modlogs_channel)
+	return modlogs_channel, err
 }
 
 const getRadioVoiceChannels = `-- name: GetRadioVoiceChannels :many
@@ -177,6 +205,17 @@ func (q *Queries) GetSTMPDNofiticationChannels(ctx context.Context) ([]GetSTMPDN
 	return items, nil
 }
 
+const getVoiceLogsChannel = `-- name: GetVoiceLogsChannel :one
+SELECT voice_logs_channel FROM guilds WHERE guild_id = $1
+`
+
+func (q *Queries) GetVoiceLogsChannel(ctx context.Context, guildID int64) (pgtype.Int8, error) {
+	row := q.db.QueryRow(ctx, getVoiceLogsChannel, guildID)
+	var voice_logs_channel pgtype.Int8
+	err := row.Scan(&voice_logs_channel)
+	return voice_logs_channel, err
+}
+
 const getYoutubeNotifactionChannels = `-- name: GetYoutubeNotifactionChannels :many
 SELECT youtube_notifications_channel, youtube_notifications_role 
 FROM guilds
@@ -222,4 +261,131 @@ type SetModeratorRoleParams struct {
 func (q *Queries) SetModeratorRole(ctx context.Context, arg SetModeratorRoleParams) error {
 	_, err := q.db.Exec(ctx, setModeratorRole, arg.GuildID, arg.ModeratorRole)
 	return err
+}
+
+const updateGuildConfig = `-- name: UpdateGuildConfig :one
+UPDATE guilds SET
+    modlogs_channel                 = $2,
+    leave_join_logs_channel         = $3,
+    delete_logs_channel             = $4,
+    edit_logs_channel               = $5,
+    voice_logs_channel              = $6,
+    member_logs_channel             = $7,
+    welcomes_channel                = $8,
+    youtube_notifications_channel   = $9,
+    youtube_notifications_role      = $10,
+    reddit_notifications_channel    = $11,
+    reddit_notifications_role       = $12,
+    stmpd_notifications_channel     = $13,
+    stmpd_notifications_role        = $14,
+    tour_notifications_channel      = $15,
+    tour_notifications_role         = $16,
+    anniversary_notifications_channel = $17,
+    anniversary_notifications_role  = $18,
+    anniversary_hour                = $19,
+    anniversary_timezone            = $20,
+    moderator_role                  = $21,
+    news_role                       = $22,
+    bot_channel                     = $23,
+    radio_voice_channel             = $24,
+    xp_multiplier                   = $25
+WHERE guild_id = $1
+RETURNING guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone, voice_logs_channel, member_logs_channel
+`
+
+type UpdateGuildConfigParams struct {
+	GuildID                         int64       `json:"guildId"`
+	ModlogsChannel                  pgtype.Int8 `json:"modlogsChannel"`
+	LeaveJoinLogsChannel            pgtype.Int8 `json:"leaveJoinLogsChannel"`
+	DeleteLogsChannel               pgtype.Int8 `json:"deleteLogsChannel"`
+	EditLogsChannel                 pgtype.Int8 `json:"editLogsChannel"`
+	VoiceLogsChannel                pgtype.Int8 `json:"voiceLogsChannel"`
+	MemberLogsChannel               pgtype.Int8 `json:"memberLogsChannel"`
+	WelcomesChannel                 pgtype.Int8 `json:"welcomesChannel"`
+	YoutubeNotificationsChannel     pgtype.Int8 `json:"youtubeNotificationsChannel"`
+	YoutubeNotificationsRole        pgtype.Int8 `json:"youtubeNotificationsRole"`
+	RedditNotificationsChannel      pgtype.Int8 `json:"redditNotificationsChannel"`
+	RedditNotificationsRole         pgtype.Int8 `json:"redditNotificationsRole"`
+	StmpdNotificationsChannel       pgtype.Int8 `json:"stmpdNotificationsChannel"`
+	StmpdNotificationsRole          pgtype.Int8 `json:"stmpdNotificationsRole"`
+	TourNotificationsChannel        pgtype.Int8 `json:"tourNotificationsChannel"`
+	TourNotificationsRole           pgtype.Int8 `json:"tourNotificationsRole"`
+	AnniversaryNotificationsChannel pgtype.Int8 `json:"anniversaryNotificationsChannel"`
+	AnniversaryNotificationsRole    pgtype.Int8 `json:"anniversaryNotificationsRole"`
+	AnniversaryHour                 int32       `json:"anniversaryHour"`
+	AnniversaryTimezone             string      `json:"anniversaryTimezone"`
+	ModeratorRole                   pgtype.Int8 `json:"moderatorRole"`
+	NewsRole                        pgtype.Int8 `json:"newsRole"`
+	BotChannel                      pgtype.Int8 `json:"botChannel"`
+	RadioVoiceChannel               pgtype.Int8 `json:"radioVoiceChannel"`
+	XpMultiplier                    float64     `json:"xpMultiplier"`
+}
+
+// A full-row update rather than per-field setters or COALESCE.
+//
+// The settings form always submits every field, so the query mirrors the form:
+// whatever the admin is looking at is what gets written. COALESCE($n, col)
+// cannot express CLEARING a setting -- it reads a NULL parameter as "leave
+// alone" -- and every column here is nullable precisely so a channel can be
+// unset. Unsetting is a first-class action, not an edge case.
+//
+// RETURNING * so the handler re-renders what the database actually holds rather
+// than echoing back what the browser sent.
+func (q *Queries) UpdateGuildConfig(ctx context.Context, arg UpdateGuildConfigParams) (Guild, error) {
+	row := q.db.QueryRow(ctx, updateGuildConfig,
+		arg.GuildID,
+		arg.ModlogsChannel,
+		arg.LeaveJoinLogsChannel,
+		arg.DeleteLogsChannel,
+		arg.EditLogsChannel,
+		arg.VoiceLogsChannel,
+		arg.MemberLogsChannel,
+		arg.WelcomesChannel,
+		arg.YoutubeNotificationsChannel,
+		arg.YoutubeNotificationsRole,
+		arg.RedditNotificationsChannel,
+		arg.RedditNotificationsRole,
+		arg.StmpdNotificationsChannel,
+		arg.StmpdNotificationsRole,
+		arg.TourNotificationsChannel,
+		arg.TourNotificationsRole,
+		arg.AnniversaryNotificationsChannel,
+		arg.AnniversaryNotificationsRole,
+		arg.AnniversaryHour,
+		arg.AnniversaryTimezone,
+		arg.ModeratorRole,
+		arg.NewsRole,
+		arg.BotChannel,
+		arg.RadioVoiceChannel,
+		arg.XpMultiplier,
+	)
+	var i Guild
+	err := row.Scan(
+		&i.GuildID,
+		&i.ModlogsChannel,
+		&i.LeaveJoinLogsChannel,
+		&i.YoutubeNotificationsChannel,
+		&i.YoutubeNotificationsRole,
+		&i.RedditNotificationsChannel,
+		&i.RedditNotificationsRole,
+		&i.StmpdNotificationsChannel,
+		&i.StmpdNotificationsRole,
+		&i.WelcomesChannel,
+		&i.DeleteLogsChannel,
+		&i.EditLogsChannel,
+		&i.BotChannel,
+		&i.RadioVoiceChannel,
+		&i.NewsRole,
+		&i.XpMultiplier,
+		&i.TourNotificationsChannel,
+		&i.TourNotificationsRole,
+		&i.ModeratorRole,
+		&i.AnniversaryNotificationsChannel,
+		&i.AnniversaryNotificationsRole,
+		&i.AnniversaryHour,
+		&i.AnniversaryTimezone,
+		&i.VoiceLogsChannel,
+		&i.MemberLogsChannel,
+	)
+	return i, err
 }

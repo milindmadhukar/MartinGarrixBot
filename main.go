@@ -116,6 +116,15 @@ func main() {
 		listeners.GuildMemberLeaveListener(b),
 		listeners.MessageDeleteListener(b),
 		listeners.MessageUpdateListener(b),
+		// Records kicks, bans and timeouts performed through Discord's own UI
+		// into the same modlogs table as the /moderation commands.
+		listeners.GuildAuditLogListener(b),
+		// Voice and profile changes relay to their configured channels and are
+		// never persisted, so they add no tables and no retention problem.
+		listeners.VoiceLogJoinListener(b),
+		listeners.VoiceLogLeaveListener(b),
+		listeners.VoiceLogMoveListener(b),
+		listeners.GuildMemberProfileListener(b),
 	); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
 		os.Exit(-1)

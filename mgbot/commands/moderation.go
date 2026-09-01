@@ -222,37 +222,11 @@ func createModlog(ctx context.Context, queries *db.Queries, params db.CreateModl
 	return err
 }
 
-// Helper function to send modlog to channel
+// sendModlogToChannel delegates to mgbot.SendModlogEmbed, which the audit-log
+// listener also uses so that moderation done through Discord's UI produces an
+// identical embed.
 func sendModlogToChannel(b *mgbot.MartinGarrixBot, guildID, userID, moderatorID snowflake.ID, logType, reason string, expiresAt *time.Time) {
-	config, err := b.Queries.GetGuild(context.Background(), int64(guildID))
-	if err != nil || !config.ModlogsChannel.Valid {
-		return
-	}
-
-	reasonText := reason
-	if reasonText == "" {
-		reasonText = "No reason provided"
-	}
-
-	embed := discord.NewEmbed().
-		WithTitle(fmt.Sprintf("Moderation Action: %s", strings.ToUpper(logType))).
-		AddField("User", fmt.Sprintf("<@%d>", userID), true).
-		AddField("Moderator", fmt.Sprintf("<@%d>", moderatorID), true).
-		AddField("Reason", reasonText, false).
-		WithTimestamp(time.Now()).
-		WithColor(utils.ColorWarning)
-
-	if expiresAt != nil {
-		embed = embed.AddField("Expires", fmt.Sprintf("<t:%d:R>", expiresAt.Unix()), false)
-	}
-
-	_, err = b.Client.Rest.CreateMessage(snowflake.ID(config.ModlogsChannel.Int64),
-		discord.NewMessageCreate().
-			WithEmbeds(embed),
-	)
-	if err != nil {
-		slog.Error("Failed to send modlog to channel", slog.Any("err", err))
-	}
+	mgbot.SendModlogEmbed(b, guildID, userID, moderatorID, logType, reason, expiresAt)
 }
 
 // parseDuration parses duration strings like "1h", "2d", "1w"

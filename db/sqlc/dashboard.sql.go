@@ -12,7 +12,7 @@ import (
 )
 
 const dashActivePunishments = `-- name: DashActivePunishments :many
-SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active FROM modlogs
+SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active, audit_log_id FROM modlogs
 WHERE guild_id = $1
   AND active = true
   AND expires_at IS NOT NULL
@@ -45,6 +45,7 @@ func (q *Queries) DashActivePunishments(ctx context.Context, arg DashActivePunis
 			&i.GuildID,
 			&i.ExpiresAt,
 			&i.Active,
+			&i.AuditLogID,
 		); err != nil {
 			return nil, err
 		}
@@ -439,7 +440,7 @@ func (q *Queries) DashModlogTypes(ctx context.Context, guildID int64) ([]DashMod
 
 const dashModlogs = `-- name: DashModlogs :many
 
-SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active FROM modlogs
+SELECT id, user_id, moderator_id, log_type, reason, time, guild_id, expires_at, active, audit_log_id FROM modlogs
 WHERE guild_id = $1
   AND ($4::varchar IS NULL OR log_type = $4)
   AND ($5::bigint IS NULL OR user_id = $5)
@@ -517,6 +518,7 @@ func (q *Queries) DashModlogs(ctx context.Context, arg DashModlogsParams) ([]Mod
 			&i.GuildID,
 			&i.ExpiresAt,
 			&i.Active,
+			&i.AuditLogID,
 		); err != nil {
 			return nil, err
 		}

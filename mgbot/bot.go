@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/disgoorg/disgo"
@@ -49,11 +50,23 @@ type MartinGarrixBot struct {
 	RedditToken    utils.RedditToken
 	RadioManager   *utils.RadioManager
 	BeatportClient *utils.BeatportClient
+
+	// resolveCache memoises user lookups made by the internal API, so paging
+	// through a log does not re-request the same moderators on every page.
+	// See resolveUser in internalapi.go.
+	resolveMu    sync.Mutex
+	resolveCache map[string]resolvedUser
 }
 
 func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
 	client, err := disgo.New(b.Cfg.Bot.Token,
-		bot.WithGatewayConfigOpts(gateway.WithIntents(gateway.IntentGuilds, gateway.IntentGuildMessages, gateway.IntentMessageContent, gateway.IntentGuildMembers, gateway.IntentGuildVoiceStates)),
+		// IntentGuildModeration is what delivers GUILD_AUDIT_LOG_ENTRY_CREATE,
+		// and with it every kick, ban and timeout performed through Discord's
+		// own UI rather than through /moderation. Without it the moderation log
+		// only ever shows what the bot itself did. It is not a privileged
+		// intent, so it needs no Developer Portal change -- but the bot does
+		// need the View Audit Log permission in the guild.
+		bot.WithGatewayConfigOpts(gateway.WithIntents(gateway.IntentGuilds, gateway.IntentGuildMessages, gateway.IntentMessageContent, gateway.IntentGuildMembers, gateway.IntentGuildVoiceStates, gateway.IntentGuildModeration)),
 		// FlagRoles and FlagChannels are what let the dashboard render role and
 		// channel pickers without a REST call per page. IntentGuilds is already
 		// enabled and already delivers both in GUILD_CREATE and keeps them

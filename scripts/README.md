@@ -185,6 +185,29 @@ that way turned out to be a class rather than a row — one wrongly flagged coll
 was hiding twenty-seven songs from search — so the useful unit of work is the
 invariant.
 
+### `backfill-modlogs`
+
+Imports historical moderation from Discord's audit log into `modlogs`, so the
+dashboard's moderation page is not empty on the day the audit-log listener ships.
+
+- **Requires:** the bot's role has **View Audit Log** in the guild; `-guild=<id>`
+- **Writes:** `modlogs` rows carrying `audit_log_id`
+- **Exit:** 0 on success; the summary reports `inserted` and `entries_seen`
+
+```
+go run ./scripts/backfill-modlogs -config=config.toml -guild=690950056202731521 -dry-run
+go run ./scripts/backfill-modlogs -config=config.toml -guild=690950056202731521
+```
+
+Discord retains roughly 45 days of audit history, so this is a one-shot catch-up
+rather than a full archive; everything after it is captured live by the listener.
+Safe to re-run — rows are keyed on the audit entry ID and inserted with
+`ON CONFLICT DO NOTHING`, so a second pass over the same window writes nothing.
+
+Entries whose executor is the bot itself are skipped: the `/moderation` command
+that performed them already wrote a row naming the human moderator, and importing
+the audit entry too would double-count the action and attribute it to the bot.
+
 ## Running against production
 
 The bot on `limitless` runs from `~/MartinGarrixBot` against the shared
