@@ -1,59 +1,120 @@
 {{define "page"}}
-<div class="flex items-baseline justify-between">
-  <h1 class="text-xl font-semibold text-white">Settings</h1>
-  {{if .Data.ReadOnly}}
-    <span class="rounded border border-slate-700 px-2 py-0.5 text-xs text-slate-400">Read only</span>
-  {{end}}
-</div>
-
-{{if .Data.ReadOnly}}
-  <p class="mt-1 text-sm text-slate-500">
-    This shows what the bot is currently configured to do. Editing from the
-    dashboard is not enabled yet — for now, use <code class="text-slate-400">/config</code> in Discord.
-  </p>
+<h1 class="text-xl font-semibold text-white">Settings</h1>
+<p class="mt-1 text-sm text-slate-500">
+  Changes take effect immediately. Anything left unset is switched off.
+</p>
+{{template "settings-form" .}}
 {{end}}
 
-<div class="mt-6 space-y-6">
-  {{range .Data.Groups}}
-    <section class="rounded-lg border border-slate-800 bg-slate-900/40">
-      <h2 class="border-b border-slate-800 px-4 py-2.5 text-sm font-medium text-slate-300">{{.Title}}</h2>
-      <dl class="divide-y divide-slate-800">
-        {{range .Settings}}
-          <div class="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-4">
-            <dt class="sm:w-56 sm:shrink-0">
-              <span class="block text-sm text-slate-200">{{.Label}}</span>
-              <span class="block text-xs text-slate-500">{{.Help}}</span>
-            </dt>
-            <dd class="min-w-0 break-all text-sm">
-              {{if .Set}}
-                <span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-slate-200">{{.Name}}</span>
-                {{if not .Known}}
-                  {{/* Configured, but the bot cannot see it -- usually a deleted
-                       channel or role, which is worth flagging rather than
-                       showing a bare ID as if it were fine. */}}
-                  <span class="ml-2 text-xs text-amber-400">not found in this server</span>
-                {{end}}
-              {{else}}
-                <span class="text-slate-600">Not set</span>
-              {{end}}
-            </dd>
-          </div>
-        {{end}}
-      </dl>
-    </section>
+{{define "settings-form"}}
+<div id="settings-form" class="mt-6 space-y-6">
+
+  {{if .Data.Problem}}
+    <div class="rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+      {{.Data.Problem}}
+    </div>
   {{end}}
 
-  <section class="rounded-lg border border-slate-800 bg-slate-900/40">
-    <h2 class="border-b border-slate-800 px-4 py-2.5 text-sm font-medium text-slate-300">Levelling</h2>
-    <div class="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-4">
-      <span class="sm:w-56 sm:shrink-0">
-        <span class="block text-sm text-slate-200">XP multiplier</span>
-        <span class="block text-xs text-slate-500">Stored, but not yet read by the bot.</span>
-      </span>
-      <span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-sm text-slate-200">
-        {{printf "%.2f" .Data.XPMultiplier}}
-      </span>
+  {{if .Data.Saved}}
+    <div class="rounded-lg border border-emerald-900/60 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
+      Saved{{if .Data.Saved}} — updated {{len .Data.Saved}} setting{{if ne (len .Data.Saved) 1}}s{{end}}{{end}}.
     </div>
-  </section>
+  {{end}}
+
+  {{$guildID := .GuildID}}
+  {{range .Data.Groups}}
+    {{/* One form per group, so saving Logging does not resubmit Notifications.
+         The handler treats an absent field as "leave alone" and a present but
+         empty one as "clear", which is what makes that safe. */}}
+    <form class="rounded-lg border border-slate-800 bg-slate-900/40"
+          hx-post="/g/{{$guildID}}/settings"
+          hx-target="#settings-form"
+          hx-swap="outerHTML">
+
+      <div class="border-b border-slate-800 px-4 py-3">
+        <h2 class="text-sm font-medium text-slate-300">{{.Title}}</h2>
+        {{if .Help}}<p class="mt-0.5 text-xs text-slate-500">{{.Help}}</p>{{end}}
+      </div>
+
+      <div class="divide-y divide-slate-800">
+        {{range .Settings}}
+          <div class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+            <label for="{{.Key}}" class="sm:w-64 sm:shrink-0">
+              <span class="block text-sm text-slate-200">
+                {{.Label}}
+                {{if .Inert}}
+                  <span class="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-500">inactive</span>
+                {{end}}
+              </span>
+              <span class="block text-xs text-slate-500">{{.Help}}</span>
+            </label>
+
+            <div class="min-w-0 flex-1">
+              <select id="{{.Key}}" name="{{.Key}}"
+                      class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-200">
+                {{range .Options}}
+                  <option value="{{.ID}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+                {{end}}
+              </select>
+              {{if and .Set (not .Known)}}
+                <p class="mt-1 text-xs text-amber-400">
+                  This is set to an ID the bot cannot see — the channel or role may have been deleted.
+                </p>
+              {{end}}
+            </div>
+          </div>
+        {{end}}
+
+        {{/* The anniversary schedule lives with its channel and role rather
+             than in a section of its own. */}}
+        {{if eq .ID "notifications"}}
+          <div class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+            <label for="anniversary_hour" class="sm:w-64 sm:shrink-0">
+              <span class="block text-sm text-slate-200">Anniversary time</span>
+              <span class="block text-xs text-slate-500">When the daily anniversary post goes out.</span>
+            </label>
+            <div class="flex min-w-0 flex-1 flex-wrap gap-2">
+              <select id="anniversary_hour" name="anniversary_hour"
+                      class="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-200">
+                {{range $.Data.Anniversary.Hours}}
+                  <option value="{{.ID}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+                {{end}}
+              </select>
+              <input type="text" id="anniversary_timezone" name="anniversary_timezone"
+                     value="{{$.Data.Anniversary.Timezone}}"
+                     placeholder="Asia/Kolkata"
+                     class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-200">
+            </div>
+          </div>
+        {{end}}
+
+        {{if eq .ID "inert"}}
+          <div class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+            <label for="{{$.Data.XPKey}}" class="sm:w-64 sm:shrink-0">
+              <span class="block text-sm text-slate-200">
+                XP multiplier
+                <span class="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-500">inactive</span>
+              </span>
+              <span class="block text-xs text-slate-500">Stored, but XP is awarded at a flat rate regardless.</span>
+            </label>
+            <div class="min-w-0 flex-1">
+              <input type="number" step="0.1" min="{{$.Data.XPMin}}" max="{{$.Data.XPMax}}"
+                     id="{{$.Data.XPKey}}" name="{{$.Data.XPKey}}"
+                     value="{{printf "%.2f" $.Data.XPMultiplier}}"
+                     class="w-32 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-200">
+            </div>
+          </div>
+        {{end}}
+      </div>
+
+      <div class="flex items-center justify-end gap-3 border-t border-slate-800 px-4 py-3">
+        <span class="htmx-indicator text-xs text-slate-500">Saving…</span>
+        <button type="submit"
+                class="rounded-full bg-mint-300 px-4 py-1.5 text-sm font-semibold text-black transition hover:bg-mint-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-mint-300 focus-visible:ring-offset-2 focus-visible:ring-offset-black">
+          Save {{.Title}}
+        </button>
+      </div>
+    </form>
+  {{end}}
 </div>
 {{end}}
