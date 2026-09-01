@@ -92,6 +92,37 @@ func (r SanityRelease) Artwork() string {
 	return r.ArtworkURL + "?w=1000&h=1000&fit=crop&auto=format"
 }
 
+// CleanLink strips the tracking a share link carries.
+//
+// The catalogue hands out "open.spotify.com/album/xyz?si=<token>" and similar, and a
+// one-off cleanup does not hold: the next sync writes the parameters straight back.
+// Stripping happens on the way in, not afterwards.
+//
+// Apple's "i=" is the exception -- it names the individual track within a release, so
+// it is part of the address rather than tracking.
+func CleanLink(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+
+	q := strings.IndexByte(rawURL, '?')
+	if q < 0 {
+		return rawURL
+	}
+
+	base := rawURL[:q]
+	if !strings.Contains(rawURL, "music.apple.com") && !strings.Contains(rawURL, "itunes.apple.com") {
+		return base
+	}
+
+	for _, part := range strings.Split(rawURL[q+1:], "&") {
+		if strings.HasPrefix(part, "i=") {
+			return base + "?" + part
+		}
+	}
+	return base
+}
+
 // Text wraps a possibly-empty string as a nullable column value. Empty means "the
 // source does not know", which must read as NULL so that COALESCE in the update
 // queries leaves whatever is already stored alone -- rather than erasing a link or a

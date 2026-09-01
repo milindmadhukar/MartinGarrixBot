@@ -306,12 +306,13 @@ func insertRelease(ctx context.Context, env *script.Env, index *utils.SongIndex,
 func insertParams(r utils.SanityRelease) db.InsertReleaseParams {
 	l := r.StreamingLinks
 	return db.InsertReleaseParams{
-		Name: r.Name(), Artists: r.Artists, ReleaseDate: utils.Text(r.ReleaseDate),
+		Name: r.Title, Artists: r.Artists, ReleaseDate: utils.Text(r.ReleaseDate),
+		MixName:   utils.Text(r.Version),
 		StmpdSlug: utils.Text(r.Slug), ThumbnailUrl: utils.Text(r.Artwork()),
-		SpotifyUrl: utils.Text(l.Spotify), AppleMusicUrl: utils.Text(l.AppleMusic),
-		YoutubeUrl: utils.Text(utils.NormalizeYoutubeURL(l.YouTube)), YoutubeMusicUrl: utils.Text(l.YouTubeMusic),
-		DeezerUrl: utils.Text(l.Deezer), TidalUrl: utils.Text(l.Tidal),
-		AmazonMusicUrl: utils.Text(l.AmazonMusic), BeatportUrl: utils.Text(l.Beatport),
+		SpotifyUrl: utils.Text(utils.CleanLink(l.Spotify)), AppleMusicUrl: utils.Text(utils.CleanLink(l.AppleMusic)),
+		YoutubeUrl: utils.Text(utils.NormalizeYoutubeURL(l.YouTube)), YoutubeMusicUrl: utils.Text(utils.CleanLink(l.YouTubeMusic)),
+		DeezerUrl: utils.Text(utils.CleanLink(l.Deezer)), TidalUrl: utils.Text(utils.CleanLink(l.Tidal)),
+		AmazonMusicUrl: utils.Text(utils.CleanLink(l.AmazonMusic)), BeatportUrl: utils.Text(utils.CleanLink(l.Beatport)),
 		BeatportReleaseID: utils.BeatportReleaseID(l.Beatport),
 	}
 }
@@ -329,10 +330,10 @@ func updateParams(id int64, r utils.SanityRelease, correctDate bool) db.UpdateSo
 		ID: id, StmpdSlug: utils.Text(r.Slug), ReleaseDate: releaseDate,
 		MixName:      utils.Text(r.Version),
 		ThumbnailUrl: utils.Text(r.Artwork()),
-		SpotifyUrl:   utils.Text(l.Spotify), AppleMusicUrl: utils.Text(l.AppleMusic),
-		YoutubeUrl: utils.Text(utils.NormalizeYoutubeURL(l.YouTube)), YoutubeMusicUrl: utils.Text(l.YouTubeMusic),
-		DeezerUrl: utils.Text(l.Deezer), TidalUrl: utils.Text(l.Tidal),
-		AmazonMusicUrl: utils.Text(l.AmazonMusic), BeatportUrl: utils.Text(l.Beatport),
+		SpotifyUrl:   utils.Text(utils.CleanLink(l.Spotify)), AppleMusicUrl: utils.Text(utils.CleanLink(l.AppleMusic)),
+		YoutubeUrl: utils.Text(utils.NormalizeYoutubeURL(l.YouTube)), YoutubeMusicUrl: utils.Text(utils.CleanLink(l.YouTubeMusic)),
+		DeezerUrl: utils.Text(utils.CleanLink(l.Deezer)), TidalUrl: utils.Text(utils.CleanLink(l.Tidal)),
+		AmazonMusicUrl: utils.Text(utils.CleanLink(l.AmazonMusic)), BeatportUrl: utils.Text(utils.CleanLink(l.Beatport)),
 		BeatportReleaseID: utils.BeatportReleaseID(l.Beatport),
 	}
 }

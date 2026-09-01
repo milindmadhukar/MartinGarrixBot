@@ -71,12 +71,12 @@ LIMIT 1;
 
 -- name: InsertRelease :one
 INSERT INTO songs (
-    name, artists, release_date, thumbnail_url, stmpd_slug,
+    name, artists, mix_name, release_date, thumbnail_url, stmpd_slug,
     spotify_url, apple_music_url, youtube_url, youtube_music_url,
     deezer_url, tidal_url, amazon_music_url, beatport_url, beatport_release_id,
     stmpd_synced_at, source
 ) VALUES (
-    sqlc.arg(name), sqlc.arg(artists), sqlc.arg(release_date), sqlc.narg(thumbnail_url), sqlc.narg(stmpd_slug),
+    sqlc.arg(name), sqlc.arg(artists), sqlc.narg(mix_name), sqlc.arg(release_date), sqlc.narg(thumbnail_url), sqlc.narg(stmpd_slug),
     sqlc.narg(spotify_url), sqlc.narg(apple_music_url), sqlc.narg(youtube_url), sqlc.narg(youtube_music_url),
     sqlc.narg(deezer_url), sqlc.narg(tidal_url), sqlc.narg(amazon_music_url),
     sqlc.narg(beatport_url), sqlc.narg(beatport_release_id),
@@ -103,13 +103,13 @@ SELECT * FROM songs WHERE stmpd_slug = $1;
 UPDATE songs SET
     stmpd_slug          = COALESCE(sqlc.narg(stmpd_slug),          stmpd_slug),
     release_date        = COALESCE(sqlc.narg(release_date),        release_date),
-    -- The catalogue's `version` field, which nothing used to carry across. A legacy
-    -- row for "La La La (Drove Remix)" was stored as plain "La La La", so it keyed
-    -- identically to the original: it showed up as a second, indistinguishable entry
-    -- in autocomplete, and dedupe wanted to merge the two and delete one. Recording
-    -- the rendition instead makes it a remix of the original, exactly like the
-    -- Catharina remixes, which carry theirs in mix_name already.
-    mix_name            = COALESCE(mix_name, sqlc.narg(mix_name)),
+    -- The catalogue is the authority for what a release is called and which
+    -- rendition it is, so both are taken from it rather than merged with whatever
+    -- the row happened to hold. This is what keeps the shape uniform: the name is
+    -- the song's name and the rendition lives in mix_name, never smuggled into the
+    -- title for some rows and not others.
+    name                = COALESCE(sqlc.narg(title), name),
+    mix_name            = sqlc.narg(mix_name),
     spotify_url         = COALESCE(sqlc.narg(spotify_url),         spotify_url),
     apple_music_url     = COALESCE(sqlc.narg(apple_music_url),     apple_music_url),
     youtube_url         = COALESCE(sqlc.narg(youtube_url),         youtube_url),
@@ -137,7 +137,8 @@ WHERE id = sqlc.arg(id)
        (is_unreleased AND sqlc.narg(release_date)::text IS NOT NULL)
     OR stmpd_slug          IS DISTINCT FROM COALESCE(sqlc.narg(stmpd_slug),          stmpd_slug)
     OR release_date        IS DISTINCT FROM COALESCE(sqlc.narg(release_date),        release_date)
-    OR mix_name            IS DISTINCT FROM COALESCE(mix_name, sqlc.narg(mix_name))
+    OR name                IS DISTINCT FROM COALESCE(sqlc.narg(title), name)
+    OR mix_name            IS DISTINCT FROM sqlc.narg(mix_name)
     OR spotify_url         IS DISTINCT FROM COALESCE(sqlc.narg(spotify_url),         spotify_url)
     OR apple_music_url     IS DISTINCT FROM COALESCE(sqlc.narg(apple_music_url),     apple_music_url)
     OR youtube_url         IS DISTINCT FROM COALESCE(sqlc.narg(youtube_url),         youtube_url)
@@ -475,3 +476,8 @@ UPDATE songs SET youtube_url = NULL
 WHERE youtube_url IS NOT NULL
   AND youtube_url NOT LIKE '%watch?v=%'
   AND youtube_url NOT LIKE '%youtu.be/%';
+
+-- name: SetSongTitle :execrows
+UPDATE songs SET name = sqlc.arg(name), mix_name = sqlc.narg(mix_name)
+WHERE id = sqlc.arg(id)
+  AND (name IS DISTINCT FROM sqlc.arg(name) OR mix_name IS DISTINCT FROM sqlc.narg(mix_name));

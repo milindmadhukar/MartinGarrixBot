@@ -1382,15 +1382,15 @@ func (q *Queries) InsertBeatportSong(ctx context.Context, arg InsertBeatportSong
 
 const insertRelease = `-- name: InsertRelease :one
 INSERT INTO songs (
-    name, artists, release_date, thumbnail_url, stmpd_slug,
+    name, artists, mix_name, release_date, thumbnail_url, stmpd_slug,
     spotify_url, apple_music_url, youtube_url, youtube_music_url,
     deezer_url, tidal_url, amazon_music_url, beatport_url, beatport_release_id,
     stmpd_synced_at, source
 ) VALUES (
-    $1, $2, $3, $4, $5,
-    $6, $7, $8, $9,
-    $10, $11, $12,
-    $13, $14,
+    $1, $2, $3, $4, $5, $6,
+    $7, $8, $9, $10,
+    $11, $12, $13,
+    $14, $15,
     NOW(), 'stmpd'
 )
 RETURNING id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection
@@ -1399,6 +1399,7 @@ RETURNING id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtub
 type InsertReleaseParams struct {
 	Name              string      `json:"name"`
 	Artists           string      `json:"artists"`
+	MixName           pgtype.Text `json:"mixName"`
 	ReleaseDate       pgtype.Text `json:"releaseDate"`
 	ThumbnailUrl      pgtype.Text `json:"thumbnailUrl"`
 	StmpdSlug         pgtype.Text `json:"stmpdSlug"`
@@ -1417,6 +1418,7 @@ func (q *Queries) InsertRelease(ctx context.Context, arg InsertReleaseParams) (S
 	row := q.db.QueryRow(ctx, insertRelease,
 		arg.Name,
 		arg.Artists,
+		arg.MixName,
 		arg.ReleaseDate,
 		arg.ThumbnailUrl,
 		arg.StmpdSlug,
@@ -1690,6 +1692,26 @@ func (q *Queries) SetSongReleaseDate(ctx context.Context, arg SetSongReleaseDate
 	return result.RowsAffected(), nil
 }
 
+const setSongTitle = `-- name: SetSongTitle :execrows
+UPDATE songs SET name = $1, mix_name = $2
+WHERE id = $3
+  AND (name IS DISTINCT FROM $1 OR mix_name IS DISTINCT FROM $2)
+`
+
+type SetSongTitleParams struct {
+	Name    string      `json:"name"`
+	MixName pgtype.Text `json:"mixName"`
+	ID      int64       `json:"id"`
+}
+
+func (q *Queries) SetSongTitle(ctx context.Context, arg SetSongTitleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSongTitle, arg.Name, arg.MixName, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setSongYoutubeURL = `-- name: SetSongYoutubeURL :execrows
 UPDATE songs SET youtube_url = $1
 WHERE id = $2 AND youtube_url IS DISTINCT FROM $1
@@ -1839,24 +1861,24 @@ const updateSongWithStmpdRelease = `-- name: UpdateSongWithStmpdRelease :execrow
 UPDATE songs SET
     stmpd_slug          = COALESCE($1,          stmpd_slug),
     release_date        = COALESCE($2,        release_date),
-    -- The catalogue's ` + "`" + `version` + "`" + ` field, which nothing used to carry across. A legacy
-    -- row for "La La La (Drove Remix)" was stored as plain "La La La", so it keyed
-    -- identically to the original: it showed up as a second, indistinguishable entry
-    -- in autocomplete, and dedupe wanted to merge the two and delete one. Recording
-    -- the rendition instead makes it a remix of the original, exactly like the
-    -- Catharina remixes, which carry theirs in mix_name already.
-    mix_name            = COALESCE(mix_name, $3),
-    spotify_url         = COALESCE($4,         spotify_url),
-    apple_music_url     = COALESCE($5,     apple_music_url),
-    youtube_url         = COALESCE($6,         youtube_url),
-    youtube_music_url   = COALESCE($7,   youtube_music_url),
-    deezer_url          = COALESCE($8,          deezer_url),
-    tidal_url           = COALESCE($9,           tidal_url),
-    amazon_music_url    = COALESCE($10,    amazon_music_url),
-    beatport_url        = COALESCE($11,        beatport_url),
-    beatport_release_id = COALESCE($12, beatport_release_id),
+    -- The catalogue is the authority for what a release is called and which
+    -- rendition it is, so both are taken from it rather than merged with whatever
+    -- the row happened to hold. This is what keeps the shape uniform: the name is
+    -- the song's name and the rendition lives in mix_name, never smuggled into the
+    -- title for some rows and not others.
+    name                = COALESCE($3, name),
+    mix_name            = $4,
+    spotify_url         = COALESCE($5,         spotify_url),
+    apple_music_url     = COALESCE($6,     apple_music_url),
+    youtube_url         = COALESCE($7,         youtube_url),
+    youtube_music_url   = COALESCE($8,   youtube_music_url),
+    deezer_url          = COALESCE($9,          deezer_url),
+    tidal_url           = COALESCE($10,           tidal_url),
+    amazon_music_url    = COALESCE($11,    amazon_music_url),
+    beatport_url        = COALESCE($12,        beatport_url),
+    beatport_release_id = COALESCE($13, beatport_release_id),
     thumbnail_url       = CASE WHEN COALESCE(thumbnail_url, '') = ''
-                               THEN $13 ELSE thumbnail_url END,
+                               THEN $14 ELSE thumbnail_url END,
     -- A song someone added because they heard it played, which has now actually
     -- come out. Clearing announced_at re-arms the announcement: the row is old, but
     -- the release is news, and this is the one case where re-announcing is right.
@@ -1868,24 +1890,25 @@ UPDATE songs SET
     announced_at  = CASE WHEN is_unreleased AND $2::text IS NOT NULL
                          THEN NULL ELSE announced_at END,
     stmpd_synced_at     = NOW()
-WHERE id = $14
+WHERE id = $15
   AND (
        (is_unreleased AND $2::text IS NOT NULL)
     OR stmpd_slug          IS DISTINCT FROM COALESCE($1,          stmpd_slug)
     OR release_date        IS DISTINCT FROM COALESCE($2,        release_date)
-    OR mix_name            IS DISTINCT FROM COALESCE(mix_name, $3)
-    OR spotify_url         IS DISTINCT FROM COALESCE($4,         spotify_url)
-    OR apple_music_url     IS DISTINCT FROM COALESCE($5,     apple_music_url)
-    OR youtube_url         IS DISTINCT FROM COALESCE($6,         youtube_url)
-    OR youtube_music_url   IS DISTINCT FROM COALESCE($7,   youtube_music_url)
-    OR deezer_url          IS DISTINCT FROM COALESCE($8,          deezer_url)
-    OR tidal_url           IS DISTINCT FROM COALESCE($9,           tidal_url)
-    OR amazon_music_url    IS DISTINCT FROM COALESCE($10,    amazon_music_url)
-    OR beatport_url        IS DISTINCT FROM COALESCE($11,        beatport_url)
-    OR beatport_release_id IS DISTINCT FROM COALESCE($12, beatport_release_id)
+    OR name                IS DISTINCT FROM COALESCE($3, name)
+    OR mix_name            IS DISTINCT FROM $4
+    OR spotify_url         IS DISTINCT FROM COALESCE($5,         spotify_url)
+    OR apple_music_url     IS DISTINCT FROM COALESCE($6,     apple_music_url)
+    OR youtube_url         IS DISTINCT FROM COALESCE($7,         youtube_url)
+    OR youtube_music_url   IS DISTINCT FROM COALESCE($8,   youtube_music_url)
+    OR deezer_url          IS DISTINCT FROM COALESCE($9,          deezer_url)
+    OR tidal_url           IS DISTINCT FROM COALESCE($10,           tidal_url)
+    OR amazon_music_url    IS DISTINCT FROM COALESCE($11,    amazon_music_url)
+    OR beatport_url        IS DISTINCT FROM COALESCE($12,        beatport_url)
+    OR beatport_release_id IS DISTINCT FROM COALESCE($13, beatport_release_id)
     -- Cast for the same reason as in UpdateSongWithStmpdLinks: IS NOT NULL leaves
     -- the parameter's type undetermined and Postgres raises 42P08.
-    OR (COALESCE(thumbnail_url, '') = '' AND $13::text IS NOT NULL)
+    OR (COALESCE(thumbnail_url, '') = '' AND $14::text IS NOT NULL)
     OR stmpd_synced_at IS NULL
   )
 `
@@ -1893,6 +1916,7 @@ WHERE id = $14
 type UpdateSongWithStmpdReleaseParams struct {
 	StmpdSlug         pgtype.Text `json:"stmpdSlug"`
 	ReleaseDate       pgtype.Text `json:"releaseDate"`
+	Title             pgtype.Text `json:"title"`
 	MixName           pgtype.Text `json:"mixName"`
 	SpotifyUrl        pgtype.Text `json:"spotifyUrl"`
 	AppleMusicUrl     pgtype.Text `json:"appleMusicUrl"`
@@ -1923,6 +1947,7 @@ func (q *Queries) UpdateSongWithStmpdRelease(ctx context.Context, arg UpdateSong
 	result, err := q.db.Exec(ctx, updateSongWithStmpdRelease,
 		arg.StmpdSlug,
 		arg.ReleaseDate,
+		arg.Title,
 		arg.MixName,
 		arg.SpotifyUrl,
 		arg.AppleMusicUrl,

@@ -56,27 +56,30 @@ type stmpdReleaseParams struct {
 func newStmpdReleaseParams(r utils.SanityRelease) stmpdReleaseParams {
 	l := r.StreamingLinks
 	return stmpdReleaseParams{
-		Name:              r.Name(),
+		// The song's name, not "Title (Version)". The rendition goes in mix_name, so
+		// every row records it the same way and unique_release can tell two
+		// renditions of the same song released on the same day apart.
+		Name:              r.Title,
 		Artists:           r.Artists,
 		Version:           utils.Text(r.Version),
 		ReleaseDate:       utils.Text(r.ReleaseDate),
 		Slug:              utils.Text(r.Slug),
 		Thumbnail:         utils.Text(r.Artwork()),
-		Spotify:           utils.Text(l.Spotify),
-		AppleMusic:        utils.Text(l.AppleMusic),
+		Spotify:           utils.Text(utils.CleanLink(l.Spotify)),
+		AppleMusic:        utils.Text(utils.CleanLink(l.AppleMusic)),
 		YouTube:           utils.Text(utils.NormalizeYoutubeURL(l.YouTube)),
-		YouTubeMusic:      utils.Text(l.YouTubeMusic),
-		Deezer:            utils.Text(l.Deezer),
-		Tidal:             utils.Text(l.Tidal),
-		AmazonMusic:       utils.Text(l.AmazonMusic),
-		BeatportURL:       utils.Text(l.Beatport),
+		YouTubeMusic:      utils.Text(utils.CleanLink(l.YouTubeMusic)),
+		Deezer:            utils.Text(utils.CleanLink(l.Deezer)),
+		Tidal:             utils.Text(utils.CleanLink(l.Tidal)),
+		AmazonMusic:       utils.Text(utils.CleanLink(l.AmazonMusic)),
+		BeatportURL:       utils.Text(utils.CleanLink(l.Beatport)),
 		BeatportReleaseID: utils.BeatportReleaseID(l.Beatport),
 	}
 }
 
 func (p stmpdReleaseParams) insert() db.InsertReleaseParams {
 	return db.InsertReleaseParams{
-		Name: p.Name, Artists: p.Artists, ReleaseDate: p.ReleaseDate,
+		Name: p.Name, Artists: p.Artists, MixName: p.Version, ReleaseDate: p.ReleaseDate,
 		StmpdSlug: p.Slug, ThumbnailUrl: p.Thumbnail,
 		SpotifyUrl: p.Spotify, AppleMusicUrl: p.AppleMusic,
 		YoutubeUrl: p.YouTube, YoutubeMusicUrl: p.YouTubeMusic,
@@ -87,7 +90,8 @@ func (p stmpdReleaseParams) insert() db.InsertReleaseParams {
 
 func (p stmpdReleaseParams) update(id int64) db.UpdateSongWithStmpdReleaseParams {
 	return db.UpdateSongWithStmpdReleaseParams{
-		ID: id, StmpdSlug: p.Slug, ReleaseDate: p.ReleaseDate, MixName: p.Version,
+		ID: id, StmpdSlug: p.Slug, ReleaseDate: p.ReleaseDate,
+		Title: utils.Text(p.Name), MixName: p.Version,
 		ThumbnailUrl: p.Thumbnail,
 		SpotifyUrl:   p.Spotify, AppleMusicUrl: p.AppleMusic,
 		YoutubeUrl: p.YouTube, YoutubeMusicUrl: p.YouTubeMusic,

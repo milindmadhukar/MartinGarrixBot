@@ -455,3 +455,14 @@ func containsWord(lower, marker string) bool {
 func isAlnum(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
 }
+
+// SplitTitleRendition separates a stored title from a rendition written into it,
+// returning the title unchanged when there is none. Unlike SplitVariant it preserves
+// the original spelling rather than normalising, because the result is written back.
+func SplitTitleRendition(title string) (base, rendition string) {
+	rest, variant := splitTrailingVariant(title)
+	if variant == "" {
+		return title, ""
+	}
+	return strings.TrimSpace(rest), strings.TrimSpace(variant)
+}

@@ -25,12 +25,45 @@ func main() {
 		script.Fatal("failed to load songs", err)
 	}
 
-	var changed, unchanged, flagged int
+	var changed, unchanged, flagged, renamed int
 	prog := script.NewProgress("rekey songs", len(rows))
 	for _, row := range rows {
 		prog.Step()
-		matchKey := utils.MatchKey(row.Name, "", row.MixName.String, row.Artists)
-		baseKey := utils.BaseKey(row.Name, row.Artists)
+		// Rows the catalogue has no slug for keep whatever shape they arrived in, so
+		// some carry the rendition inside the name -- "Sicko Drop (Claudinho Brasil
+		// Remix)" -- while their catalogue-backed siblings carry it in mix_name. Move
+		// it, so every row records a rendition the same way and the two can be told
+		// apart by the same rule.
+		name, mix := row.Name, row.MixName.String
+		// Move the rendition out of the name when the name is the only place it lives,
+		// or when mix_name already says exactly the same thing. Where the two differ
+		// the name is the more specific of the two -- "Higher Ground (DubVision
+		// Remix)" against a mix_name of just "Remixes" -- and stripping it would
+		// throw away which remix it is.
+		base, variant := utils.SplitTitleRendition(name)
+		redundant := variant != "" && utils.NormalizeToken(variant) == utils.NormalizeToken(mix)
+		if variant != "" && (mix == "" || redundant) {
+			if mix == "" {
+				mix = variant
+			}
+			name = base
+			if _, err := env.Queries.SetSongTitle(ctx, db.SetSongTitleParams{
+				ID: row.ID, Name: name, MixName: utils.Text(mix),
+			}); err != nil {
+				slog.Warn("could not move a rendition out of the name",
+					slog.Int64("song_id", row.ID), slog.String("name", row.Name),
+					slog.Any("err", err))
+				name, mix = row.Name, row.MixName.String
+			} else {
+				renamed++
+				slog.Info("moved the rendition out of the name",
+					slog.Int64("song_id", row.ID), slog.String("was", row.Name),
+					slog.String("now", name), slog.String("mix", mix))
+			}
+		}
+
+		matchKey := utils.MatchKey(name, "", mix, row.Artists)
+		baseKey := utils.BaseKey(name, row.Artists)
 
 		// Nothing branches on DryRun any more: the whole run is inside a transaction
 		// that is rolled back, so the dry run exercises exactly the code the real one
@@ -81,5 +114,6 @@ func main() {
 		slog.Int("total", len(rows)),
 		slog.Int("written", changed),
 		slog.Int("already_current", unchanged),
-		slog.Int("newly_flagged_as_collections", flagged))
+		slog.Int("newly_flagged_as_collections", flagged),
+		slog.Int("renditions_moved_out_of_name", renamed))
 }
