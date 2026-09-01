@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -68,7 +69,7 @@ func TestInsertBeatportSong_RoundTrip(t *testing.T) {
 	inserted := insertBeatportSong(t, q, db.InsertBeatportSongParams{
 		Name:         name,
 		Artists:      "Martin Garrix",
-		ReleaseDate:  "2013-06-17",
+		ReleaseDate:  text("2013-06-17"),
 		ThumbnailUrl: text("https://example.com/a.jpg"),
 		BeatportID:   int4(bpID),
 		MixName:      text("Original Mix"),
@@ -118,7 +119,7 @@ func TestInsertRelease_RoundTripOnTheNaturalKey(t *testing.T) {
 	inserted, err := q.InsertRelease(ctx, db.InsertReleaseParams{
 		Name:        name,
 		Artists:     artists,
-		ReleaseDate: releaseDate,
+		ReleaseDate: text(releaseDate),
 		SpotifyUrl:  text("https://open.spotify.com/track/x"),
 	})
 	if err != nil {
@@ -133,7 +134,7 @@ func TestInsertRelease_RoundTripOnTheNaturalKey(t *testing.T) {
 	// GetSong looks up on (name, artists, release_date), which is the key the
 	// autocomplete round-trip and the ingestion conflict check both use.
 	got, err := q.GetSong(ctx, db.GetSongParams{
-		Name: name, Artists: artists, ReleaseDate: releaseDate,
+		Name: name, Artists: artists, ReleaseDate: text(releaseDate),
 	})
 	if err != nil {
 		t.Fatalf("GetSong failed: %v", err)
@@ -153,7 +154,7 @@ func TestDoesSongExist(t *testing.T) {
 	const artists, releaseDate = "Martin Garrix", "2015-01-01"
 
 	exists, err := q.DoesSongExist(ctx, db.DoesSongExistParams{
-		Name: name, Artists: artists, ReleaseDate: releaseDate,
+		Name: name, Artists: artists, ReleaseDate: text(releaseDate),
 	})
 	if err != nil {
 		t.Fatalf("DoesSongExist failed: %v", err)
@@ -163,7 +164,7 @@ func TestDoesSongExist(t *testing.T) {
 	}
 
 	song, err := q.InsertRelease(ctx, db.InsertReleaseParams{
-		Name: name, Artists: artists, ReleaseDate: releaseDate,
+		Name: name, Artists: artists, ReleaseDate: text(releaseDate),
 	})
 	if err != nil {
 		t.Fatalf("InsertRelease failed: %v", err)
@@ -171,7 +172,7 @@ func TestDoesSongExist(t *testing.T) {
 	t.Cleanup(func() { deleteSong(t, song.ID) })
 
 	exists, err = q.DoesSongExist(ctx, db.DoesSongExistParams{
-		Name: name, Artists: artists, ReleaseDate: releaseDate,
+		Name: name, Artists: artists, ReleaseDate: text(releaseDate),
 	})
 	if err != nil {
 		t.Fatalf("DoesSongExist failed: %v", err)
@@ -183,7 +184,7 @@ func TestDoesSongExist(t *testing.T) {
 	// The date is part of the key, so the same track under a different date is
 	// a different row. This is why the STMPD fetcher keeps writing <year>-01-01.
 	exists, err = q.DoesSongExist(ctx, db.DoesSongExistParams{
-		Name: name, Artists: artists, ReleaseDate: "2020-01-01",
+		Name: name, Artists: artists, ReleaseDate: text("2020-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("DoesSongExist failed: %v", err)
@@ -204,7 +205,7 @@ func TestUniqueRelease_RejectsADuplicate(t *testing.T) {
 
 	name := testSongName(t, "Byte")
 	params := db.InsertReleaseParams{
-		Name: name, Artists: "Martin Garrix", ReleaseDate: "2026-01-01",
+		Name: name, Artists: "Martin Garrix", ReleaseDate: text("2026-01-01"),
 	}
 
 	song, err := q.InsertRelease(ctx, params)
@@ -237,13 +238,13 @@ func TestBeatportID_IsUniqueButNullable(t *testing.T) {
 
 	first := insertBeatportSong(t, q, db.InsertBeatportSongParams{
 		Name: testSongName(t, "First"), Artists: "Martin Garrix",
-		ReleaseDate: "2026-01-01", BeatportID: int4(bpID),
+		ReleaseDate: text("2026-01-01"), BeatportID: int4(bpID),
 	})
 	_ = first
 
 	_, err := q.InsertBeatportSong(ctx, db.InsertBeatportSongParams{
 		Name: testSongName(t, "Second"), Artists: "Martin Garrix",
-		ReleaseDate: "2026-01-02", BeatportID: int4(bpID),
+		ReleaseDate: text("2026-01-02"), BeatportID: int4(bpID),
 	})
 	if err == nil {
 		t.Fatal("two songs were allowed to share a beatport id")
@@ -257,7 +258,7 @@ func TestBeatportID_IsUniqueButNullable(t *testing.T) {
 		song, err := q.InsertRelease(ctx, db.InsertReleaseParams{
 			Name:        testSongName(t, fmt.Sprintf("No Beatport ID %d", i)),
 			Artists:     "STMPD",
-			ReleaseDate: "2026-01-01",
+			ReleaseDate: text("2026-01-01"),
 		})
 		if err != nil {
 			t.Fatalf("a song with no beatport id was rejected: %v", err)
@@ -279,7 +280,7 @@ func TestGetAllSongsForMatching_ReturnsTheDedupeColumns(t *testing.T) {
 
 	inserted := insertBeatportSong(t, q, db.InsertBeatportSongParams{
 		Name: name, Artists: "Martin Garrix",
-		ReleaseDate: "2026-01-01", BeatportID: int4(bpID),
+		ReleaseDate: text("2026-01-01"), BeatportID: int4(bpID),
 	})
 
 	rows, err := q.GetAllSongsForMatching(ctx)
@@ -318,7 +319,7 @@ func TestUpdateSongWithBeatportData(t *testing.T) {
 
 	name := testSongName(t, "To Enrich")
 	song, err := q.InsertRelease(ctx, db.InsertReleaseParams{
-		Name: name, Artists: "Martin Garrix", ReleaseDate: "2026-01-01",
+		Name: name, Artists: "Martin Garrix", ReleaseDate: text("2026-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("InsertRelease failed: %v", err)
@@ -326,15 +327,23 @@ func TestUpdateSongWithBeatportData(t *testing.T) {
 	t.Cleanup(func() { deleteSong(t, song.ID) })
 
 	bpID := beatportID()
-	if err := q.UpdateSongWithBeatportData(ctx, db.UpdateSongWithBeatportDataParams{
+	// :execrows now, so a cycle that changes nothing reports zero rows instead of
+	// rewriting the same rows forever. The count is part of the contract.
+	rows, err := q.UpdateSongWithBeatportData(ctx, db.UpdateSongWithBeatportDataParams{
 		ID:         song.ID,
+		Name:       name,
+		Artists:    "Martin Garrix",
 		BeatportID: int4(bpID),
 		MixName:    text("Extended Mix"),
 		Genre:      text("Big Room"),
 		Bpm:        int4(128),
 		LengthMs:   int4(303000),
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("UpdateSongWithBeatportData failed: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("UpdateSongWithBeatportData wrote %d rows, want 1", rows)
 	}
 
 	got, err := q.GetSongByID(ctx, song.ID)
@@ -362,7 +371,7 @@ func TestMarkBeatportUpdated(t *testing.T) {
 
 	song := insertBeatportSong(t, q, db.InsertBeatportSongParams{
 		Name: testSongName(t, "To Mark"), Artists: "Martin Garrix",
-		ReleaseDate: "2026-01-01", BeatportID: int4(beatportID()),
+		ReleaseDate: text("2026-01-01"), BeatportID: int4(beatportID()),
 	})
 
 	if err := q.MarkBeatportUpdated(ctx, song.ID); err != nil {
@@ -386,16 +395,21 @@ func TestUpdateSongWithStmpdLinks(t *testing.T) {
 
 	song := insertBeatportSong(t, q, db.InsertBeatportSongParams{
 		Name: testSongName(t, "To Link"), Artists: "Martin Garrix",
-		ReleaseDate: "2026-01-01", BeatportID: int4(beatportID()),
+		ReleaseDate: text("2026-01-01"), BeatportID: int4(beatportID()),
 	})
 
-	if err := q.UpdateSongWithStmpdLinks(ctx, db.UpdateSongWithStmpdLinksParams{
+	// :execrows, so a no-op cycle reports zero rows rather than claiming a write.
+	linked, err := q.UpdateSongWithStmpdLinks(ctx, db.UpdateSongWithStmpdLinksParams{
 		ID:            song.ID,
 		SpotifyUrl:    text("https://open.spotify.com/track/x"),
 		AppleMusicUrl: text("https://music.apple.com/x"),
 		YoutubeUrl:    text("https://youtu.be/x"),
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("UpdateSongWithStmpdLinks failed: %v", err)
+	}
+	if linked != 1 {
+		t.Fatalf("UpdateSongWithStmpdLinks wrote %d rows, want 1", linked)
 	}
 
 	got, err := q.GetSongByID(ctx, song.ID)
@@ -419,7 +433,7 @@ func TestGetSongsLike(t *testing.T) {
 
 	name := testSongName(t, "Searchable Anthem")
 	song, err := q.InsertRelease(ctx, db.InsertReleaseParams{
-		Name: name, Artists: "Findable Artist", ReleaseDate: "2026-01-01",
+		Name: name, Artists: "Findable Artist", ReleaseDate: text("2026-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("InsertRelease failed: %v", err)
@@ -466,7 +480,7 @@ func TestGetSongsLike_MemberInputIsNotEscaped(t *testing.T) {
 
 	name := testSongName(t, "Escaping Probe")
 	song, err := q.InsertRelease(ctx, db.InsertReleaseParams{
-		Name: name, Artists: "Escaping Artist", ReleaseDate: "2026-01-01",
+		Name: name, Artists: "Escaping Artist", ReleaseDate: text("2026-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("InsertRelease failed: %v", err)
@@ -515,7 +529,7 @@ func TestGetRandomSongForRadio_ExcludesLongTracks(t *testing.T) {
 
 	long := insertBeatportSong(t, q, db.InsertBeatportSongParams{
 		Name: testSongName(t, "Very Long Mix"), Artists: "Martin Garrix",
-		ReleaseDate: "2026-01-01", BeatportID: int4(beatportID()),
+		ReleaseDate: text("2026-01-01"), BeatportID: int4(beatportID()),
 		LengthMs: int4(3_600_000), // an hour
 	})
 
@@ -523,7 +537,7 @@ func TestGetRandomSongForRadio_ExcludesLongTracks(t *testing.T) {
 	// this would pass vacuously on an empty catalogue.
 	short := insertBeatportSong(t, q, db.InsertBeatportSongParams{
 		Name: testSongName(t, "Radio Edit"), Artists: "Martin Garrix",
-		ReleaseDate: "2026-01-01", BeatportID: int4(beatportID()),
+		ReleaseDate: text("2026-01-01"), BeatportID: int4(beatportID()),
 		LengthMs: int4(180_000), // three minutes
 	})
 
@@ -548,9 +562,14 @@ func TestGetRandomSongForRadio_ExcludesLongTracks(t *testing.T) {
 	}
 }
 
-// The autocomplete handlers marshal this into a choice value, and Discord caps
-// an option value at 100 characters.
-func TestSongKey_FitsDiscordsOptionValueLimit(t *testing.T) {
+// Discord caps an option value at 100 characters, and the autocomplete handlers
+// put the song id there.
+//
+// They used to marshal {name, artists, release_date} instead, which a long title
+// pushed past the cap: selecting such a song failed the whole interaction with
+// 50035 Invalid Form Body. The id is bounded by the column width, so the longest
+// title in the catalogue cannot reproduce that.
+func TestSongChoiceValue_FitsDiscordsOptionValueLimit(t *testing.T) {
 	t.Parallel()
 
 	q := queries(t)
@@ -560,24 +579,24 @@ func TestSongKey_FitsDiscordsOptionValueLimit(t *testing.T) {
 	song, err := q.InsertRelease(ctx, db.InsertReleaseParams{
 		Name:        name,
 		Artists:     "An Artist With A Rather Long Name, And A Collaborator",
-		ReleaseDate: "2026-01-01",
+		ReleaseDate: text("2026-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("InsertRelease failed: %v", err)
 	}
 	t.Cleanup(func() { deleteSong(t, song.ID) })
 
-	// This mirrors utils.UniqueSong, which links.go and lyrics.go serialise
-	// into the choice value.
-	key := fmt.Sprintf(`{"name":%q,"artists":%q,"release_date":%q}`,
-		song.Name, song.Artists, song.ReleaseDate)
-
-	if len(key) <= 100 {
-		t.Skip("this title is not long enough to exceed the limit")
+	value := strconv.FormatInt(song.ID, 10)
+	if len(value) > 100 {
+		t.Errorf("choice value for song %d is %d characters, over Discord's limit of 100",
+			song.ID, len(value))
 	}
 
-	t.Logf("BUG: the autocomplete choice value for song %d is %d characters, "+
-		"over Discord's 100 character limit, so selecting it fails the whole "+
-		"interaction with 50035 Invalid Form Body. The song id would fit.",
-		song.ID, len(key))
+	// The old shape, kept here to show what the id replaced: on this row it is
+	// already over the cap.
+	legacy := fmt.Sprintf(`{"name":%q,"artists":%q,"release_date":%q}`,
+		song.Name, song.Artists, song.ReleaseDate.String)
+	if len(legacy) <= 100 {
+		t.Skip("this title is no longer long enough to have tripped the old limit")
+	}
 }

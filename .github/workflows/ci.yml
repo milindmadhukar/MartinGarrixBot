@@ -17,8 +17,12 @@ jobs:
     name: Build, vet and test
     runs-on: ubuntu-latest
     steps:
+      # Full history: the formatting step below diffs against the base commit,
+      # and the default shallow clone has no parent to diff against.
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # go.mod is the single source of truth for the Go version, matching the
       # Dockerfile's golang:1.25-alpine. check-latest picks up the newest patch
@@ -45,9 +49,10 @@ jobs:
       - name: Formatting (changed files only)
         run: |
           base="${{ github.event.pull_request.base.sha }}"
-          [ -n "$base" ] || base="$(git rev-parse HEAD~1 2>/dev/null || true)"
+          [ -n "$base" ] || base="$(git rev-parse --verify -q HEAD~1 || true)"
           [ -n "$base" ] || exit 0
-          changed="$(git diff --name-only --diff-filter=d "$base"...HEAD -- '*.go')"
+          git merge-base --is-ancestor "$base" HEAD 2>/dev/null || exit 0
+          changed="$(git diff --name-only --diff-filter=d "$base" HEAD -- '*.go')"
           [ -n "$changed" ] || exit 0
           unformatted="$(gofmt -l $changed)"
           if [ -n "$unformatted" ]; then
