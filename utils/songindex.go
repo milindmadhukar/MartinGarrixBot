@@ -161,6 +161,29 @@ func (ix *SongIndex) ClaimBeatport(row *db.GetAllSongsForMatchingRow, id pgtype.
 	}
 }
 
+// HasBetterRendition reports whether some other row for this song agrees with the
+// query's rendition and is available to take it -- either unclaimed, or itself
+// mis-assigned and about to be freed.
+func (ix *SongIndex) HasBetterRendition(q SongQuery, freeable map[int64]bool) bool {
+	base, _ := SplitVariant(q.Title, q.Version, q.MixName)
+	key := ArtistSetKey(q.Artists) + "|" + base
+
+	for _, i := range ix.byBaseKey[key] {
+		row := ix.rows[i]
+		claimed := row.StmpdSlug.Valid && row.StmpdSlug.String != "" && row.StmpdSlug.String != q.StmpdSlug
+		if claimed && !freeable[row.ID] {
+			continue
+		}
+		if row.StmpdSlug.Valid && row.StmpdSlug.String == q.StmpdSlug {
+			continue // the row it is already on
+		}
+		if agree, _ := variantsOf(q, row); agree {
+			return true
+		}
+	}
+	return false
+}
+
 // Detach removes a row's claim to an STMPD release.
 //
 // Both the row's own field and the bySlug map have to be updated. Clearing only the
@@ -213,9 +236,15 @@ func (ix *SongIndex) Lookup(q SongQuery) (*db.GetAllSongsForMatchingRow, MatchTi
 			return &ix.rows[i], MatchBeatportRelease
 		}
 	}
+	// A shared streaming URL is strong evidence of identity, but not of *which
+	// rendition*: links get copied onto whichever row a release was matched to, so
+	// two rows can carry the same Spotify URL. Requiring the renditions to agree
+	// here keeps this tier from re-claiming a row that a stricter tier just rejected.
 	if key := StreamingURLKey(q.SpotifyURL); key != "" {
 		if i, ok := ix.byStreamingURL[key]; ok {
-			return &ix.rows[i], MatchStreamingURL
+			if agree, _ := variantsOf(q, ix.rows[i]); agree {
+				return &ix.rows[i], MatchStreamingURL
+			}
 		}
 	}
 
@@ -363,6 +392,13 @@ func (ix *SongIndex) claimedByAnother(i int, q SongQuery) bool {
 	}
 
 	return false
+}
+
+// variantsOf reports whether a query and a candidate row describe the same rendition.
+func variantsOf(q SongQuery, row db.GetAllSongsForMatchingRow) (bool, string) {
+	_, qv := SplitVariant(q.Title, q.Version, q.MixName)
+	_, rv := SplitVariant(row.Name, "", row.MixName.String)
+	return RenditionsAgree(qv, rv), rv
 }
 
 func storedVariant(r db.GetAllSongsForMatchingRow) string {

@@ -40,6 +40,7 @@ type counters struct {
 	inserted      int
 	merged        int
 	dateCorrected int
+	reassigned    int
 	failed        int
 	conflated     []conflict
 }
@@ -82,6 +83,8 @@ func main() {
 	slog.Info("Fetched STMPD catalogue", slog.Int("releases", len(releases)))
 
 	c := counters{byTier: map[utils.MatchTier]int{}}
+	c.reassigned = releaseMisassignedSlugs(ctx, env, index, releases)
+
 	prog := script.NewProgress("reconcile catalogue", len(releases))
 	for _, release := range releases {
 		processRelease(ctx, env, index, release, &c)
@@ -102,6 +105,7 @@ func main() {
 		slog.Int("inserted", c.inserted),
 		slog.Int("merged_duplicates", c.merged),
 		slog.Int("dates_corrected", c.dateCorrected),
+		slog.Int("slugs_reassigned", c.reassigned),
 		slog.Int("conflated_rows", len(c.conflated)),
 		slog.Int("failed", c.failed))
 
@@ -139,16 +143,16 @@ func processRelease(ctx context.Context, env *script.Env, index *utils.SongIndex
 
 	matched, tier := index.Lookup(release.Query())
 
-	// A row whose slug belongs to a release with a different rendition is conflated:
-	// it carries beatport's metadata for one version and STMPD's links for another.
-	// Reclaiming the slug does not undo that -- the shared streaming URL re-identifies
-	// the row immediately -- and untangling it means deciding which half of the row is
-	// wrong, which is a judgement call. Report, do not guess.
+	// Anything still mis-assigned here had nowhere better to go: the database holds
+	// one row for the song and it happens to be a named rendition, while the
+	// catalogue's release is the plain one. Moving the slug would mean inventing a
+	// row carrying nothing but STMPD's links and stripping the only real row of them.
+	// That is a gap in the catalogue, not an error. Report it.
 	if matched != nil && tier == utils.MatchStmpdSlug &&
 		!utils.RenditionsAgree(releaseVariant(release), rowVariant(*matched)) {
 		c.conflated = append(c.conflated, conflict{
 			Release: release.Name(), Version: orNone(release.Version),
-			SongID: matched.ID, Row: matched.Name, RowMix: orNone(matched.MixName.String),
+			SongID: matched.ID, Row: matched.Name, RowMix: orNone(rowVariant(*matched)),
 		})
 	}
 
@@ -390,4 +394,66 @@ func writeConflicts(path string, rows []conflict) {
 		_ = w.Write([]string{strconv.FormatInt(r.SongID, 10), r.Row, r.RowMix, r.Release, r.Version})
 	}
 	slog.Info("Wrote conflated-rows report", slog.String("path", path), slog.Int("rows", len(rows)))
+}
+
+// releaseMisassignedSlugs frees slugs sitting on rows that record a different
+// rendition, but only where the release has somewhere better to go.
+//
+// This runs before the main pass because a mis-assignment is often a straight swap:
+// the plain release holds the acoustic row's slug while the acoustic release holds the
+// plain row's. Neither can move while the other is in the way, so both are released
+// first and the main pass then puts each where it belongs.
+//
+// The "somewhere better" test is what stops this from inventing rows. A release whose
+// only candidate is the row it is already on -- the common case, where the database
+// simply has no plain version of the song -- keeps it.
+func releaseMisassignedSlugs(ctx context.Context, env *script.Env, index *utils.SongIndex, releases []utils.SanityRelease) int {
+	bySlug := map[string]*db.GetAllSongsForMatchingRow{}
+	misassigned := map[int64]bool{}
+
+	for _, rel := range releases {
+		row, tier := index.Lookup(rel.Query())
+		if row == nil || tier != utils.MatchStmpdSlug {
+			continue
+		}
+		if utils.RenditionsAgree(releaseVariant(rel), rowVariant(*row)) {
+			continue
+		}
+		bySlug[rel.Slug] = row
+		misassigned[row.ID] = true
+	}
+	if len(misassigned) == 0 {
+		return 0
+	}
+
+	freed := 0
+	for _, rel := range releases {
+		row, ok := bySlug[rel.Slug]
+		if !ok {
+			continue
+		}
+
+		// A candidate is any row for this song that agrees on the rendition and is
+		// either unclaimed or itself mis-assigned and about to be freed.
+		if !index.HasBetterRendition(rel.Query(), misassigned) {
+			continue
+		}
+
+		slog.Info("freeing a mis-assigned slug so the release can find its own row",
+			slog.String("release", rel.Name()),
+			slog.String("release_rendition", orNone(releaseVariant(rel))),
+			slog.Int64("was_on", row.ID), slog.String("row", row.Name),
+			slog.String("row_rendition", orNone(rowVariant(*row))))
+
+		if !env.DryRun {
+			if _, err := env.Queries.ClearStmpdSlug(ctx, row.ID); err != nil {
+				slog.Error("failed to free the slug", slog.Int64("song_id", row.ID), slog.Any("err", err))
+				continue
+			}
+		}
+		index.Detach(row)
+		freed++
+	}
+
+	return freed
 }
