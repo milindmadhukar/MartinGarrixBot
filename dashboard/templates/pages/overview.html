@@ -1,0 +1,273 @@
+{{define "page"}}
+<div class="flex flex-wrap items-baseline justify-between gap-3">
+  <h1 class="text-xl font-semibold text-white">Overview</h1>
+  <nav class="flex gap-1 text-sm">
+    {{$g := .GuildID}}{{$w := .Data.WindowDays}}
+    <a href="/g/{{$g}}?days=7"   class="rounded px-2 py-1 {{if eq $w 7}}bg-slate-800 text-white{{else}}text-slate-400 hover:text-slate-200{{end}}">7d</a>
+    <a href="/g/{{$g}}?days=30"  class="rounded px-2 py-1 {{if eq $w 30}}bg-slate-800 text-white{{else}}text-slate-400 hover:text-slate-200{{end}}">30d</a>
+    <a href="/g/{{$g}}?days=90"  class="rounded px-2 py-1 {{if eq $w 90}}bg-slate-800 text-white{{else}}text-slate-400 hover:text-slate-200{{end}}">90d</a>
+    <a href="/g/{{$g}}?days=365" class="rounded px-2 py-1 {{if eq $w 365}}bg-slate-800 text-white{{else}}text-slate-400 hover:text-slate-200{{end}}">1y</a>
+  </nav>
+</div>
+
+{{/* Every panel is its own request, loaded on page load. One slow aggregate
+     costs one card rather than the whole page, and the request log gets
+     per-panel timings for free. */}}
+<div class="mt-5 space-y-4">
+  {{range .Data.Panels}}
+    <div hx-get="/g/{{$.GuildID}}/panels/{{.}}?days={{$.Data.WindowDays}}"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+      <div class="h-28 animate-pulse rounded-lg border border-slate-800 bg-slate-900/30"></div>
+    </div>
+  {{end}}
+</div>
+{{end}}
+
+{{/* ---- panels ---------------------------------------------------------- */}}
+
+{{define "panel-summary"}}
+{{if .Data.Error}}{{template "panelError" .Data.Error}}{{else}}
+<div class="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-6">
+  {{if .Data.MemberCount}}
+    {{template "stat" dict "Label" "Members now" "Value" (comma .Data.MemberCount)}}
+  {{end}}
+  {{template "stat" dict "Label" "Tracked members" "Value" (comma .Data.Summary.TrackedUsers)}}
+  {{template "stat" dict "Label" (printf "Messages / %dd" .Data.WindowDays) "Value" (comma .Data.Summary.MessagesWindow)}}
+  {{template "stat" dict "Label" "Messages all time" "Value" (comma .Data.Summary.MessagesCounted)}}
+  {{template "stat" dict "Label" (printf "Mod actions / %dd" .Data.WindowDays) "Value" (comma .Data.Summary.ModlogsWindow)}}
+  {{template "stat" dict "Label" "Coins in circulation" "Value" (comma .Data.Summary.CoinsInCirculation)}}
+</div>
+{{end}}
+{{end}}
+
+{{define "stat"}}
+<div class="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-3">
+  <div class="text-xs text-slate-500">{{.Label}}</div>
+  <div class="mt-1 text-lg font-semibold text-slate-100 sm:text-xl">{{.Value}}</div>
+</div>
+{{end}}
+
+{{define "panel-growth"}}
+<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
+  <div class="flex items-baseline justify-between">
+    <h2 class="text-sm font-medium text-slate-300">Member growth</h2>
+    {{if .Data.Totals}}
+      <span class="text-xs text-slate-500">
+        <span class="text-emerald-400">+{{comma .Data.Totals.Joins}}</span> /
+        <span class="text-red-400">-{{comma .Data.Totals.Leaves}}</span> ·
+        net <span class="{{if lt .Data.Net 0}}text-red-400{{else}}text-emerald-400{{end}}">{{comma .Data.Net}}</span>
+      </span>
+    {{end}}
+  </div>
+
+  {{if .Data.Error}}{{template "panelError" .Data.Error}}
+  {{else if .Data.Series}}
+    {{/* A column chart in CSS. Days with no events are present as zero rows
+         from the query's generate_series join, so a quiet stretch shows as
+         gaps rather than being interpolated away. */}}
+    <div class="mt-4 flex h-24 items-end gap-px sm:h-32">
+      {{$max := .Data.Max}}
+      {{range .Data.Series}}
+        <div class="group relative flex h-full flex-1 flex-col justify-end gap-px"
+             title="{{fmtDate .Day}} · +{{.Joins}} / -{{.Leaves}}">
+          <div class="w-full rounded-t-sm bg-emerald-500/70" style="height: {{pct .Joins $max}}%"></div>
+          <div class="w-full rounded-b-sm bg-red-500/60" style="height: {{pct .Leaves $max}}%"></div>
+        </div>
+      {{end}}
+    </div>
+    <div class="mt-2 flex justify-between text-xs text-slate-600">
+      <span>{{with index .Data.Series 0}}{{fmtDate .Day}}{{end}}</span>
+      <span>{{with index .Data.Series (sub (len .Data.Series) 1)}}{{fmtDate .Day}}{{end}}</span>
+    </div>
+  {{else}}
+    {{template "empty" "No join or leave events in this period."}}
+  {{end}}
+</section>
+{{end}}
+
+{{define "panel-messages"}}
+<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
+  <h2 class="text-sm font-medium text-slate-300">Message activity</h2>
+  {{if .Data.Error}}{{template "panelError" .Data.Error}}
+  {{else if .Data.Series}}
+    <div class="mt-4 flex h-24 items-end gap-px sm:h-32">
+      {{$max := .Data.Max}}
+      {{range .Data.Series}}
+        <div class="flex-1 rounded-t-sm bg-indigo-500/70"
+             style="height: {{pct .Messages $max}}%"
+             title="{{fmtDate .Day}} · {{comma .Messages}} messages from {{comma .ActiveAuthors}} members"></div>
+      {{end}}
+    </div>
+    <div class="mt-2 flex justify-between text-xs text-slate-600">
+      <span>{{with index .Data.Series 0}}{{fmtDate .Day}}{{end}}</span>
+      <span>peak {{comma .Data.Max}}/day</span>
+      <span>{{with index .Data.Series (sub (len .Data.Series) 1)}}{{fmtDate .Day}}{{end}}</span>
+    </div>
+  {{else}}
+    {{template "empty" "No messages recorded in this period."}}
+  {{end}}
+</section>
+{{end}}
+
+{{define "panel-heatmap"}}
+<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
+  <h2 class="text-sm font-medium text-slate-300">When the server is busy</h2>
+  {{if .Data.Error}}{{template "panelError" .Data.Error}}
+  {{else if .Data.Peak}}
+    <div class="mt-4 overflow-x-auto">
+      <div class="min-w-[34rem] space-y-px">
+      {{range $dow, $row := .Data.Grid}}
+        <div class="flex items-center gap-1">
+          <span class="w-8 shrink-0 text-right text-xs text-slate-600">
+            {{index (list "Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat") $dow}}
+          </span>
+          {{range $row}}
+            <span class="h-3.5 flex-1 rounded-sm bg-indigo-400"
+                  style="opacity: {{if .Intensity}}{{.Intensity}}{{else}}4{{end}}%"
+                  title="{{.Hour}}:00 · {{comma .Messages}} messages"></span>
+          {{end}}
+        </div>
+      {{end}}
+        <div class="flex items-center gap-1 pt-1">
+          <span class="w-8 shrink-0"></span>
+          {{range $h := seq 24}}
+            <span class="flex-1 text-center text-[10px] text-slate-700">{{if eq (mod $h 6) 0}}{{$h}}{{end}}</span>
+          {{end}}
+        </div>
+      </div>
+    </div>
+    <p class="mt-2 text-xs text-slate-600">Local time ({{.Data.Peak}} messages in the busiest hour).</p>
+  {{else}}
+    {{template "empty" "Not enough message history to build a heatmap."}}
+  {{end}}
+</section>
+{{end}}
+
+{{define "panel-channels"}}
+<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
+  <h2 class="text-sm font-medium text-slate-300">Busiest channels</h2>
+  {{if .Data.Error}}{{template "panelError" .Data.Error}}
+  {{else if .Data.Channels}}
+    <ul class="mt-3 space-y-2">
+      {{$top := (index .Data.Channels 0).Messages}}
+      {{range .Data.Channels}}
+        <li>
+          <div class="flex justify-between text-sm">
+            <span class="text-slate-300">{{.Name}}</span>
+            <span class="text-slate-500">{{comma .Messages}}</span>
+          </div>
+          {{template "bar" dict "Pct" (pct .Messages $top) "Color" "bg-indigo-500/70"}}
+        </li>
+      {{end}}
+    </ul>
+  {{else}}
+    {{template "empty" "No channel activity in this period."}}
+  {{end}}
+</section>
+{{end}}
+
+{{define "panel-members"}}
+<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
+  <div class="flex items-baseline justify-between">
+    <h2 class="text-sm font-medium text-slate-300">Top members</h2>
+    <nav class="flex gap-1 text-xs">
+      {{$g := .GuildID}}{{$w := .Data.WindowDays}}{{$s := .Data.Sort}}
+      {{range $tab := list (dict "Key" "xp" "Label" "XP") (dict "Key" "coins" "Label" "Coins") (dict "Key" "messages" "Label" "Messages")}}
+        <a hx-get="/g/{{$g}}/panels/members?days={{$w}}&amp;sort={{$tab.Key}}"
+           hx-target="closest section" hx-swap="outerHTML"
+           href="/g/{{$g}}?days={{$w}}"
+           class="cursor-pointer rounded px-2 py-0.5 {{if eq $s $tab.Key}}bg-slate-800 text-white{{else}}text-slate-400 hover:text-slate-200{{end}}">{{$tab.Label}}</a>
+      {{end}}
+    </nav>
+  </div>
+
+  {{if .Data.Error}}{{template "panelError" .Data.Error}}
+  {{else if .Data.Members}}
+    <ol class="mt-3 space-y-1.5">
+      {{range $i, $m := .Data.Members}}
+        <li class="flex items-center gap-3 text-sm">
+          <span class="w-5 text-right text-xs text-slate-600">{{add $i 1}}</span>
+          <img src="{{$m.Avatar}}" alt="" class="h-6 w-6 rounded-full">
+          <span class="min-w-0 flex-1 truncate text-slate-300">{{$m.Name}}</span>
+          <span class="text-slate-500">
+            {{if eq $.Data.Sort "coins"}}{{comma $m.NetWorth}} coins
+            {{else if eq $.Data.Sort "messages"}}{{comma $m.MessagesSent}} msgs
+            {{else}}{{comma $m.TotalXp}} XP{{end}}
+          </span>
+        </li>
+      {{end}}
+    </ol>
+  {{else}}
+    {{template "empty" "No members tracked in this server yet."}}
+  {{end}}
+</section>
+{{end}}
+
+{{define "panel-moderation"}}
+<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
+  <h2 class="text-sm font-medium text-slate-300">Moderation</h2>
+  {{if .Data.Error}}{{template "panelError" .Data.Error}}
+  {{else if .Data.ByType}}
+    <div class="mt-3 grid gap-6 lg:grid-cols-2">
+      <div>
+        <h3 class="text-xs uppercase tracking-wide text-slate-600">By action</h3>
+        <ul class="mt-2 space-y-2">
+          {{$max := .Data.MaxType}}
+          {{range .Data.ByType}}
+            <li>
+              <div class="flex justify-between text-sm">
+                <span>{{template "logTypeBadge" .LogType}}</span>
+                <span class="text-slate-500">{{comma .Count}}</span>
+              </div>
+              {{template "bar" dict "Pct" (pct .Count $max) "Color" "bg-amber-500/70"}}
+            </li>
+          {{end}}
+        </ul>
+      </div>
+
+      <div>
+        <h3 class="text-xs uppercase tracking-wide text-slate-600">Most active moderators</h3>
+        {{if .Data.Moderators}}
+          <ul class="mt-2 space-y-1.5">
+            {{range .Data.Moderators}}
+              <li class="flex items-center gap-3 text-sm">
+                <img src="{{.Avatar}}" alt="" class="h-6 w-6 rounded-full">
+                <span class="min-w-0 flex-1 truncate text-slate-300">{{.Name}}</span>
+                <span class="shrink-0 whitespace-nowrap text-xs text-slate-500">
+                  {{comma .Actions}} · {{comma .Bans}}b {{comma .Mutes}}m {{comma .Kicks}}k
+                </span>
+              </li>
+            {{end}}
+          </ul>
+        {{else}}
+          <p class="mt-2 text-sm text-slate-600">No moderator activity in this period.</p>
+        {{end}}
+      </div>
+    </div>
+  {{else}}
+    {{template "empty" "No moderation actions in this period."}}
+  {{end}}
+</section>
+{{end}}
+
+{{define "panel-punishments"}}
+<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
+  <h2 class="text-sm font-medium text-slate-300">Active punishments</h2>
+  {{if .Data.Error}}{{template "panelError" .Data.Error}}
+  {{else if .Data.Punishments}}
+    <ul class="mt-3 divide-y divide-slate-800">
+      {{range .Data.Punishments}}
+        <li class="flex items-center gap-3 py-2 text-sm">
+          {{template "logTypeBadge" .LogType}}
+          <img src="{{.UserAvatar}}" alt="" class="h-6 w-6 rounded-full">
+          <span class="min-w-0 flex-1 truncate text-slate-300">{{.UserName}}</span>
+          <span class="shrink-0 whitespace-nowrap text-xs text-slate-500">{{fmtTime .ExpiresAt}}</span>
+        </li>
+      {{end}}
+    </ul>
+  {{else}}
+    {{template "empty" "Nobody is currently serving a temporary punishment."}}
+  {{end}}
+</section>
+{{end}}

@@ -1,0 +1,43 @@
+package dashboard
+
+import (
+	"os"
+	"testing"
+	"time"
+
+	"github.com/disgoorg/snowflake/v2"
+	"github.com/milindmadhukar/MartinGarrixBot/dashboard/session"
+)
+
+// TestMintSmokeCookie is a manual helper, not a real test: it prints a signed
+// session cookie so the authenticated pages can be exercised with curl against
+// a local instance. It is skipped unless MGB_MINT_COOKIE is set.
+//
+//	MGB_MINT_COOKIE=1 MGB_MINT_SECRET=... MGB_MINT_GUILD=... go test ./dashboard -run MintSmokeCookie -v
+func TestMintSmokeCookie(t *testing.T) {
+	if os.Getenv("MGB_MINT_COOKIE") == "" {
+		t.Skip("set MGB_MINT_COOKIE to mint a development session cookie")
+	}
+
+	secret := os.Getenv("MGB_MINT_SECRET")
+	if secret == "" {
+		t.Fatal("MGB_MINT_SECRET is required")
+	}
+	guild, err := snowflake.Parse(os.Getenv("MGB_MINT_GUILD"))
+	if err != nil {
+		t.Fatalf("MGB_MINT_GUILD: %v", err)
+	}
+
+	c := session.NewCodec(secret, time.Hour, false)
+	s, err := c.New(1001, "smoke", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Eligible = []snowflake.ID{guild}
+
+	value, err := c.Encode(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("COOKIE=%s", value)
+}

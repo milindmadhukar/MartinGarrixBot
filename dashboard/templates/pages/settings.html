@@ -1,0 +1,59 @@
+{{define "page"}}
+<div class="flex items-baseline justify-between">
+  <h1 class="text-xl font-semibold text-white">Settings</h1>
+  {{if .Data.ReadOnly}}
+    <span class="rounded border border-slate-700 px-2 py-0.5 text-xs text-slate-400">Read only</span>
+  {{end}}
+</div>
+
+{{if .Data.ReadOnly}}
+  <p class="mt-1 text-sm text-slate-500">
+    This shows what the bot is currently configured to do. Editing from the
+    dashboard is not enabled yet — for now, use <code class="text-slate-400">/config</code> in Discord.
+  </p>
+{{end}}
+
+<div class="mt-6 space-y-6">
+  {{range .Data.Groups}}
+    <section class="rounded-lg border border-slate-800 bg-slate-900/40">
+      <h2 class="border-b border-slate-800 px-4 py-2.5 text-sm font-medium text-slate-300">{{.Title}}</h2>
+      <dl class="divide-y divide-slate-800">
+        {{range .Settings}}
+          <div class="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-4">
+            <dt class="sm:w-56 sm:shrink-0">
+              <span class="block text-sm text-slate-200">{{.Label}}</span>
+              <span class="block text-xs text-slate-500">{{.Help}}</span>
+            </dt>
+            <dd class="min-w-0 break-all text-sm">
+              {{if .Set}}
+                <span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-slate-200">{{.Name}}</span>
+                {{if not .Known}}
+                  {{/* Configured, but the bot cannot see it -- usually a deleted
+                       channel or role, which is worth flagging rather than
+                       showing a bare ID as if it were fine. */}}
+                  <span class="ml-2 text-xs text-amber-400">not found in this server</span>
+                {{end}}
+              {{else}}
+                <span class="text-slate-600">Not set</span>
+              {{end}}
+            </dd>
+          </div>
+        {{end}}
+      </dl>
+    </section>
+  {{end}}
+
+  <section class="rounded-lg border border-slate-800 bg-slate-900/40">
+    <h2 class="border-b border-slate-800 px-4 py-2.5 text-sm font-medium text-slate-300">Levelling</h2>
+    <div class="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-4">
+      <span class="sm:w-56 sm:shrink-0">
+        <span class="block text-sm text-slate-200">XP multiplier</span>
+        <span class="block text-xs text-slate-500">Stored, but not yet read by the bot.</span>
+      </span>
+      <span class="rounded bg-slate-800 px-2 py-0.5 font-mono text-sm text-slate-200">
+        {{printf "%.2f" .Data.XPMultiplier}}
+      </span>
+    </div>
+  </section>
+</div>
+{{end}}

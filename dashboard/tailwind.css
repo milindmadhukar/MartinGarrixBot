@@ -1,0 +1,13 @@
+/* Tailwind input. This file is NOT embedded in the binary -- `make tailwind`
+   compiles it into dashboard/static/app.css, which is committed and embedded.
+   That is what keeps Node out of the Docker image entirely. */
+@import "tailwindcss";
+
+@source "./templates/**/*.html";
+
+/* Tabular figures stop counts from jittering as htmx swaps a table body in. */
+@layer base {
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}

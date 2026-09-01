@@ -1,0 +1,88 @@
+{{define "layout.html"}}<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if .Title}}{{.Title}} · {{end}}Garrix Dashboard</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body class="h-full bg-slate-950 text-slate-200 antialiased"
+      {{if .CSRFToken}}hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'{{end}}>
+
+  <header class="border-b border-slate-800 bg-slate-900/60">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 sm:px-4">
+      <a href="/" class="flex shrink-0 items-center gap-2 font-semibold text-slate-100">
+        <span class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+        <span class="hidden sm:inline">Garrix Dashboard</span>
+        <span class="sm:hidden">Garrix</span>
+      </a>
+
+      {{if .GuildID}}
+        <span class="hidden text-slate-600 sm:inline">/</span>
+        <a href="/guilds?pick=1"
+           class="flex min-w-0 items-center gap-2 text-sm text-slate-300 hover:text-white">
+          {{if .GuildIcon}}
+            <img src="{{.GuildIcon}}" alt="" class="h-5 w-5 shrink-0 rounded-full">
+          {{end}}
+          <span class="truncate">{{.GuildName}}</span>
+          <span class="hidden shrink-0 text-xs text-slate-500 sm:inline">change</span>
+        </a>
+      {{end}}
+
+      <div class="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+        {{if .LoggedIn}}
+          <span class="hidden text-sm text-slate-400 md:inline">{{.Username}}</span>
+          <img src="{{.AvatarURL}}" alt="" class="h-7 w-7 rounded-full">
+          <form method="post" action="/logout">
+            <button class="rounded-md border border-slate-700 px-2.5 py-1 text-xs text-slate-300 hover:bg-slate-800">
+              Sign out
+            </button>
+          </form>
+        {{else}}
+          <a href="/login" class="rounded-md bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400">
+            Sign in<span class="hidden sm:inline"> with Discord</span>
+          </a>
+        {{end}}
+      </div>
+    </div>
+
+    {{if .GuildID}}
+      {{/* Scrolls sideways rather than wrapping on a phone: four tabs stacked
+           two-high pushes the content below the fold on a small screen. */}}
+      <nav class="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-3 sm:px-4
+                  [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden">
+        {{template "navlink" dict "Href" (printf "/g/%s" .GuildID) "Label" "Overview" "Active" (eq .Nav "overview")}}
+        {{template "navlink" dict "Href" (printf "/g/%s/modlogs" .GuildID) "Label" "Moderation" "Active" (eq .Nav "modlogs")}}
+        {{template "navlink" dict "Href" (printf "/g/%s/members" .GuildID) "Label" "Joins &amp; leaves" "Active" (eq .Nav "members")}}
+        {{template "navlink" dict "Href" (printf "/g/%s/settings" .GuildID) "Label" "Settings" "Active" (eq .Nav "settings")}}
+      </nav>
+    {{end}}
+  </header>
+
+  {{if .Degraded}}
+    <div class="border-b border-amber-900/60 bg-amber-950/40">
+      <div class="mx-auto max-w-7xl px-3 py-2 text-sm text-amber-200 sm:px-4">
+        The bot is not reachable right now, so channel, role and member names are
+        showing as raw IDs. Everything else on this page is live.
+      </div>
+    </div>
+  {{end}}
+
+  <main class="mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-6">
+    {{block "page" .}}{{end}}
+  </main>
+
+  <footer class="mx-auto max-w-7xl px-3 pb-8 pt-4 text-xs text-slate-600 sm:px-4">
+    Martin Garrix Bot
+  </footer>
+</body>
+</html>
+{{end}}
+
+{{define "navlink"}}
+<a href="{{.Href}}"
+   class="shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm {{if .Active}}border-indigo-400 text-white{{else}}border-transparent text-slate-400 hover:text-slate-200{{end}}">
+  {{.Label}}
+</a>
+{{end}}

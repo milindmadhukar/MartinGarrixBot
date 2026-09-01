@@ -1,0 +1,64 @@
+{{define "card"}}
+<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+  <h2 class="mb-3 text-sm font-medium text-slate-300">{{.Title}}</h2>
+  {{.Body}}
+</section>
+{{end}}
+
+{{/* pagination renders page links that preserve the current filters. */}}
+{{define "pagination"}}
+{{if gt .TotalPages 1}}
+<div class="mt-4 flex items-center justify-between text-sm">
+  <span class="text-slate-500">
+    Page {{.Page}} of {{.TotalPages}} · {{comma .Total}} rows
+  </span>
+  <div class="flex gap-2">
+    {{if .HasPrev}}
+      <a class="rounded border border-slate-700 px-2.5 py-1 text-slate-300 hover:bg-slate-800"
+         href="?page={{.PrevPage}}{{.Query}}">Previous</a>
+    {{else}}
+      <span class="rounded border border-slate-800 px-2.5 py-1 text-slate-600">Previous</span>
+    {{end}}
+    {{if .HasNext}}
+      <a class="rounded border border-slate-700 px-2.5 py-1 text-slate-300 hover:bg-slate-800"
+         href="?page={{.NextPage}}{{.Query}}">Next</a>
+    {{else}}
+      <span class="rounded border border-slate-800 px-2.5 py-1 text-slate-600">Next</span>
+    {{end}}
+  </div>
+</div>
+{{else}}
+<div class="mt-4 text-sm text-slate-500">{{comma .Total}} rows</div>
+{{end}}
+{{end}}
+
+{{define "empty"}}
+<div class="rounded-lg border border-dashed border-slate-800 px-4 py-10 text-center text-sm text-slate-500">
+  {{.}}
+</div>
+{{end}}
+
+{{/* logTypeBadge colours a modlog action so the table scans at a glance. */}}
+{{define "logTypeBadge"}}
+<span class="rounded px-1.5 py-0.5 text-xs font-medium
+  {{if or (eq . "ban") (eq . "tempban") (eq . "softback")}}bg-red-950 text-red-300
+  {{else if eq . "kick"}}bg-orange-950 text-orange-300
+  {{else if or (eq . "mute") (eq . "tempmute")}}bg-amber-950 text-amber-300
+  {{else if or (eq . "unban") (eq . "unmute")}}bg-emerald-950 text-emerald-300
+  {{else}}bg-slate-800 text-slate-300{{end}}">{{.}}</span>
+{{end}}
+
+{{/* bar is a horizontal proportion bar. Charts here are CSS, not a library:
+     the CSP forbids inline script, and every series on this dashboard is small
+     enough that a div with a width does the job. */}}
+{{define "bar"}}
+<div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+  <div class="h-full rounded-full {{.Color}}" style="width: {{.Pct}}%"></div>
+</div>
+{{end}}
+
+{{define "panelError"}}
+<div class="rounded border border-slate-800 bg-slate-900/40 px-4 py-6 text-center text-sm text-slate-500">
+  {{.}}
+</div>
+{{end}}
