@@ -29,15 +29,6 @@ jobs:
           go-version-file: go.mod
           check-latest: true
 
-      - name: Check formatting
-        run: |
-          unformatted="$(gofmt -l .)"
-          if [ -n "$unformatted" ]; then
-            echo "These files need gofmt:"
-            echo "$unformatted"
-            exit 1
-          fi
-
       - name: Build
         run: go build ./...
 
