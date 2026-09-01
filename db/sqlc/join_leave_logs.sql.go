@@ -25,31 +25,33 @@ func (q *Queries) GetLeaveJoinLogsChannel(ctx context.Context, guildID int64) (p
 }
 
 const logMemberJoin = `-- name: LogMemberJoin :exec
-INSERT INTO join_leave_logs (member_id, action, time)
-VALUES ($1, 'join', $2)
+INSERT INTO join_leave_logs (member_id, guild_id, action, time)
+VALUES ($1, $2, 'join', $3)
 `
 
 type LogMemberJoinParams struct {
 	MemberID int64            `json:"memberId"`
+	GuildID  int64            `json:"guildId"`
 	Time     pgtype.Timestamp `json:"time"`
 }
 
 func (q *Queries) LogMemberJoin(ctx context.Context, arg LogMemberJoinParams) error {
-	_, err := q.db.Exec(ctx, logMemberJoin, arg.MemberID, arg.Time)
+	_, err := q.db.Exec(ctx, logMemberJoin, arg.MemberID, arg.GuildID, arg.Time)
 	return err
 }
 
 const logMemberLeave = `-- name: LogMemberLeave :exec
-INSERT INTO join_leave_logs (member_id, action, time)
-VALUES ($1, 'leave', $2)
+INSERT INTO join_leave_logs (member_id, guild_id, action, time)
+VALUES ($1, $2, 'leave', $3)
 `
 
 type LogMemberLeaveParams struct {
 	MemberID int64            `json:"memberId"`
+	GuildID  int64            `json:"guildId"`
 	Time     pgtype.Timestamp `json:"time"`
 }
 
 func (q *Queries) LogMemberLeave(ctx context.Context, arg LogMemberLeaveParams) error {
-	_, err := q.db.Exec(ctx, logMemberLeave, arg.MemberID, arg.Time)
+	_, err := q.db.Exec(ctx, logMemberLeave, arg.MemberID, arg.GuildID, arg.Time)
 	return err
 }

@@ -23,6 +23,7 @@ func GuildMemberJoinListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 		now := time.Now().UTC()
 		err := b.Queries.LogMemberJoin(context.Background(), db.LogMemberJoinParams{
 			MemberID: int64(e.Member.User.ID),
+			GuildID:  int64(e.GuildID),
 			Time: pgtype.Timestamp{
 				Time:  now,
 				Valid: true,
@@ -95,6 +96,7 @@ func GuildMemberLeaveListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 		now := time.Now().UTC()
 		err := b.Queries.LogMemberLeave(context.Background(), db.LogMemberLeaveParams{
 			MemberID: int64(userID),
+			GuildID:  int64(e.GuildID),
 			Time: pgtype.Timestamp{
 				Time:  now,
 				Valid: true,

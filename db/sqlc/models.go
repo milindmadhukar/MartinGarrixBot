@@ -34,6 +34,8 @@ type JoinLeaveLog struct {
 	MemberID int64            `json:"memberId"`
 	Action   string           `json:"action"`
 	Time     pgtype.Timestamp `json:"time"`
+	ID       int64            `json:"id"`
+	GuildID  int64            `json:"guildId"`
 }
 
 type Message struct {
