@@ -31,19 +31,23 @@ type Config struct {
 }
 
 type BotConfig struct {
-	DevGuilds          []snowflake.ID `toml:"dev_guilds"`
-	Token              string         `toml:"token"`
-	YoutubeAPIKey      string         `toml:"youtube_api_key"`
-	GoogleServiceFile  string         `toml:"google_service_file"`
-	RedditClientID     string         `toml:"reddit_client_id"`
-	RedditClientSecret string         `toml:"reddit_client_secret"`
-	RedditBotUsername  string         `toml:"reddit_bot_username"`
-	RedditBotPassword  string         `toml:"reddit_bot_password"`
-	BeatportUsername   string         `toml:"beatport_username"`
-	BeatportPassword   string         `toml:"beatport_password"`
-	BeatportLabelID    string         `toml:"beatport_label_id"`
-	BeatportArtistIDs  []string       `toml:"beatport_artist_ids"`
-	BeatportMaxTracks  int            `toml:"beatport_max_tracks"`
+	DevGuilds []snowflake.ID `toml:"dev_guilds"`
+	Token     string         `toml:"token"`
+	// The tag has to match what the config files actually say. It read
+	// "youtube_api_key" while config.toml, config.example.toml and the deployed
+	// config.docker.toml all write "yt_api_key", so this field was empty in
+	// production and the YouTube service ran on the service-account file alone.
+	YoutubeAPIKey      string   `toml:"yt_api_key"`
+	GoogleServiceFile  string   `toml:"google_service_file"`
+	RedditClientID     string   `toml:"reddit_client_id"`
+	RedditClientSecret string   `toml:"reddit_client_secret"`
+	RedditBotUsername  string   `toml:"reddit_bot_username"`
+	RedditBotPassword  string   `toml:"reddit_bot_password"`
+	BeatportUsername   string   `toml:"beatport_username"`
+	BeatportPassword   string   `toml:"beatport_password"`
+	BeatportLabelID    string   `toml:"beatport_label_id"`
+	BeatportArtistIDs  []string `toml:"beatport_artist_ids"`
+	BeatportMaxTracks  int      `toml:"beatport_max_tracks"`
 }
 
 type LogConfig struct {

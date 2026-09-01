@@ -130,19 +130,8 @@ func ArtistSetKey(artists string) string {
 // into one normalized variant token, and an "original mix" is treated as no variant
 // at all so that it matches a source that simply omits it.
 func SplitVariant(title, version, mixName string) (base, variant string) {
-	base = stripFeature(title)
-	extra := ""
-
-	// A trailing parenthesised or bracketed group is a variant only if it actually
-	// names one -- "Angels For Each Other (feat. Arijit Singh)" must keep its
-	// credit out of the variant slot.
-	if open, close := lastGroup(base); open >= 0 {
-		inner := base[open+1 : close]
-		if isVariantPhrase(inner) {
-			extra = inner
-			base = strings.TrimSpace(base[:open])
-		}
-	}
+	work, extra := splitTrailingVariant(title)
+	base = stripFeature(work)
 
 	for _, candidate := range []string{version, mixName, extra} {
 		if v := NormalizeToken(candidate); v != "" && v != NormalizeToken("original mix") {
@@ -194,6 +183,27 @@ func stripFeature(title string) string {
 	return base
 }
 
+// splitTrailingVariant peels a rendition off the end of a title, returning the rest
+// and the rendition.
+//
+// This has to happen before the featured-artist clause is removed, not after. The
+// feature is stripped by cutting from "feat." to the end of the string, which
+// swallows anything following it: "X's feat. Icona Pop (Osrin Remix)" came back as
+// plain "X's" with no rendition at all, so the remix looked like the original and a
+// remix video was matched to the original's row.
+//
+// A trailing group counts as a rendition only if it names one. "Angels For Each Other
+// (feat. Arijit Singh)" must keep its credit out of the rendition slot.
+func splitTrailingVariant(title string) (rest, variant string) {
+	if open, close := lastGroup(title); open >= 0 {
+		inner := title[open+1 : close]
+		if isVariantPhrase(inner) {
+			return strings.TrimSpace(title[:open]), inner
+		}
+	}
+	return title, ""
+}
+
 // lastGroup returns the index range of the final (...) or [...] group in s.
 func lastGroup(s string) (open, close int) {
 	for _, pair := range [][2]byte{{'(', ')'}, {'[', ']'}} {
@@ -224,7 +234,11 @@ func isVariantPhrase(s string) bool {
 // creditKey renders the full set of artists on a recording, including any credited
 // only inside the title.
 func creditKey(title, artists string) string {
-	if _, featured := splitFeature(title); featured != "" {
+	// Peel the rendition off first. Otherwise the feature clause of "X's feat. Icona
+	// Pop (Osrin Remix)" reads as "Icona Pop (Osrin Remix)" and "osrinremix" is
+	// folded into the artist set as though it were a person.
+	work, _ := splitTrailingVariant(title)
+	if _, featured := splitFeature(work); featured != "" {
 		artists = artists + ", " + featured
 	}
 	return ArtistSetKey(artists)
@@ -315,7 +329,8 @@ func SameRecording(titleA, artistsA, titleB, artistsB string) bool {
 }
 
 func featureSuffix(title string) string {
-	if _, featured := splitFeature(title); featured != "" {
+	work, _ := splitTrailingVariant(title)
+	if _, featured := splitFeature(work); featured != "" {
 		return ", " + featured
 	}
 	return ""

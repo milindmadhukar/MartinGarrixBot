@@ -31,6 +31,20 @@ func (q *Queries) AdoptSongIdentifiers(ctx context.Context, arg AdoptSongIdentif
 	return err
 }
 
+const clearPlaylistSpotifyLinks = `-- name: ClearPlaylistSpotifyLinks :execrows
+UPDATE songs SET spotify_url = NULL WHERE spotify_url LIKE '%/playlist/%'
+`
+
+// Spotify playlist links cannot be resolved without the Spotify API, and pointing a
+// song's Spotify button at a playlist is worse than showing no button.
+func (q *Queries) ClearPlaylistSpotifyLinks(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, clearPlaylistSpotifyLinks)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const clearStmpdSlug = `-- name: ClearStmpdSlug :execrows
 UPDATE songs SET stmpd_slug = NULL WHERE id = $1
 `
@@ -933,6 +947,53 @@ func (q *Queries) GetSongsMissingLinks(ctx context.Context) ([]GetSongsMissingLi
 	return items, nil
 }
 
+const getSongsNeedingYoutube = `-- name: GetSongsNeedingYoutube :many
+SELECT id, name, artists, mix_name, youtube_url, spotify_url
+FROM songs
+WHERE youtube_url IS NULL
+   OR youtube_url NOT LIKE '%watch?v=%'
+ORDER BY id
+`
+
+type GetSongsNeedingYoutubeRow struct {
+	ID         int64       `json:"id"`
+	Name       string      `json:"name"`
+	Artists    string      `json:"artists"`
+	MixName    pgtype.Text `json:"mixName"`
+	YoutubeUrl pgtype.Text `json:"youtubeUrl"`
+	SpotifyUrl pgtype.Text `json:"spotifyUrl"`
+}
+
+// Rows whose YouTube button is missing or points at a playlist rather than a video.
+// A playlist link is worse than none: it sends people to a playlist instead of the
+// song they asked for.
+func (q *Queries) GetSongsNeedingYoutube(ctx context.Context) ([]GetSongsNeedingYoutubeRow, error) {
+	rows, err := q.db.Query(ctx, getSongsNeedingYoutube)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSongsNeedingYoutubeRow
+	for rows.Next() {
+		var i GetSongsNeedingYoutubeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Artists,
+			&i.MixName,
+			&i.YoutubeUrl,
+			&i.SpotifyUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSongsNeverAnnounced = `-- name: GetSongsNeverAnnounced :many
 SELECT id, name, artists, release_date FROM songs WHERE announced_at IS NULL
 `
@@ -1461,6 +1522,24 @@ type SetSongReleaseDateParams struct {
 
 func (q *Queries) SetSongReleaseDate(ctx context.Context, arg SetSongReleaseDateParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setSongReleaseDate, arg.ID, arg.ReleaseDate)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setSongYoutubeURL = `-- name: SetSongYoutubeURL :execrows
+UPDATE songs SET youtube_url = $1
+WHERE id = $2 AND youtube_url IS DISTINCT FROM $1
+`
+
+type SetSongYoutubeURLParams struct {
+	YoutubeUrl pgtype.Text `json:"youtubeUrl"`
+	ID         int64       `json:"id"`
+}
+
+func (q *Queries) SetSongYoutubeURL(ctx context.Context, arg SetSongYoutubeURLParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSongYoutubeURL, arg.YoutubeUrl, arg.ID)
 	if err != nil {
 		return 0, err
 	}

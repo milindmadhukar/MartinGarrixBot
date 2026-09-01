@@ -415,3 +415,22 @@ UPDATE songs SET is_collection = $2 WHERE id = $1 AND is_collection IS DISTINCT 
 -- name: ClearStmpdSlug :execrows
 -- Detach a release identity from a row it does not belong to.
 UPDATE songs SET stmpd_slug = NULL WHERE id = $1;
+
+-- name: GetSongsNeedingYoutube :many
+-- Rows whose YouTube button is missing or points at a playlist rather than a video.
+-- A playlist link is worse than none: it sends people to a playlist instead of the
+-- song they asked for.
+SELECT id, name, artists, mix_name, youtube_url, spotify_url
+FROM songs
+WHERE youtube_url IS NULL
+   OR youtube_url NOT LIKE '%watch?v=%'
+ORDER BY id;
+
+-- name: SetSongYoutubeURL :execrows
+UPDATE songs SET youtube_url = sqlc.narg(youtube_url)
+WHERE id = sqlc.arg(id) AND youtube_url IS DISTINCT FROM sqlc.narg(youtube_url);
+
+-- name: ClearPlaylistSpotifyLinks :execrows
+-- Spotify playlist links cannot be resolved without the Spotify API, and pointing a
+-- song's Spotify button at a playlist is worse than showing no button.
+UPDATE songs SET spotify_url = NULL WHERE spotify_url LIKE '%/playlist/%';

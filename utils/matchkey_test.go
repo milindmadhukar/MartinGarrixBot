@@ -223,3 +223,25 @@ func TestRemixMustNotClaimTheOriginalsRow(t *testing.T) {
 		t.Errorf("a remix must not key the same as the original it derives from: %q", original)
 	}
 }
+
+func TestRenditionSurvivesAFeatureClause(t *testing.T) {
+	// The feature was stripped by cutting to the end of the string, which swallowed
+	// any rendition that followed it. "X's feat. Icona Pop (Osrin Remix)" reduced to
+	// plain "X's", so the remix keyed identically to the original -- and the remix's
+	// video was matched onto the original's row.
+	base, variant := SplitVariant("X's feat. Icona Pop (Osrin Remix)", "", "")
+	if base != "xs" || variant != "osrinremix" {
+		t.Errorf("SplitVariant = (%q, %q); want (\"xs\", \"osrinremix\")", base, variant)
+	}
+
+	original := MatchKey("X's (feat. Icona Pop)", "", "", "CMC$ & GRX")
+	remix := MatchKey("X's feat. Icona Pop (Osrin Remix)", "", "", "CMC$ & GRX")
+	if original == remix {
+		t.Errorf("the remix must not key the same as the original: %q", original)
+	}
+
+	// The featured artist still counts, and the remixer is not mistaken for one.
+	if got := creditKey("X's feat. Icona Pop (Osrin Remix)", "CMC$ & GRX"); got != creditKey("X's", "CMC$ & GRX, Icona Pop") {
+		t.Errorf("credit key folded the rendition into the artists: %q", got)
+	}
+}
