@@ -5,9 +5,62 @@
 
 @source "./templates/**/*.html";
 
-/* Tabular figures stop counts from jittering as htmx swaps a table body in. */
+/* Palette borrowed from the STMPD RCRDS visual language: pure black, thin white
+   geometry, and one pale mint accent. Nothing here reproduces their marks --
+   the motif on the sign-in page is an abstract polyhedron of our own. */
+@theme {
+  --color-ink: #000000;
+  --color-ink-soft: #0a0a0b;
+  --color-mint-100: #dcf5f2;
+  --color-mint-300: #a8e4e0;
+  --color-mint-500: #6fd3cd;
+  --color-mint-700: #2f8d88;
+}
+
 @layer base {
+  /* Tabular figures stop counts from jittering as htmx swaps a table body in. */
   table {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* The halftone wash behind the sign-in mark. A repeating-radial-gradient is
+     the whole effect -- no image asset, so it costs nothing and cannot 404. */
+  .halftone {
+    background-image: repeating-radial-gradient(
+      circle at 0 0,
+      rgba(168, 228, 224, 0.5) 0 1px,
+      transparent 1px 4px
+    );
+  }
+
+  /* Slow drift for the background field. Respects the reduced-motion setting,
+     because a permanently moving backdrop behind a login form is exactly the
+     sort of thing that setting exists for. */
+  .drift {
+    animation: drift 24s ease-in-out infinite alternate;
+  }
+
+  @keyframes drift {
+    from {
+      transform: translate3d(-1.5%, -1%, 0) scale(1.03);
+    }
+    to {
+      transform: translate3d(1.5%, 1%, 0) scale(1.08);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drift {
+      animation: none;
+    }
+  }
+
+  /* Uppercase, widely tracked labels -- the stamp/print voice of the reference
+     artwork. */
+  .stamped {
+    text-transform: uppercase;
+    letter-spacing: 0.35em;
   }
 }

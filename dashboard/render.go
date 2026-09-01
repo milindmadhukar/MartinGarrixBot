@@ -27,6 +27,7 @@ type renderer struct {
 // and the shared partials, so a page can override any block the layout defines.
 var pageFiles = []string{
 	"landing",
+	"noaccess",
 	"guilds",
 	"overview",
 	"modlogs",
@@ -127,6 +128,10 @@ type pageData struct {
 	GuildID   string
 	GuildName string
 	GuildIcon string
+
+	// Bare drops the header and footer. The sign-in and refused-access screens
+	// own the whole viewport and have no navigation to carry.
+	Bare bool
 
 	// Degraded is set when the bot's internal API could not be reached, so the
 	// layout can explain why names are missing instead of the page just looking

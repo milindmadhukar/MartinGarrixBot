@@ -1,0 +1,58 @@
+{{define "page"}}
+<div class="relative flex min-h-screen items-center justify-center overflow-hidden">
+
+  {{template "geoField"}}
+
+  <div class="relative z-10 w-full max-w-lg px-6 py-12 text-center">
+    <div class="mx-auto w-20 text-slate-700 sm:w-24">
+      {{template "geoSVG" "w-full h-auto"}}
+    </div>
+
+    <p class="stamped mt-8 text-[10px] text-slate-600">Access denied</p>
+
+    <h1 class="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+      Nothing here for you
+    </h1>
+
+    <p class="mx-auto mt-4 max-w-md text-sm leading-relaxed text-slate-400">
+      Signing in worked, but you do not have the Administrator permission in any
+      server this bot is in — so there is nothing you can manage.
+    </p>
+
+    {{if .Data.Invitable}}
+      <div class="mt-10 text-left">
+        <p class="stamped mb-3 text-center text-[10px] text-mint-300/70">
+          Add the bot
+        </p>
+        <p class="mb-4 text-center text-xs text-slate-500">
+          You administer these servers, but the bot is not in them yet.
+        </p>
+        <ul class="space-y-2">
+          {{range .Data.Invitable}}
+            <li class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3">
+              <span class="min-w-0 flex-1 truncate text-sm text-slate-300">{{.Name}}</span>
+              <a href="{{.InviteURL}}"
+                 class="shrink-0 rounded-full border border-mint-300/30 bg-mint-300/10 px-3 py-1
+                        text-xs font-medium text-mint-100 hover:border-mint-300/60 hover:bg-mint-300/20">
+                Invite
+              </a>
+            </li>
+          {{end}}
+        </ul>
+      </div>
+    {{else}}
+      <a href="{{.Data.InviteURL}}"
+         class="mt-10 inline-flex items-center justify-center rounded-full border border-mint-300/30
+                bg-mint-300/10 px-5 py-2.5 text-sm font-medium text-mint-100
+                hover:border-mint-300/60 hover:bg-mint-300/20">
+        Add the bot to a server
+      </a>
+    {{end}}
+
+    <p class="mt-10 text-xs text-slate-600">
+      Just been given the permission?
+      <a href="/login?consent=1" class="text-mint-300/80 underline-offset-2 hover:underline">Check again</a>.
+    </p>
+  </div>
+</div>
+{{end}}

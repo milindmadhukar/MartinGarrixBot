@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -313,4 +314,56 @@ func TestHtmxUnauthorizedUsesHXRedirect(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d; htmx only acts on HX-Redirect with a 2xx", w.Code)
 	}
+}
+
+// TestNoAccessPageRenders covers the refusal path that now replaces Authelia as
+// the outer gate. A refused login must render a real page and, critically, must
+// not have issued a session cookie on the way.
+func TestNoAccessPageRenders(t *testing.T) {
+	opts := testOptions(t)
+	opts.SessionSecret = "0123456789abcdef0123456789abcdef"
+	opts.SessionTTL = time.Hour
+	opts.ClientID = "799613778052382720"
+
+	renderer, err := newRenderer(opts, false)
+	if err != nil {
+		t.Fatalf("newRenderer: %v", err)
+	}
+	s := &Server{
+		opts:     opts,
+		renderer: renderer,
+		sessions: session.NewCodec(opts.SessionSecret, opts.SessionTTL, false),
+	}
+
+	t.Run("with invitable guilds", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.renderNoAccess(w, httptest.NewRequest(http.MethodGet, "/auth/callback", nil),
+			[]session.MissingGuild{{ID: 123, Name: "Somewhere"}})
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403", w.Code)
+		}
+		body := w.Body.String()
+		if !strings.Contains(body, "Somewhere") {
+			t.Error("the administered-but-bot-absent guild was not offered an invite")
+		}
+		if len(w.Result().Cookies()) != 0 {
+			t.Fatal("a refused login must not set any cookie")
+		}
+	})
+
+	t.Run("with nothing at all", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.renderNoAccess(w, httptest.NewRequest(http.MethodGet, "/auth/callback", nil), nil)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "Add the bot to a server") {
+			t.Error("expected the generic invite fallback")
+		}
+		if len(w.Result().Cookies()) != 0 {
+			t.Fatal("a refused login must not set any cookie")
+		}
+	})
 }
