@@ -23,11 +23,11 @@ const (
 
 // BeatportConfig holds beatport API configuration
 type BeatportConfig struct {
-	Username     string
-	Password     string
-	LabelID      string
-	ArtistIDs    []string
-	MaxTracks    int
+	Username  string
+	Password  string
+	LabelID   string
+	ArtistIDs []string
+	MaxTracks int
 }
 
 // BeatportTokenResponse represents the OAuth token response
