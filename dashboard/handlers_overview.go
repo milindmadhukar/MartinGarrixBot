@@ -78,15 +78,23 @@ func (s *Server) handlePanel(w http.ResponseWriter, r *http.Request) {
 		rows, err = s.queries.DashJoinLeaveDaily(ctx, db.DashJoinLeaveDailyParams{
 			GuildID: int64(guildID), Tz: s.opts.TimeZone, WindowDays: int32(window),
 		})
+		// Bail before the second query rather than after: letting it run would
+		// overwrite this err and render an empty chart as though it were real.
+		if err != nil {
+			break
+		}
 		data["Series"] = rows
 		data["Max"] = maxJoinLeave(rows)
+
 		var totals db.DashJoinLeaveTotalsRow
-		if totals, err = s.queries.DashJoinLeaveTotals(ctx, db.DashJoinLeaveTotalsParams{
+		totals, err = s.queries.DashJoinLeaveTotals(ctx, db.DashJoinLeaveTotalsParams{
 			GuildID: int64(guildID), WindowDays: int32(window),
-		}); err == nil {
-			data["Totals"] = totals
-			data["Net"] = totals.Joins - totals.Leaves
+		})
+		if err != nil {
+			break
 		}
+		data["Totals"] = totals
+		data["Net"] = totals.Joins - totals.Leaves
 
 	case "messages":
 		var rows []db.DashMessagesDailyRow
@@ -129,15 +137,20 @@ func (s *Server) handlePanel(w http.ResponseWriter, r *http.Request) {
 		byType, err = s.queries.DashModlogsByType(ctx, db.DashModlogsByTypeParams{
 			GuildID: int64(guildID), WindowDays: int32(window),
 		})
+		if err != nil {
+			break
+		}
 		data["ByType"] = byType
 		data["MaxType"] = maxByType(byType)
 
 		var mods []db.DashTopModeratorsRow
-		if mods, err = s.queries.DashTopModerators(ctx, db.DashTopModeratorsParams{
+		mods, err = s.queries.DashTopModerators(ctx, db.DashTopModeratorsParams{
 			GuildID: int64(guildID), WindowDays: int32(window), Limit: 5,
-		}); err == nil {
-			data["Moderators"] = s.namedModerators(ctx, guildID, mods)
+		})
+		if err != nil {
+			break
 		}
+		data["Moderators"] = s.namedModerators(ctx, guildID, mods)
 
 	case "punishments":
 		var rows []db.Modlog

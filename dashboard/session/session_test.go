@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -70,7 +71,7 @@ func TestWrongKeyRejected(t *testing.T) {
 	sess, _ := signer.New(1, "user", "")
 	encoded, _ := signer.Encode(sess)
 
-	if _, err := verifier.Decode(encoded); err != ErrBadSignature {
+	if _, err := verifier.Decode(encoded); !errors.Is(err, ErrBadSignature) {
 		t.Fatalf("Decode with the wrong key = %v, want ErrBadSignature", err)
 	}
 }
@@ -94,7 +95,7 @@ func TestExpiryComesFromTheSignedPayload(t *testing.T) {
 	sess.ExpiresAt = time.Now().Add(-time.Minute).Unix()
 
 	encoded, _ := c.Encode(sess)
-	if _, err := c.Decode(encoded); err != ErrExpired {
+	if _, err := c.Decode(encoded); !errors.Is(err, ErrExpired) {
 		t.Fatalf("Decode of an expired session = %v, want ErrExpired", err)
 	}
 }
@@ -234,7 +235,7 @@ func TestReadAndClear(t *testing.T) {
 		t.Errorf("UserID = %d, want 42", got.UserID)
 	}
 
-	if _, err := c.Read(httptest.NewRequest(http.MethodGet, "/", nil)); err != ErrNoCookie {
+	if _, err := c.Read(httptest.NewRequest(http.MethodGet, "/", nil)); !errors.Is(err, ErrNoCookie) {
 		t.Errorf("Read without a cookie = %v, want ErrNoCookie", err)
 	}
 

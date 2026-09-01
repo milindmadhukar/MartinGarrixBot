@@ -196,3 +196,41 @@ func TestHeatmapGridHandlesNoData(t *testing.T) {
 		t.Error("intensity should be 0 when there is no peak")
 	}
 }
+
+// TestPanelErrorSuppressesData guards the bug golangci-lint caught: the growth
+// and moderation panels each run two queries, and the second used to overwrite
+// the first's error before it was ever checked. A failed first query then
+// rendered as an empty chart with no error shown -- silently wrong, which is
+// worse than visibly broken. Both panels now bail before the second query, so a
+// panel carrying an error must not also be carrying half-populated data.
+func TestPanelErrorSuppressesData(t *testing.T) {
+	r, err := newRenderer(testOptions(t), false)
+	if err != nil {
+		t.Fatalf("newRenderer: %v", err)
+	}
+
+	for _, panel := range []string{"growth", "moderation"} {
+		t.Run(panel, func(t *testing.T) {
+			// Exactly what the handler now produces when the first query
+			// fails: an error and nothing else.
+			p := &pageData{GuildID: "1", Data: map[string]any{
+				"WindowDays": 30,
+				"Error":      "This panel could not be loaded.",
+			}}
+
+			var buf bytes.Buffer
+			if err := r.pages["overview"].ExecuteTemplate(&buf, "panel-"+panel, p); err != nil {
+				t.Fatalf("panel %q with only an error failed to render: %v", panel, err)
+			}
+
+			out := buf.String()
+			if !strings.Contains(out, "could not be loaded") {
+				t.Errorf("panel %q did not show its error", panel)
+			}
+			// No bars drawn next to the error message.
+			if strings.Contains(out, "style=\"height:") || strings.Contains(out, "style=\"width:") {
+				t.Errorf("panel %q drew a chart alongside its error", panel)
+			}
+		})
+	}
+}
