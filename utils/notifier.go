@@ -33,7 +33,7 @@ type NotificationItem struct {
 	Embed *discord.Embed
 
 	// For interactive components (STMPD)
-	Components []discord.ContainerComponent
+	Components []discord.LayoutComponent
 }
 
 // GuildNotificationConfig holds the channel and role info for a guild
@@ -197,9 +197,9 @@ func (bn *BatchNotifier) sendToGuild(guild GuildNotificationConfig) error {
 	// For multiple items, send ping first, then separate messages
 	headerContent := bn.buildHeaderContent(guild.RoleID)
 	headerMsg, err := bn.RestClient.CreateMessage(guild.ChannelID,
-		discord.NewMessageCreateBuilder().
-			SetContent(headerContent).
-			Build())
+		discord.NewMessageCreate().
+			WithContent(headerContent),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to send header message: %w", err)
 	}
@@ -222,49 +222,49 @@ func (bn *BatchNotifier) sendToGuild(guild GuildNotificationConfig) error {
 		case NotificationTypeYoutube:
 			// Send each video as a separate message
 			msg, err = bn.RestClient.CreateMessage(guild.ChannelID,
-				discord.NewMessageCreateBuilder().
-					SetContent(item.Content).
-					Build())
+				discord.NewMessageCreate().
+					WithContent(item.Content),
+			)
 
 		case NotificationTypeReddit:
 			// Send each post as a separate embed message
 			if item.Embed != nil {
 				msg, err = bn.RestClient.CreateMessage(guild.ChannelID,
-					discord.NewMessageCreateBuilder().
-						SetEmbeds(*item.Embed).
-						Build())
+					discord.NewMessageCreate().
+						WithEmbeds(*item.Embed),
+				)
 			}
 
 		case NotificationTypeSTMPD:
 			// Send each release as a separate embed message with buttons
 			if item.Embed != nil {
-				builder := discord.NewMessageCreateBuilder().
-					SetEmbeds(*item.Embed)
+				builder := discord.NewMessageCreate().
+					WithEmbeds(*item.Embed)
 
 				// Add components if they exist
 				if len(item.Components) > 0 {
 					for _, component := range item.Components {
-						builder.AddContainerComponents(component)
+						builder = builder.AddComponents(component)
 					}
 				}
 
-				msg, err = bn.RestClient.CreateMessage(guild.ChannelID, builder.Build())
+				msg, err = bn.RestClient.CreateMessage(guild.ChannelID, builder)
 			}
 
 		case NotificationTypeTour:
 			// Send each tour show as a separate embed message with ticket button
 			if item.Embed != nil {
-				builder := discord.NewMessageCreateBuilder().
-					SetEmbeds(*item.Embed)
+				builder := discord.NewMessageCreate().
+					WithEmbeds(*item.Embed)
 
 				// Add components if they exist
 				if len(item.Components) > 0 {
 					for _, component := range item.Components {
-						builder.AddContainerComponents(component)
+						builder = builder.AddComponents(component)
 					}
 				}
 
-				msg, err = bn.RestClient.CreateMessage(guild.ChannelID, builder.Build())
+				msg, err = bn.RestClient.CreateMessage(guild.ChannelID, builder)
 			}
 		}
 
@@ -312,55 +312,55 @@ func (bn *BatchNotifier) sendSingleItem(guild GuildNotificationConfig) error {
 		// Combine ping with video content
 		content := rolePing + item.Content
 		msg, err = bn.RestClient.CreateMessage(guild.ChannelID,
-			discord.NewMessageCreateBuilder().
-				SetContent(content).
-				Build())
+			discord.NewMessageCreate().
+				WithContent(content),
+		)
 
 	case NotificationTypeReddit:
 		// Send embed with ping as content
 		if item.Embed != nil {
 			content := rolePing + "New post on r/Martingarrix"
 			msg, err = bn.RestClient.CreateMessage(guild.ChannelID,
-				discord.NewMessageCreateBuilder().
-					SetContent(content).
-					SetEmbeds(*item.Embed).
-					Build())
+				discord.NewMessageCreate().
+					WithContent(content).
+					WithEmbeds(*item.Embed),
+			)
 		}
 
 	case NotificationTypeSTMPD:
 		// Send embed with buttons and ping as content
 		if item.Embed != nil {
 			content := rolePing + "New release on STMPD RCRDS!"
-			builder := discord.NewMessageCreateBuilder().
-				SetContent(content).
-				SetEmbeds(*item.Embed)
+			builder := discord.NewMessageCreate().
+				WithContent(content).
+				WithEmbeds(*item.Embed)
 
 			// Add components if they exist
 			if len(item.Components) > 0 {
 				for _, component := range item.Components {
-					builder.AddContainerComponents(component)
+					builder = builder.AddComponents(component)
 				}
 			}
 
-			msg, err = bn.RestClient.CreateMessage(guild.ChannelID, builder.Build())
+			msg, err = bn.RestClient.CreateMessage(guild.ChannelID, builder)
 		}
 
 	case NotificationTypeTour:
 		// Send embed with buttons and ping as content
 		if item.Embed != nil {
 			content := rolePing + "New tour date announced!"
-			builder := discord.NewMessageCreateBuilder().
-				SetContent(content).
-				SetEmbeds(*item.Embed)
+			builder := discord.NewMessageCreate().
+				WithContent(content).
+				WithEmbeds(*item.Embed)
 
 			// Add components if they exist
 			if len(item.Components) > 0 {
 				for _, component := range item.Components {
-					builder.AddContainerComponents(component)
+					builder = builder.AddComponents(component)
 				}
 			}
 
-			msg, err = bn.RestClient.CreateMessage(guild.ChannelID, builder.Build())
+			msg, err = bn.RestClient.CreateMessage(guild.ChannelID, builder)
 		}
 	}
 

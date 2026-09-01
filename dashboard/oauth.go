@@ -91,8 +91,8 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := s.oauth.Rest().GetAccessToken(
-		s.oauth.ID(), s.opts.ClientSecret, code, s.opts.RedirectURI)
+	token, err := s.oauth.Rest.GetAccessToken(
+		s.oauth.ID, s.opts.ClientSecret, code, s.opts.RedirectURI)
 	if err != nil {
 		slog.Error("OAuth token exchange failed", slog.Any("err", err))
 		s.renderError(w, r, http.StatusBadGateway, "Login failed",

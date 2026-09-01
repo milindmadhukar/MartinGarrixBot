@@ -2,28 +2,29 @@ package utils
 
 import "github.com/disgoorg/disgo/discord"
 
+// discord.Embed's With* methods take a value receiver and return a copy, so
+// their result always has to be assigned back.
+
 func SuccessEmbed(title, description string) discord.Embed {
-	eb := discord.NewEmbedBuilder().
-		SetTitle(CutString(TickEmoji+" "+title, 256))
+	eb := discord.NewEmbed().
+		WithTitle(CutString(TickEmoji+" "+title, 256)).
+		WithColor(ColorSuccess)
 
 	if description != "" {
-		eb.Description = (CutString(description, 2048))
+		eb = eb.WithDescription(CutString(description, 2048))
 	}
 
-	eb.Color = ColorSuccess
-
-	return eb.Build()
+	return eb
 }
 
 func FailureEmbed(title, description string) discord.Embed {
-	eb := discord.NewEmbedBuilder().
-		SetTitle(CutString(CrossEmoji+" "+title, 256))
+	eb := discord.NewEmbed().
+		WithTitle(CutString(CrossEmoji+" "+title, 256)).
+		WithColor(ColorError)
 
 	if description != "" {
-		eb.Description = (CutString(description, 2048))
+		eb = eb.WithDescription(CutString(description, 2048))
 	}
 
-	eb.Color = ColorError
-
-	return eb.Build()
+	return eb
 }

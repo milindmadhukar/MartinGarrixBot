@@ -106,7 +106,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		// of the ~190 tracks fetched, every 15 minutes.
 		index := utils.NewSongIndex(existingSongs)
 
-		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeSTMPD)
+		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest, utils.NotificationTypeSTMPD)
 
 		newCount := 0
 		updatedCount := 0
@@ -150,6 +150,10 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 					BeatportID: pgtype.Int4{
 						Int32: int32(track.ID),
 						Valid: true,
+					},
+					BeatportSlug: pgtype.Text{
+						String: track.Slug,
+						Valid:  track.Slug != "",
 					},
 					MixName: pgtype.Text{
 						String: track.MixName,
@@ -252,6 +256,10 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 						Int32: int32(track.ID),
 						Valid: true,
 					},
+					BeatportSlug: pgtype.Text{
+						String: track.Slug,
+						Valid:  track.Slug != "",
+					},
 					MixName: pgtype.Text{
 						String: track.MixName,
 						Valid:  track.MixName != "",
@@ -310,6 +318,10 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				BeatportID: pgtype.Int4{
 					Int32: int32(track.ID),
 					Valid: true,
+				},
+				BeatportSlug: pgtype.Text{
+					String: track.Slug,
+					Valid:  track.Slug != "",
 				},
 				MixName: pgtype.Text{
 					String: track.MixName,
@@ -391,17 +403,12 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			// what protects every other path from replaying the back catalogue.
 			if isRecentRelease(utils.Text(track.ReleaseDate)) {
 				// Build announcement embed
-				title := fmt.Sprintf("%s - %s", artistsStr, track.Name)
-				if track.MixName != "" && track.MixName != "Original Mix" {
-					title = fmt.Sprintf("%s (%s)", title, track.MixName)
-				}
-
-				embedBuilder := discord.NewEmbedBuilder().
-					SetTitle(title).
-					SetColor(0x1DB954) // Green for beatport
+				embedBuilder := discord.NewEmbed().
+					WithTitle(utils.SongHeading(artistsStr, track.Name, track.MixName)).
+					WithColor(0x1DB954) // Green for beatport
 
 				if track.ThumbnailURL != "" {
-					embedBuilder.SetImage(track.ThumbnailURL)
+					embedBuilder = embedBuilder.WithImage(track.ThumbnailURL)
 				}
 
 				// Build footer with metadata
@@ -423,27 +430,32 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				}
 
 				if len(footerParts) > 0 {
-					embedBuilder.SetFooter(strings.Join(footerParts, " | "), "")
+					embedBuilder = embedBuilder.WithFooter(strings.Join(footerParts, " | "), "")
 				}
 
-				announcementEmbed := embedBuilder.Build()
+				announcementEmbed := embedBuilder
 
 				// Lead with the beatport track link. This is built from the track id
 				// rather than read from songs.beatport_url, which holds a RELEASE
 				// URL from the STMPD dataset -- the track link is the more precise
 				// destination for a beatport announcement.
-				beatportURL := utils.BeatportTrackURL(int32(track.ID))
-				buttons := append(
-					[]discord.InteractiveComponent{utils.BeatportButton(beatportURL)},
-					utils.GetSongButtons(song)...,
-				)
+				// Without a slug there is no track page to link to: /track/<id> is
+				// not a route beatport serves. Lead with the song's other links
+				// rather than with a button that 404s.
+				buttons := utils.GetSongButtons(song)
+				if track.Slug != "" {
+					beatportURL := utils.BeatportTrackURL(track.Slug, int32(track.ID))
+					buttons = append(
+						[]discord.InteractiveComponent{utils.BeatportButton(beatportURL)},
+						buttons...,
+					)
+				}
 				components := utils.ChunkButtonRows(buttons)
 
 				notifier.AddItem(utils.NotificationItem{
 					Embed:      &announcementEmbed,
 					Components: components,
 				})
-
 			}
 		}
 

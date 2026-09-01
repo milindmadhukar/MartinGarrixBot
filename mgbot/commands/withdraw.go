@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/disgoorg/disgo/discord"
@@ -36,31 +37,9 @@ var withdraw = discord.SlashCommandCreate{
 func WithdrawHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
 		amt, amtOk := e.SlashCommandInteractionData().OptInt("amount")
-
-		if amtOk && amt <= 0 {
-			embed := utils.FailureEmbed("Amount of coins to withdraw should be positive.", "")
-			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-					SetEmbeds(embed).
-					SetEphemeral(true).
-					Build(),
-			)
-		}
-
 		isAll := e.SlashCommandInteractionData().Bool("all")
 		isHalf := e.SlashCommandInteractionData().Bool("half")
 
-		if !amtOk && !isAll && !isHalf {
-			embed := utils.FailureEmbed("Please provide amount of coins to withdraw.", "")
-			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-					SetEmbeds(embed).
-					SetEphemeral(true).
-					Build(),
-			)
-		}
-
-		var embed discord.Embed
 		var amtToWithdraw int64
 
 		balanceInfo, err := b.Queries.GetBalance(e.Ctx, db.GetBalanceParams{
@@ -71,22 +50,21 @@ func WithdrawHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			return err
 		}
 
-		if isHalf {
-			amtToWithdraw = balanceInfo.GarrixCoins.Int64 / 2
-		} else if isAll {
-			amtToWithdraw = balanceInfo.GarrixCoins.Int64
-		} else if amtOk {
-			if int64(amt) > balanceInfo.GarrixCoins.Int64 {
-				embed = utils.FailureEmbed("You don't have enough coins in safe to withdraw.", "")
-				return e.Respond(
-					discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-						SetEmbeds(embed).
-						SetEphemeral(true).
-						Build(),
-				)
+		amtToWithdraw, err = resolveAmount(balanceInfo.GarrixCoins.Int64, amt, amtOk, isAll, isHalf)
+		if err != nil {
+			message := "Please provide amount of coins to withdraw."
+			switch {
+			case errors.Is(err, ErrAmountNotPositive):
+				message = "Amount of coins to withdraw should be positive."
+			case errors.Is(err, ErrInsufficientBalance):
+				message = "You don't have enough coins in safe to withdraw."
 			}
 
-			amtToWithdraw = int64(amt)
+			return e.Respond(
+				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+					WithEmbeds(utils.FailureEmbed(message, "")).
+					WithEphemeral(true),
+			)
 		}
 
 		err = b.Queries.WithdrawAmount(e.Ctx, db.WithdrawAmountParams{
@@ -99,16 +77,15 @@ func WithdrawHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			return err
 		}
 
-		embed = utils.SuccessEmbed(
+		embed := utils.SuccessEmbed(
 			fmt.Sprintf("Successfully withdrew %d coins from safe to hold in hand.", amtToWithdraw),
 			"",
 		)
 
 		return e.Respond(
 			discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(embed).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(embed),
 		)
 	}
 }

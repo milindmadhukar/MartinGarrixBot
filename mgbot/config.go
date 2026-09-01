@@ -14,6 +14,7 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open config: %w", err)
 	}
+	defer file.Close()
 
 	var cfg Config
 	if err = toml.NewDecoder(file).Decode(&cfg); err != nil {

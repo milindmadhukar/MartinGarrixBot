@@ -29,7 +29,7 @@ type Server struct {
 	queries  *db.Queries
 	bots     *BotAPI
 	sessions *session.Codec
-	oauth    oauth2.Client
+	oauth    *oauth2.Client
 	renderer *renderer
 	http     *http.Server
 }

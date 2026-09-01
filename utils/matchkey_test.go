@@ -300,3 +300,75 @@ func TestIsCollectionCatchesSetsAndLongRecordings(t *testing.T) {
 		t.Error("a five-minute original mix is a track")
 	}
 }
+
+func TestStrokeLettersFoldToPlainLetters(t *testing.T) {
+	// NFD decomposes an accent away from its letter, but the stroke in "Ø" is part of
+	// the glyph, so "NØ SIGNE" and "NO SIGNE" stayed two different artists and their
+	// one song stayed two rows.
+	if ArtistSetKey("NØ SIGNE") != ArtistSetKey("NO SIGNE") {
+		t.Errorf("Ø did not fold: %q vs %q", ArtistSetKey("NØ SIGNE"), ArtistSetKey("NO SIGNE"))
+	}
+	for _, pair := range [][2]string{
+		{"Mø", "Mo"}, {"Æther", "Aether"}, {"Þor", "Thor"}, {"Łukasz", "Lukasz"},
+	} {
+		if NormalizeToken(pair[0]) != NormalizeToken(pair[1]) {
+			t.Errorf("%q did not fold to %q: %q vs %q",
+				pair[0], pair[1], NormalizeToken(pair[0]), NormalizeToken(pair[1]))
+		}
+	}
+}
+
+// A release keeps its identity once re-keying has moved the rendition out of the
+// title: "Hero (Remixes)" and name "Hero" + mix "Remixes" are the same row, and the
+// catalogue must not start offering it as a song halfway through a maintenance pass.
+func TestIsCollectionReadsTheRendition(t *testing.T) {
+	cases := []struct {
+		name, mix string
+		want      bool
+	}{
+		{"Hero", "Remixes", true},
+		{"Hero", "", false},
+		{"Scared To Be Lonely Remixes Vol. 1", "Remixes Vol. 1", true},
+		{"Dreamer", "Remixes Vol. 2", true},
+		{"Another World", "Festival Edits Part I", true},
+		{"Hero", "Space Ducks Extended Remix", false},
+		{"Animals", "Original Mix", false},
+		{"Catharina", "Extended Mix", false},
+		// "Remix" singular is one track; only the plural names a package.
+		{"Bad Blood", "Julian Jordan Remix", false},
+		// mix_name here is the package the track came on, not the track's variant.
+		{"Higher Ground (DubVision Remix)", "Remixes", false},
+		// ...but when the title's own variant is itself a package, it stays one.
+		{"So Far Away (Remixes Vol.I)", "Remixes Vol. 1", true},
+	}
+
+	for _, c := range cases {
+		if got := IsCollection(c.name, c.mix, 0); got != c.want {
+			t.Errorf("IsCollection(%q, %q) = %v, want %v", c.name, c.mix, got, c.want)
+		}
+	}
+}
+
+// The catalogue slug distinguishes a release from the single of the same name, which
+// nothing in the title, artist or rendition can do: "Void" and the "Void EP" are one
+// title, one artist and no rendition apart.
+func TestStmpdSlugNamesRelease(t *testing.T) {
+	cases := []struct {
+		name, slug string
+		want       bool
+	}{
+		{"Void", "seth-hills-void-ep-2020-8-10", true},
+		{"Void", "seth-hills-void-2020-5-14", false},
+		// A track on someone else's EP is not that EP.
+		{"Mind The Grind", "bombai-ep-2018-3-2", false},
+		{"Higher Ground", "martin-garrix-higher-ground-remixes-2021-1-1", true},
+		{"Breathe", "mesto-breathe-2024-5-10", false},
+		{"", "seth-hills-void-ep-2020-8-10", false},
+	}
+
+	for _, c := range cases {
+		if got := StmpdSlugNamesRelease(c.name, c.slug); got != c.want {
+			t.Errorf("StmpdSlugNamesRelease(%q, %q) = %v, want %v", c.name, c.slug, got, c.want)
+		}
+	}
+}

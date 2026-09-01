@@ -56,3 +56,21 @@ func TestNormalizeYoutubeURL(t *testing.T) {
 		}
 	}
 }
+
+func TestAppleURLNamesThisRelease(t *testing.T) {
+	// The row IS the EP: the slug reduces to its name.
+	if !AppleURLNamesThisRelease("Seven", "https://music.apple.com/ca/album/seven-ep/1168670107") {
+		t.Error("Seven is an EP and its Apple slug says so")
+	}
+	if !AppleURLNamesThisRelease("The Street", "https://music.apple.com/nl/album/the-street-ep/123") {
+		t.Error("The Street is an EP")
+	}
+	// The row is a TRACK on an EP. The slug says "-ep" but names a different release.
+	if AppleURLNamesThisRelease("Mind The Grind", "https://music.apple.com/nl/album/bombai-ep/456") {
+		t.Error("a track on the Bombai EP is not itself a release")
+	}
+	// An ordinary single.
+	if AppleURLNamesThisRelease("Animals", "https://music.apple.com/nl/album/animals-single/789") {
+		t.Error("a single is not a multi-track release")
+	}
+}

@@ -8,26 +8,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AnniversaryPost struct {
+	GuildID   int64              `json:"guildId"`
+	LocalDate pgtype.Date        `json:"localDate"`
+	SongCount int32              `json:"songCount"`
+	PostedAt  pgtype.Timestamptz `json:"postedAt"`
+}
+
 type Guild struct {
-	GuildID                     int64       `json:"guildId"`
-	ModlogsChannel              pgtype.Int8 `json:"modlogsChannel"`
-	LeaveJoinLogsChannel        pgtype.Int8 `json:"leaveJoinLogsChannel"`
-	YoutubeNotificationsChannel pgtype.Int8 `json:"youtubeNotificationsChannel"`
-	YoutubeNotificationsRole    pgtype.Int8 `json:"youtubeNotificationsRole"`
-	RedditNotificationsChannel  pgtype.Int8 `json:"redditNotificationsChannel"`
-	RedditNotificationsRole     pgtype.Int8 `json:"redditNotificationsRole"`
-	StmpdNotificationsChannel   pgtype.Int8 `json:"stmpdNotificationsChannel"`
-	StmpdNotificationsRole      pgtype.Int8 `json:"stmpdNotificationsRole"`
-	WelcomesChannel             pgtype.Int8 `json:"welcomesChannel"`
-	DeleteLogsChannel           pgtype.Int8 `json:"deleteLogsChannel"`
-	EditLogsChannel             pgtype.Int8 `json:"editLogsChannel"`
-	BotChannel                  pgtype.Int8 `json:"botChannel"`
-	RadioVoiceChannel           pgtype.Int8 `json:"radioVoiceChannel"`
-	NewsRole                    pgtype.Int8 `json:"newsRole"`
-	XpMultiplier                float64     `json:"xpMultiplier"`
-	TourNotificationsChannel    pgtype.Int8 `json:"tourNotificationsChannel"`
-	TourNotificationsRole       pgtype.Int8 `json:"tourNotificationsRole"`
-	ModeratorRole               pgtype.Int8 `json:"moderatorRole"`
+	GuildID                         int64       `json:"guildId"`
+	ModlogsChannel                  pgtype.Int8 `json:"modlogsChannel"`
+	LeaveJoinLogsChannel            pgtype.Int8 `json:"leaveJoinLogsChannel"`
+	YoutubeNotificationsChannel     pgtype.Int8 `json:"youtubeNotificationsChannel"`
+	YoutubeNotificationsRole        pgtype.Int8 `json:"youtubeNotificationsRole"`
+	RedditNotificationsChannel      pgtype.Int8 `json:"redditNotificationsChannel"`
+	RedditNotificationsRole         pgtype.Int8 `json:"redditNotificationsRole"`
+	StmpdNotificationsChannel       pgtype.Int8 `json:"stmpdNotificationsChannel"`
+	StmpdNotificationsRole          pgtype.Int8 `json:"stmpdNotificationsRole"`
+	WelcomesChannel                 pgtype.Int8 `json:"welcomesChannel"`
+	DeleteLogsChannel               pgtype.Int8 `json:"deleteLogsChannel"`
+	EditLogsChannel                 pgtype.Int8 `json:"editLogsChannel"`
+	BotChannel                      pgtype.Int8 `json:"botChannel"`
+	RadioVoiceChannel               pgtype.Int8 `json:"radioVoiceChannel"`
+	NewsRole                        pgtype.Int8 `json:"newsRole"`
+	XpMultiplier                    float64     `json:"xpMultiplier"`
+	TourNotificationsChannel        pgtype.Int8 `json:"tourNotificationsChannel"`
+	TourNotificationsRole           pgtype.Int8 `json:"tourNotificationsRole"`
+	ModeratorRole                   pgtype.Int8 `json:"moderatorRole"`
+	AnniversaryNotificationsChannel pgtype.Int8 `json:"anniversaryNotificationsChannel"`
+	AnniversaryNotificationsRole    pgtype.Int8 `json:"anniversaryNotificationsRole"`
+	AnniversaryHour                 int32       `json:"anniversaryHour"`
+	AnniversaryTimezone             string      `json:"anniversaryTimezone"`
 }
 
 type JoinLeaveLog struct {
@@ -100,6 +111,7 @@ type Song struct {
 	ParentSongID      pgtype.Int8        `json:"parentSongId"`
 	IsInstrumental    bool               `json:"isInstrumental"`
 	IsCollection      bool               `json:"isCollection"`
+	BeatportSlug      pgtype.Text        `json:"beatportSlug"`
 }
 
 type Tag struct {

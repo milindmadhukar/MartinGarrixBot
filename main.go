@@ -33,8 +33,14 @@ var (
 )
 
 func main() {
-	Version = os.Getenv("VERSION")
-	Commit = os.Getenv("COMMIT")
+	// Version/Commit are normally stamped in at build time via -ldflags; fall back
+	// to the environment (and then to placeholders) for `go run` and local builds.
+	if Version == "" {
+		Version = os.Getenv("VERSION")
+	}
+	if Commit == "" {
+		Commit = os.Getenv("COMMIT")
+	}
 	if Version == "" {
 		Version = "dev"
 	}
@@ -85,7 +91,9 @@ func main() {
 	case b.Cfg.Bot.YoutubeAPIKey != "":
 		ytOption = option.WithAPIKey(b.Cfg.Bot.YoutubeAPIKey)
 	case b.Cfg.Bot.GoogleServiceFile != "":
-		ytOption = option.WithCredentialsFile(b.Cfg.Bot.GoogleServiceFile)
+		// WithCredentialsFile is deprecated: it accepts any credential type without
+		// validation. The file here is always a service account key, so name that type.
+		ytOption = option.WithAuthCredentialsFile(option.ServiceAccount, b.Cfg.Bot.GoogleServiceFile)
 	default:
 		slog.Error("No YouTube credentials configured: set yt_api_key or google_service_file")
 		os.Exit(-1)
@@ -150,6 +158,13 @@ func main() {
 				// Fills gaps neither STMPD nor beatport can, a small batch at a
 				// time, so the maintenance scripts stay one-off repairs.
 				go handlers.GetSongEnrichment(b, time.NewTicker(1*time.Hour))
+
+				// Ticks far more often than it posts. Unlike the feeds above there
+				// is no remote source to poll -- what it waits for is each guild's
+				// own configured local hour, so the schedule lives per guild and
+				// this is only how often that gets checked. The 5 minute poll is
+				// also what lets a restart pick up a window it slept through.
+				go handlers.GetSongAnniversaries(b, time.NewTicker(5*time.Minute))
 
 				// Auto-start radio in all configured guilds (only if Lavalink is connected)
 				go func() {

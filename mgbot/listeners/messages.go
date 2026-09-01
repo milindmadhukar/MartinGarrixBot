@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"math/rand/v2"
 	"strings"
 	"time"
 
@@ -32,7 +31,7 @@ func MessageCreateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 		if strings.HasPrefix(strings.ToLower(e.Message.Content), "mg.") {
 			replyMessageContent := "Prefix commands are deprecated. Please use slash commands instead. Type `/` to see available commands."
 			utils.ReplyToMessageDeleteAfter(b.Client, e.ChannelID, e.Message, replyMessageContent, 10)
-			b.Client.Rest().DeleteMessage(e.ChannelID, e.Message.ID, rest.WithDelay(10))
+			b.Client.Rest.DeleteMessage(e.ChannelID, e.Message.ID, rest.WithDelay(10))
 			return
 		}
 
@@ -73,10 +72,14 @@ func MessageCreateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 			LastXpAdded: user.LastXpAdded,
 		}
 
-		if !user.LastXpAdded.Valid || now.Sub(user.LastXpAdded.Time.UTC()) >= time.Minute {
-			// Generate random number between 15 and 25
-			xp := 15 + rand.Int32N(11)
-			params.TotalXp.Int32 = user.TotalXp.Int32 + xp
+		if total, awarded := nextXP(
+			user.TotalXp.Int32,
+			user.LastXpAdded.Time,
+			user.LastXpAdded.Valid,
+			now,
+			rollXP(),
+		); awarded {
+			params.TotalXp.Int32 = total
 			params.TotalXp.Valid = true
 			params.LastXpAdded.Time = now
 			params.LastXpAdded.Valid = true

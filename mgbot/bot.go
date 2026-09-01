@@ -15,8 +15,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
-	"github.com/disgoorg/disgolink/v3/disgolink"
-	"github.com/disgoorg/paginator"
+	"github.com/disgoorg/disgolink/v4/disgolink"
 	"github.com/golang-migrate/migrate/v4"
 	migratePgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -30,20 +29,18 @@ import (
 
 func New(cfg Config, version string, commit string) *MartinGarrixBot {
 	return &MartinGarrixBot{
-		Cfg:       cfg,
-		Paginator: paginator.New(),
-		Version:   version,
-		Commit:    commit,
+		Cfg:     cfg,
+		Version: version,
+		Commit:  commit,
 	}
 }
 
 type MartinGarrixBot struct {
-	Cfg       Config
-	Client    bot.Client
-	Paginator *paginator.Manager
-	Version   string
-	Commit    string
-	IsReady   bool
+	Cfg     Config
+	Client  *bot.Client
+	Version string
+	Commit  string
+	IsReady bool
 
 	DB             *pgxpool.Pool
 	Queries        *db.Queries
@@ -66,7 +63,6 @@ func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
 		// MemberPermissionsInChannel usable, which need FlagRoles and both
 		// flags respectively.
 		bot.WithCacheConfigOpts(cache.WithCaches(cache.FlagGuilds, cache.FlagMessages, cache.FlagVoiceStates, cache.FlagMembers, cache.FlagRoles, cache.FlagChannels)),
-		bot.WithEventListeners(b.Paginator),
 		bot.WithEventListeners(listeners...),
 	)
 	if err != nil {
@@ -128,7 +124,7 @@ func (b *MartinGarrixBot) SetupDB() error {
 		slog.Info("Database migrated to latest migration.")
 		return nil
 	}
-	return errors.New("Could not make a connection to the database.")
+	return errors.New("could not make a connection to the database")
 }
 
 // SetupBeatport initializes the Beatport API client
@@ -281,7 +277,7 @@ func SetupLogger(cfg LogConfig) {
 
 // SetupLavalink initializes the Lavalink client and connects to the node
 func (b *MartinGarrixBot) SetupLavalink(ctx context.Context) error {
-	b.RadioManager = utils.NewRadioManager(b.Client.ApplicationID())
+	b.RadioManager = utils.NewRadioManager(b.Client.ApplicationID)
 
 	// Set up disconnect callback
 	b.RadioManager.OnLavalinkDisconnect = func() {

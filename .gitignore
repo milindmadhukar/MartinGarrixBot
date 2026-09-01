@@ -20,6 +20,12 @@ config.prod.toml
 /rekey-songs
 /import-beatport
 
+# Agent scratch worktrees; these are separate git repos and must not be committed.
+.claude/
+/garrixbot
+coverage.out
+coverage.html
+
 # The standalone Tailwind CLI, fetched by `make tailwind_install`. Its OUTPUT,
 # dashboard/static/app.css, is deliberately committed: it is go:embed-ed, so a
 # stray *.css ignore rule would turn the dashboard build into a failure that

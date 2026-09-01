@@ -171,21 +171,14 @@ func processRelease(ctx context.Context, env *script.Env, index *utils.SongIndex
 
 	params := updateParams(matched.ID, release, correctDate)
 
-	if env.DryRun {
-		// The inferred tiers are the ones worth reading before committing, so log
-		// those at info and let the exact-identity matches stay quiet.
-		level := slog.LevelDebug
-		if !tier.Exact() {
-			level = slog.LevelInfo
-		}
-		slog.Log(ctx, level, "would apply release to existing song",
-			slog.String("release", name), slog.String("artists", release.Artists),
-			slog.String("matched_name", matched.Name), slog.String("matched_artists", matched.Artists),
-			slog.String("tier", string(tier)),
-			slog.Int64("song_id", matched.ID), slog.Bool("correct_date", correctDate))
-		c.written++
-		return
+	// The inferred tiers are the ones worth reading before committing.
+	level := slog.LevelDebug
+	if !tier.Exact() {
+		level = slog.LevelInfo
 	}
+	slog.Log(ctx, level, "applying release to existing song",
+		slog.String("release", name), slog.String("tier", string(tier)),
+		slog.Int64("song_id", matched.ID), slog.Bool("correct_date", correctDate))
 
 	n, err := env.Queries.UpdateSongWithStmpdRelease(ctx, params)
 	if err == nil {
@@ -277,24 +270,6 @@ func mergeTwin(ctx context.Context, env *script.Env, release utils.SanityRelease
 func insertRelease(ctx context.Context, env *script.Env, index *utils.SongIndex, release utils.SanityRelease, c *counters) {
 	name := release.Name()
 
-	if env.DryRun {
-		// Ask the database whether the insert would actually happen. Without this the
-		// dry run reports inserts that the real run rejects as duplicates, which
-		// overstates exactly the number a reviewer is checking before committing.
-		exists, err := env.Queries.DoesSongExist(ctx, db.DoesSongExistParams{
-			Name: name, Artists: release.Artists, ReleaseDate: utils.Text(release.ReleaseDate),
-		})
-		if err == nil && exists {
-			c.unchanged++
-			return
-		}
-		slog.Info("would insert release",
-			slog.String("name", name), slog.String("artists", release.Artists),
-			slog.String("release_date", release.ReleaseDate))
-		c.inserted++
-		return
-	}
-
 	song, err := env.Queries.InsertRelease(ctx, insertParams(release))
 	if err != nil {
 		if db.ErrorCode(err) == db.UniqueViolation {
@@ -331,12 +306,13 @@ func insertRelease(ctx context.Context, env *script.Env, index *utils.SongIndex,
 func insertParams(r utils.SanityRelease) db.InsertReleaseParams {
 	l := r.StreamingLinks
 	return db.InsertReleaseParams{
-		Name: r.Name(), Artists: r.Artists, ReleaseDate: utils.Text(r.ReleaseDate),
+		Name: r.Title, Artists: r.Artists, ReleaseDate: utils.Text(r.ReleaseDate),
+		MixName:   utils.Text(r.Version),
 		StmpdSlug: utils.Text(r.Slug), ThumbnailUrl: utils.Text(r.Artwork()),
-		SpotifyUrl: utils.Text(l.Spotify), AppleMusicUrl: utils.Text(l.AppleMusic),
-		YoutubeUrl: utils.Text(utils.NormalizeYoutubeURL(l.YouTube)), YoutubeMusicUrl: utils.Text(l.YouTubeMusic),
-		DeezerUrl: utils.Text(l.Deezer), TidalUrl: utils.Text(l.Tidal),
-		AmazonMusicUrl: utils.Text(l.AmazonMusic), BeatportUrl: utils.Text(l.Beatport),
+		SpotifyUrl: utils.Text(utils.CleanLink(l.Spotify)), AppleMusicUrl: utils.Text(utils.CleanLink(l.AppleMusic)),
+		YoutubeUrl: utils.Text(utils.NormalizeYoutubeURL(l.YouTube)), YoutubeMusicUrl: utils.Text(utils.CleanLink(l.YouTubeMusic)),
+		DeezerUrl: utils.Text(utils.CleanLink(l.Deezer)), TidalUrl: utils.Text(utils.CleanLink(l.Tidal)),
+		AmazonMusicUrl: utils.Text(utils.CleanLink(l.AmazonMusic)), BeatportUrl: utils.Text(utils.CleanLink(l.Beatport)),
 		BeatportReleaseID: utils.BeatportReleaseID(l.Beatport),
 	}
 }
@@ -354,10 +330,10 @@ func updateParams(id int64, r utils.SanityRelease, correctDate bool) db.UpdateSo
 		ID: id, StmpdSlug: utils.Text(r.Slug), ReleaseDate: releaseDate,
 		MixName:      utils.Text(r.Version),
 		ThumbnailUrl: utils.Text(r.Artwork()),
-		SpotifyUrl:   utils.Text(l.Spotify), AppleMusicUrl: utils.Text(l.AppleMusic),
-		YoutubeUrl: utils.Text(utils.NormalizeYoutubeURL(l.YouTube)), YoutubeMusicUrl: utils.Text(l.YouTubeMusic),
-		DeezerUrl: utils.Text(l.Deezer), TidalUrl: utils.Text(l.Tidal),
-		AmazonMusicUrl: utils.Text(l.AmazonMusic), BeatportUrl: utils.Text(l.Beatport),
+		SpotifyUrl:   utils.Text(utils.CleanLink(l.Spotify)), AppleMusicUrl: utils.Text(utils.CleanLink(l.AppleMusic)),
+		YoutubeUrl: utils.Text(utils.NormalizeYoutubeURL(l.YouTube)), YoutubeMusicUrl: utils.Text(utils.CleanLink(l.YouTubeMusic)),
+		DeezerUrl: utils.Text(utils.CleanLink(l.Deezer)), TidalUrl: utils.Text(utils.CleanLink(l.Tidal)),
+		AmazonMusicUrl: utils.Text(utils.CleanLink(l.AmazonMusic)), BeatportUrl: utils.Text(utils.CleanLink(l.Beatport)),
 		BeatportReleaseID: utils.BeatportReleaseID(l.Beatport),
 	}
 }

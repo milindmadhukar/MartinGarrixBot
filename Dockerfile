@@ -20,9 +20,9 @@ RUN export GOOS=$(echo ${TARGETPLATFORM} | cut -d'/' -f1) \
     && if [ "${GOARCH}" = "arm64" ]; then export GOARCH=arm64; fi \
     && echo "Building for GOOS=${GOOS} GOARCH=${GOARCH}" \
     && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
-       go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT}" -o bot . \
+       go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o bot . \
     && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
-       go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT}" -o dashboard ./cmd/dashboard
+       go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o dashboard ./cmd/dashboard
 
 # --- dashboard image -------------------------------------------------------
 # Deliberately before the bot stage: buildx defaults to the LAST stage, so

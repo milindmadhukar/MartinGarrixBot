@@ -66,7 +66,7 @@ const giveCoins = `-- name: GiveCoins :exec
 WITH sender_update AS (
     UPDATE users AS sender
     SET in_hand = sender.in_hand - $4
-    WHERE sender.id = $1 AND sender.in_hand >= $3 AND sender.guild_id = $3
+    WHERE sender.id = $1 AND sender.in_hand >= $4 AND sender.guild_id = $3
     RETURNING sender.id
 )
 UPDATE users AS receiver

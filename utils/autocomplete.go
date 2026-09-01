@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -16,6 +15,7 @@ type SongChoice struct {
 	ID      int64
 	Name    string
 	Artists string
+	Mix     string
 }
 
 // BuildSongChoices renders autocomplete choices whose value is the song id.
@@ -29,7 +29,10 @@ type SongChoice struct {
 func BuildSongChoices(songs []SongChoice) []discord.AutocompleteChoice {
 	choices := make([]discord.AutocompleteChoice, 0, len(songs))
 	for _, song := range songs {
-		label := fmt.Sprintf("%s - %s", song.Artists, song.Name)
+		// The rendition belongs in the label. Renditions are listed now rather than
+		// hidden, and without it two of them read as the same entry twice -- which is
+		// exactly the confusion that hiding them was meant to avoid.
+		label := SongHeading(song.Artists, song.Name, song.Mix)
 		if len(label) > discordChoiceNameLimit {
 			label = label[:discordChoiceNameLimit-1] + "…"
 		}

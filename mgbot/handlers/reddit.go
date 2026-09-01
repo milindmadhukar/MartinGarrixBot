@@ -38,14 +38,14 @@ func AuthenticateReddit(b *mgbot.MartinGarrixBot) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to make request: %v", err)
+		return fmt.Errorf("failed to make request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read response: %v", err)
+		return fmt.Errorf("failed to read response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -55,7 +55,7 @@ func AuthenticateReddit(b *mgbot.MartinGarrixBot) error {
 	// Parse response
 	var redditToken utils.RedditToken
 	if err := json.Unmarshal(body, &redditToken); err != nil {
-		return fmt.Errorf("failed to parse response: %v", err)
+		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	redditToken.ExpiresAt = time.Now().Add(time.Duration(redditToken.ExpiresIn) * time.Second)
@@ -63,7 +63,6 @@ func AuthenticateReddit(b *mgbot.MartinGarrixBot) error {
 	b.RedditToken = redditToken
 
 	return nil
-
 }
 
 // redditClient bounds every API call. The fetcher loop is the only thing driving
@@ -73,7 +72,7 @@ var redditClient = &http.Client{Timeout: 30 * time.Second}
 
 // redditTokenRefreshMargin re-authenticates slightly ahead of the advertised
 // expiry so a cycle can never start with a token that dies mid-request.
-const redditTokenRefreshMargin = 5 * time.Minute
+const redditTokenRefreshMargin = utils.TokenRefreshMargin
 
 // redditUserAgent builds the User-Agent Reddit's API rules ask for
 // (platform:app-id:version, plus the owning account). Generic agents are one of
@@ -86,7 +85,8 @@ func redditUserAgent(b *mgbot.MartinGarrixBot) string {
 // expiring. This runs on every cycle: Reddit's tokens last 24h, so authenticating
 // only once at startup leaves a long-lived process silently unauthenticated.
 func ensureRedditToken(b *mgbot.MartinGarrixBot) error {
-	if b.RedditToken.AccessToken != "" && time.Now().Before(b.RedditToken.ExpiresAt.Add(-redditTokenRefreshMargin)) {
+	if !utils.NeedsRefresh(b.RedditToken.AccessToken, b.RedditToken.ExpiresAt,
+		time.Now(), redditTokenRefreshMargin) {
 		return nil
 	}
 
@@ -110,7 +110,7 @@ func runRedditCycle(b *mgbot.MartinGarrixBot, endpoint string) error {
 		return err
 	}
 
-	notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeReddit)
+	notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest, utils.NotificationTypeReddit)
 
 	req, err := http.NewRequest("GET", "https://oauth.reddit.com"+endpoint, nil)
 	if err != nil {
@@ -160,14 +160,14 @@ func runRedditCycle(b *mgbot.MartinGarrixBot, endpoint string) error {
 			continue
 		}
 
-		redditPostEmbed := discord.NewEmbedBuilder().
-			SetTitle(html.UnescapeString(utils.CutString(post.Data.Title, 256))).
-			SetURL("https://www.reddit.com"+post.Data.Permalink).
-			SetTimestamp(time.Unix(int64(post.Data.CreatedUtc), 0)).
-			SetDescription(utils.CutString(html.UnescapeString(post.Data.Selftext), 2048)).
-			SetFooter(fmt.Sprintf("Author u/%s on Subreddit %s", post.Data.Author, post.Data.SubredditNamePrefixed), "").
+		redditPostEmbed := discord.NewEmbed().
+			WithTitle(html.UnescapeString(utils.CutString(post.Data.Title, 256))).
+			WithURL("https://www.reddit.com"+post.Data.Permalink).
+			WithTimestamp(time.Unix(int64(post.Data.CreatedUtc), 0)).
+			WithDescription(utils.CutString(html.UnescapeString(post.Data.Selftext), 2048)).
+			WithFooter(fmt.Sprintf("Author u/%s on Subreddit %s", post.Data.Author, post.Data.SubredditNamePrefixed), "").
 			// TODO: Change to reddit orange
-			SetColor(utils.ColorSuccess)
+			WithColor(utils.ColorSuccess)
 
 		if imageRegex.MatchString(post.Data.URL) {
 			redditPostEmbed.Image = &discord.EmbedResource{
@@ -176,7 +176,7 @@ func runRedditCycle(b *mgbot.MartinGarrixBot, endpoint string) error {
 		}
 
 		// Add this post to the batch
-		embed := redditPostEmbed.Build()
+		embed := redditPostEmbed
 		notifier.AddItem(utils.NotificationItem{
 			Embed: &embed,
 		})

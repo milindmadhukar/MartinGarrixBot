@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"log/slog"
 
 	"github.com/disgoorg/disgo/discord"
@@ -38,6 +37,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 			for _, song := range songs {
 				songChoices = append(songChoices, utils.SongChoice{
 					ID: song.ID, Name: song.Name, Artists: song.Artists,
+					Mix: song.MixName.String,
 				})
 			}
 		} else {
@@ -49,6 +49,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 			for _, song := range songs {
 				songChoices = append(songChoices, utils.SongChoice{
 					ID: song.ID, Name: song.Name, Artists: song.Artists,
+					Mix: song.MixName.String,
 				})
 			}
 		}
@@ -59,18 +60,15 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 
 func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
-
 		songID, ok := utils.ParseSongChoice(e.SlashCommandInteractionData().String("song"))
 		if !ok {
 			// The user submitted free text instead of picking a suggestion.
 			return e.Respond(discord.InteractionResponseTypeCreateMessage,
-				discord.NewMessageCreateBuilder().
-					SetEmbeds(discord.NewEmbedBuilder().
-						SetDescription("Please pick a song from the suggestions.").
-						SetColor(utils.ColorWarning).
-						Build()).
-					SetEphemeral(true).
-					Build())
+				discord.NewMessageCreate().
+					WithEmbeds(discord.NewEmbed().
+						WithDescription("Please pick a song from the suggestions.").
+						WithColor(utils.ColorWarning)).
+					WithEphemeral(true))
 		}
 
 		song, err := b.Queries.GetSongByID(e.Ctx, songID)
@@ -84,22 +82,22 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			lyrics = lyrics[:2048]
 		}
 
-		eb := discord.NewEmbedBuilder().
-			SetTitle(fmt.Sprintf("%s - %s", song.Artists, song.Name)).
-			SetDescription(lyrics).
-			SetColor(utils.ColorSuccess).
-			SetThumbnail(song.ThumbnailUrl.String)
+		eb := discord.NewEmbed().
+			WithTitle(utils.SongHeading(song.Artists, song.Name, song.MixName.String)).
+			WithDescription(lyrics).
+			WithColor(utils.ColorSuccess).
+			WithThumbnail(song.ThumbnailUrl.String)
 
-		lyricsMessage := discord.NewMessageCreateBuilder().
-			SetEmbeds(eb.Build())
+		lyricsMessage := discord.NewMessageCreate().
+			WithEmbeds(eb)
 
 		// GetSongButtonRows returns nil when the song carries no links, so the
 		// hand-written "does it have any" guard this replaced is redundant.
-		lyricsMessage = lyricsMessage.AddContainerComponents(utils.GetSongButtonRows(song)...)
+		lyricsMessage = lyricsMessage.AddComponents(utils.GetSongButtonRows(song)...)
 
 		return e.Respond(
 			discord.InteractionResponseTypeCreateMessage,
-			lyricsMessage.Build(),
+			lyricsMessage,
 		)
 	}
 }

@@ -1,0 +1,245 @@
+package commands
+
+// In-package: filterValidLines and selectLyricLines are unexported.
+
+import (
+	"slices"
+	"strings"
+	"testing"
+)
+
+func TestFilterValidLines(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		lines    []string
+		songName string
+		want     []string
+	}{
+		{
+			name:     "keeps lines that do not give the answer away",
+			lines:    []string{"we are the people", "that you'll never get the best of"},
+			songName: "Animals",
+			want:     []string{"we are the people", "that you'll never get the best of"},
+		},
+		{
+			name:     "drops a line containing the song name",
+			lines:    []string{"we are the animals", "keep this one"},
+			songName: "Animals",
+			want:     []string{"keep this one"},
+		},
+		{
+			name:     "the song name match is case insensitive",
+			lines:    []string{"WE ARE THE ANIMALS", "keep this one"},
+			songName: "animals",
+			want:     []string{"keep this one"},
+		},
+		{
+			name:     "drops lines under five characters",
+			lines:    []string{"hey", "oh", "a longer line"},
+			songName: "Animals",
+			want:     []string{"a longer line"},
+		},
+		{
+			name:     "trims surrounding whitespace",
+			lines:    []string{"   padded line   "},
+			songName: "Animals",
+			want:     []string{"padded line"},
+		},
+		{
+			name:     "a line that is only whitespace is dropped",
+			lines:    []string{"        ", "a longer line"},
+			songName: "Animals",
+			want:     []string{"a longer line"},
+		},
+		{
+			name:     "exactly five characters is kept",
+			lines:    []string{"12345"},
+			songName: "Animals",
+			want:     []string{"12345"},
+		},
+		{
+			name:     "four characters is dropped",
+			lines:    []string{"1234"},
+			songName: "Animals",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := filterValidLines(tt.lines, tt.songName)
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("filterValidLines() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// Returns nil rather than an empty slice, so callers must test with len().
+func TestFilterValidLines_NoMatchesReturnsNil(t *testing.T) {
+	t.Parallel()
+
+	for _, lines := range [][]string{nil, {}, {"hey", "yo"}} {
+		if got := filterValidLines(lines, "Animals"); got != nil {
+			t.Errorf("filterValidLines(%v) = %v, want nil", lines, got)
+		}
+	}
+}
+
+// BUG: strings.Contains(x, "") is always true, so an empty song name filters
+// every line out and the quiz has nothing to show. A song row with an empty
+// name would have to reach the handler for this to fire, so it is pinned rather
+// than fixed.
+func TestFilterValidLines_EmptySongNameDropsEverything(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{"a perfectly good line", "another good line"}
+
+	if got := filterValidLines(lines, ""); got != nil {
+		t.Errorf("filterValidLines(%v, \"\") = %v, want nil (current behaviour)", lines, got)
+	}
+}
+
+func TestSelectLyricLines_CountPerDifficulty(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{"one", "two", "three", "four", "five", "six", "seven", "eight"}
+
+	tests := []struct {
+		difficulty string
+		want       int
+	}{
+		{"easy", 4},
+		{"medium", 3},
+		{"hard", 2},
+		{"extreme", 1},
+		{"unrecognised", 4}, // falls back to the easy count
+		{"", 4},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.difficulty, func(t *testing.T) {
+			t.Parallel()
+
+			got := selectLyricLines(lines, tt.difficulty)
+			if len(got) != tt.want {
+				t.Errorf("selectLyricLines(_, %q) returned %d lines, want %d",
+					tt.difficulty, len(got), tt.want)
+			}
+		})
+	}
+}
+
+func TestSelectLyricLines_EdgeCases(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no lines gives no lines", func(t *testing.T) {
+		t.Parallel()
+
+		if got := selectLyricLines(nil, "easy"); len(got) != 0 {
+			t.Errorf("got %d lines from an empty input, want 0", len(got))
+		}
+	})
+
+	t.Run("the count is clamped to what is available", func(t *testing.T) {
+		t.Parallel()
+
+		lines := []string{"only", "two"}
+		got := selectLyricLines(lines, "easy") // easy wants 4
+		if len(got) != 2 {
+			t.Errorf("got %d lines, want all 2 that were available", len(got))
+		}
+	})
+
+	t.Run("a single line", func(t *testing.T) {
+		t.Parallel()
+
+		got := selectLyricLines([]string{"only one"}, "easy")
+		if len(got) != 1 || got[0] != "only one" {
+			t.Errorf("got %v, want the single available line", got)
+		}
+	})
+}
+
+// The selection window is random, so assert the invariants instead of an exact
+// result: it must always be a contiguous run taken from the input.
+func TestSelectLyricLines_IsAlwaysAContiguousWindow(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{"one", "two", "three", "four", "five", "six", "seven", "eight"}
+
+	for _, difficulty := range []string{"easy", "medium", "hard", "extreme"} {
+		for range 200 {
+			got := selectLyricLines(lines, difficulty)
+			if len(got) == 0 {
+				t.Fatalf("difficulty %q returned no lines", difficulty)
+			}
+
+			start := slices.Index(lines, got[0])
+			if start < 0 {
+				t.Fatalf("difficulty %q returned %q, which is not in the input",
+					difficulty, got[0])
+			}
+			if start+len(got) > len(lines) {
+				t.Fatalf("difficulty %q returned a window running past the end of the input",
+					difficulty)
+			}
+			if !slices.Equal(got, lines[start:start+len(got)]) {
+				t.Fatalf("difficulty %q returned %v, which is not contiguous in the input",
+					difficulty, got)
+			}
+		}
+	}
+}
+
+// The window is a subslice of the caller's slice, not a copy, so writing to it
+// writes through to the input.
+func TestSelectLyricLines_AliasesTheInputSlice(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{"one", "two", "three", "four"}
+	got := selectLyricLines(lines, "easy") // takes all four
+
+	got[0] = "mutated"
+
+	if !slices.Contains(lines, "mutated") {
+		t.Error("the returned window no longer aliases the input; if that was " +
+			"deliberate, delete this test")
+	}
+}
+
+// The two functions run back to back in the handler: filter the lyrics, then
+// pick a window from what survives.
+func TestQuizLinePipeline(t *testing.T) {
+	t.Parallel()
+
+	lyrics := strings.Split(
+		"We are the animals\n"+
+			"hey\n"+
+			"Never gonna give you up\n"+
+			"   \n"+
+			"Never gonna let you down\n"+
+			"Never gonna run around",
+		"\n")
+
+	valid := filterValidLines(lyrics, "Animals")
+	if len(valid) != 3 {
+		t.Fatalf("got %d valid lines, want 3: %v", len(valid), valid)
+	}
+
+	for _, line := range valid {
+		if strings.Contains(strings.ToLower(line), "animals") {
+			t.Errorf("line %q gives the answer away", line)
+		}
+		if len(line) < 5 {
+			t.Errorf("line %q is too short to have survived", line)
+		}
+	}
+
+	if got := selectLyricLines(valid, "hard"); len(got) != 2 {
+		t.Errorf("got %d lines for a hard quiz, want 2", len(got))
+	}
+}

@@ -26,7 +26,7 @@ func BalanceHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
 		member := e.SlashCommandInteractionData().Member("user")
 		// TODO: Check if it can't resolve a member
-		if member.Member.User.ID == 0 {
+		if member.User.ID == 0 {
 			member = *e.Member()
 		}
 
@@ -39,17 +39,16 @@ func BalanceHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			return err
 		}
 
-		eb := discord.NewEmbedBuilder().
-			SetTitle("Garrix Bank").
+		eb := discord.NewEmbed().
+			WithTitle("Garrix Bank").
 			AddField("In Hand", strconv.Itoa(int(balanceInfo.InHand.Int64)), false).
 			AddField("In Safe", strconv.Itoa(int(balanceInfo.GarrixCoins.Int64)), false).
-			SetColor(utils.ColorSuccess).
-			SetThumbnail(*e.Member().User.AvatarURL(discord.WithFormat(discord.FileFormatJPEG), discord.WithSize(512)))
+			WithColor(utils.ColorSuccess).
+			WithThumbnail(*e.Member().User.AvatarURL(discord.WithFormat(discord.FileFormatJPEG), discord.WithSize(512)))
 
 		return e.Respond(
-			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-				SetEmbeds(eb.Build()).
-				Build(),
+			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+				WithEmbeds(eb),
 		)
 	}
 }

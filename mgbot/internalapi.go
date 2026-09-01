@@ -116,7 +116,7 @@ func (b *MartinGarrixBot) internalAuth(next http.Handler) http.Handler {
 
 func (b *MartinGarrixBot) handleInternalGuilds(w http.ResponseWriter, r *http.Request) {
 	guilds := make([]internalGuild, 0)
-	b.Client.Caches().GuildsForEach(func(g discord.Guild) {
+	for g := range b.Client.Caches.Guilds() {
 		guilds = append(guilds, internalGuild{
 			ID:          g.ID.String(),
 			Name:        g.Name,
@@ -124,7 +124,7 @@ func (b *MartinGarrixBot) handleInternalGuilds(w http.ResponseWriter, r *http.Re
 			OwnerID:     g.OwnerID.String(),
 			MemberCount: g.MemberCount,
 		})
-	})
+	}
 	sort.Slice(guilds, func(i, j int) bool { return guilds[i].Name < guilds[j].Name })
 	writeInternalJSON(w, guilds)
 }
@@ -135,7 +135,7 @@ func (b *MartinGarrixBot) handleInternalGuild(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	g, found := b.Client.Caches().Guild(guildID)
+	g, found := b.Client.Caches.Guild(guildID)
 	if !found {
 		// A guild the bot is not in is a 404, not an error: the dashboard
 		// uses this to decide whether to offer an invite link.
@@ -159,15 +159,15 @@ func (b *MartinGarrixBot) handleInternalRoles(w http.ResponseWriter, r *http.Req
 	}
 
 	roles := make([]internalRole, 0)
-	b.Client.Caches().RolesForEach(guildID, func(role discord.Role) {
+	for role := range b.Client.Caches.Roles(guildID) {
 		roles = append(roles, newInternalRole(role))
-	})
+	}
 
 	// The cache is only populated when cache.FlagRoles is enabled and the
 	// guild has been received; fall back to REST so a cold start or a
 	// misconfigured cache degrades to slow rather than to empty dropdowns.
 	if len(roles) == 0 {
-		fetched, err := b.Client.Rest().GetRoles(guildID)
+		fetched, err := b.Client.Rest.GetRoles(guildID)
 		if err != nil {
 			slog.Error("Failed to fetch roles for internal API",
 				slog.String("guild_id", guildID.String()), slog.Any("err", err))
@@ -191,16 +191,16 @@ func (b *MartinGarrixBot) handleInternalChannels(w http.ResponseWriter, r *http.
 	}
 
 	channels := make([]internalChannel, 0)
-	// ChannelsForEach is global, not guild-scoped, so this has to filter.
-	b.Client.Caches().ChannelsForEach(func(ch discord.GuildChannel) {
+	// Caches.Channels() is global, not guild-scoped, so this has to filter.
+	for ch := range b.Client.Caches.Channels() {
 		if ch.GuildID() != guildID {
-			return
+			continue
 		}
 		channels = append(channels, newInternalChannel(ch))
-	})
+	}
 
 	if len(channels) == 0 {
-		fetched, err := b.Client.Rest().GetGuildChannels(guildID)
+		fetched, err := b.Client.Rest.GetGuildChannels(guildID)
 		if err != nil {
 			slog.Error("Failed to fetch channels for internal API",
 				slog.String("guild_id", guildID.String()), slog.Any("err", err))

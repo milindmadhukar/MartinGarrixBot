@@ -13,6 +13,13 @@ const (
 	SourceReddit   = "reddit"
 	SourceYouTube  = "youtube"
 	SourceTour     = "tour"
+	// SourceAnniversary tracks liveness, not fetching. The catalogue is local, so
+	// there is nothing to fail at; a cycle counts as a success whenever the guild
+	// configs could be read. Recording success only when a post went out would read
+	// as "last success 3 days ago" on any quiet stretch -- which is precisely the
+	// silent-failure signature this registry was written to catch, and it would cry
+	// wolf on days that simply have no anniversary.
+	SourceAnniversary = "anniversary"
 )
 
 // sourceFailureThreshold is how many consecutive bad cycles a source may have

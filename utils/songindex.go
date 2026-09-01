@@ -272,9 +272,18 @@ func (ix *SongIndex) Lookup(q SongQuery) (*db.GetAllSongsForMatchingRow, MatchTi
 	var owned *db.GetAllSongsForMatchingRow
 
 	note := func(i int) {
-		if owned == nil && ix.ownedByAnotherBeatportTrack(i, q) {
-			owned = &ix.rows[i]
+		if owned != nil || !ix.ownedByAnotherBeatportTrack(i, q) {
+			return
 		}
+		// Only the same recording counts as already represented. Every remix of a
+		// song shares its base key and its artist set with the original, so without
+		// this the original -- already owned by some other beatport track id --
+		// answered for all of them: thirty "Scared To Be Lonely" remixes reported
+		// present while the table held four rows, and no remix was ever inserted.
+		if agree, _ := variantsOf(q, ix.rows[i]); !agree {
+			return
+		}
+		owned = &ix.rows[i]
 	}
 
 	for _, i := range ix.byMatchKey[artistSet+"|"+base+"|"+variant] {

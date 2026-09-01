@@ -6,7 +6,6 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
-	"github.com/disgoorg/disgo/rest"
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
 
@@ -18,30 +17,28 @@ var ping = discord.SlashCommandCreate{
 func PingHandler(e *handler.CommandEvent) error {
 	var gatewayPing string
 	if e.Client().HasGateway() {
-		gatewayPing = e.Client().Gateway().Latency().String()
+		gatewayPing = e.Client().Gateway.Latency().String()
 	}
 
-	eb := discord.NewEmbedBuilder().
-		SetTitle("Pong! \U0001F3D3").
+	eb := discord.NewEmbed().
+		WithTitle("Pong! \U0001F3D3").
 		AddField("Rest", "loading...", false).
 		AddField("Gateway", gatewayPing, false).
-		SetColor(utils.ColorSuccess)
+		WithColor(utils.ColorSuccess)
 
 	defer func() {
-		var start int64
-		_, _ = e.Client().Rest().GetBotApplicationInfo(func(config *rest.RequestConfig) {
-			start = time.Now().UnixNano()
-		})
-		duration := time.Now().UnixNano() - start
-		eb.SetField(0, "Rest", time.Duration(duration).String(), false)
-		if _, err := e.Client().Rest().UpdateInteractionResponse(e.ApplicationID(), e.Token(), discord.MessageUpdate{Embeds: &[]discord.Embed{eb.Build()}}); err != nil {
+		// disgo v0.19 unexported the request config, so the round trip is timed
+		// around the call rather than from inside a rest.RequestOpt.
+		start := time.Now()
+		_, _ = e.Client().Rest.GetBotApplicationInfo()
+		eb = eb.WithField(0, "Rest", time.Since(start).String(), false)
+		if _, err := e.Client().Rest.UpdateInteractionResponse(e.ApplicationID(), e.Token(), discord.MessageUpdate{Embeds: &[]discord.Embed{eb}}); err != nil {
 			slog.Error("Failed update interaction", slog.Any("err", err))
 		}
 	}()
 
-	return e.Respond( discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-			SetEmbeds(eb.Build()).
-			SetEphemeral(true).
-			Build(),
+	return e.Respond(discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+		WithEmbeds(eb).
+		WithEphemeral(true),
 	)
 }

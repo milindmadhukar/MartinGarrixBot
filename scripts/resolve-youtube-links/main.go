@@ -88,12 +88,9 @@ func main() {
 		}
 
 		url := "https://www.youtube.com/watch?v=" + match.ID
-		if env.DryRun {
-			slog.Info("would set youtube link",
-				slog.Int64("song_id", row.ID), slog.String("name", row.Name),
-				slog.String("artists", row.Artists),
-				slog.String("video", match.Title), slog.String("url", url))
-		}
+		slog.Debug("matched a video",
+			slog.Int64("song_id", row.ID), slog.String("name", row.Name),
+			slog.String("video", match.Title))
 
 		n, err := env.Queries.SetSongYoutubeURL(ctx, db.SetSongYoutubeURLParams{
 			ID: row.ID, YoutubeUrl: utils.Text(url),

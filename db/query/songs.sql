@@ -11,36 +11,40 @@ SELECT * FROM songs WHERE id = $1;
 SELECT * FROM songs WHERE beatport_id = $1;
 
 -- name: GetSongsLike :many
--- Autocomplete offers one entry per song. Remix rows are excluded: ten "Told You
--- So" choices is not a useful list, and the choice payload is capped at 100 bytes
--- by Discord, which long remix names were overflowing.
-SELECT id, name, artists, release_date
+-- Renditions are listed, not hidden. A remix is its own recording with its own links,
+-- and excluding it made those links unreachable through the bot at all. What made the
+-- old list unusable was the same song appearing twice under one name -- that is a
+-- duplicate, and duplicates are merged rather than filtered out of sight.
+--
+-- Collections are still excluded: an EP is not something to fetch links for as a song.
+-- mix_name comes back so the caller can tell two renditions apart in the label.
+SELECT id, name, artists, mix_name, release_date
 FROM songs
-WHERE parent_song_id IS NULL
-  AND LOWER(artists || ' - ' || name) LIKE LOWER($1)
-ORDER BY release_date DESC
+WHERE NOT is_collection
+  AND LOWER(artists || ' - ' || name || ' ' || COALESCE(mix_name, '')) LIKE LOWER($1)
+ORDER BY (parent_song_id IS NOT NULL), release_date DESC
 LIMIT 20;
 
 -- name: GetRandomSongNames :many
-SELECT id, name, artists, release_date
+SELECT id, name, artists, mix_name, release_date
 FROM songs
-WHERE parent_song_id IS NULL
+WHERE NOT is_collection AND parent_song_id IS NULL
 ORDER BY RANDOM()
 LIMIT 20;
 
 -- name: GetSongsWithLyricsLike :many
-SELECT id, name, artists, release_date
+SELECT id, name, artists, mix_name, release_date
 FROM songs
 WHERE lyrics IS NOT NULL
-  AND parent_song_id IS NULL
+  AND NOT is_collection
   AND LOWER(artists || ' - ' || name) LIKE LOWER($1)
-ORDER BY release_date DESC
+ORDER BY (parent_song_id IS NOT NULL), release_date DESC
 LIMIT 20;
 
 -- name: GetRandomSongNamesWithLyrics :many
-SELECT id, name, artists, release_date
+SELECT id, name, artists, mix_name, release_date
 FROM songs
-WHERE lyrics IS NOT NULL AND parent_song_id IS NULL
+WHERE lyrics IS NOT NULL AND NOT is_collection AND parent_song_id IS NULL
 ORDER BY RANDOM()
 LIMIT 20;
 
@@ -71,12 +75,12 @@ LIMIT 1;
 
 -- name: InsertRelease :one
 INSERT INTO songs (
-    name, artists, release_date, thumbnail_url, stmpd_slug,
+    name, artists, mix_name, release_date, thumbnail_url, stmpd_slug,
     spotify_url, apple_music_url, youtube_url, youtube_music_url,
     deezer_url, tidal_url, amazon_music_url, beatport_url, beatport_release_id,
     stmpd_synced_at, source
 ) VALUES (
-    sqlc.arg(name), sqlc.arg(artists), sqlc.arg(release_date), sqlc.narg(thumbnail_url), sqlc.narg(stmpd_slug),
+    sqlc.arg(name), sqlc.arg(artists), sqlc.narg(mix_name), sqlc.arg(release_date), sqlc.narg(thumbnail_url), sqlc.narg(stmpd_slug),
     sqlc.narg(spotify_url), sqlc.narg(apple_music_url), sqlc.narg(youtube_url), sqlc.narg(youtube_music_url),
     sqlc.narg(deezer_url), sqlc.narg(tidal_url), sqlc.narg(amazon_music_url),
     sqlc.narg(beatport_url), sqlc.narg(beatport_release_id),
@@ -103,13 +107,13 @@ SELECT * FROM songs WHERE stmpd_slug = $1;
 UPDATE songs SET
     stmpd_slug          = COALESCE(sqlc.narg(stmpd_slug),          stmpd_slug),
     release_date        = COALESCE(sqlc.narg(release_date),        release_date),
-    -- The catalogue's `version` field, which nothing used to carry across. A legacy
-    -- row for "La La La (Drove Remix)" was stored as plain "La La La", so it keyed
-    -- identically to the original: it showed up as a second, indistinguishable entry
-    -- in autocomplete, and dedupe wanted to merge the two and delete one. Recording
-    -- the rendition instead makes it a remix of the original, exactly like the
-    -- Catharina remixes, which carry theirs in mix_name already.
-    mix_name            = COALESCE(mix_name, sqlc.narg(mix_name)),
+    -- The catalogue is the authority for what a release is called and which
+    -- rendition it is, so both are taken from it rather than merged with whatever
+    -- the row happened to hold. This is what keeps the shape uniform: the name is
+    -- the song's name and the rendition lives in mix_name, never smuggled into the
+    -- title for some rows and not others.
+    name                = COALESCE(sqlc.narg(title), name),
+    mix_name            = sqlc.narg(mix_name),
     spotify_url         = COALESCE(sqlc.narg(spotify_url),         spotify_url),
     apple_music_url     = COALESCE(sqlc.narg(apple_music_url),     apple_music_url),
     youtube_url         = COALESCE(sqlc.narg(youtube_url),         youtube_url),
@@ -137,7 +141,8 @@ WHERE id = sqlc.arg(id)
        (is_unreleased AND sqlc.narg(release_date)::text IS NOT NULL)
     OR stmpd_slug          IS DISTINCT FROM COALESCE(sqlc.narg(stmpd_slug),          stmpd_slug)
     OR release_date        IS DISTINCT FROM COALESCE(sqlc.narg(release_date),        release_date)
-    OR mix_name            IS DISTINCT FROM COALESCE(mix_name, sqlc.narg(mix_name))
+    OR name                IS DISTINCT FROM COALESCE(sqlc.narg(title), name)
+    OR mix_name            IS DISTINCT FROM sqlc.narg(mix_name)
     OR spotify_url         IS DISTINCT FROM COALESCE(sqlc.narg(spotify_url),         spotify_url)
     OR apple_music_url     IS DISTINCT FROM COALESCE(sqlc.narg(apple_music_url),     apple_music_url)
     OR youtube_url         IS DISTINCT FROM COALESCE(sqlc.narg(youtube_url),         youtube_url)
@@ -156,8 +161,8 @@ WHERE id = sqlc.arg(id)
 -- name: InsertBeatportSong :one
 INSERT INTO songs (
     name, artists, release_date, thumbnail_url, beatport_id, mix_name,
-    release_name, genre, sub_genre, bpm, musical_key, length_ms, source
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'beatport')
+    release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_slug, source
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'beatport')
 RETURNING *;
 
 -- name: DoesSongExist :one
@@ -178,6 +183,7 @@ UPDATE songs SET
     artists       = sqlc.arg(artists),
     thumbnail_url = COALESCE(sqlc.narg(thumbnail_url), thumbnail_url),
     beatport_id   = sqlc.narg(beatport_id),
+    beatport_slug = COALESCE(sqlc.narg(beatport_slug), beatport_slug),
     mix_name      = sqlc.narg(mix_name),
     release_date  = sqlc.arg(release_date),
     release_name  = sqlc.narg(release_name),
@@ -193,6 +199,7 @@ WHERE id = sqlc.arg(id)
     OR artists       IS DISTINCT FROM sqlc.arg(artists)
     OR thumbnail_url IS DISTINCT FROM COALESCE(sqlc.narg(thumbnail_url), thumbnail_url)
     OR beatport_id   IS DISTINCT FROM sqlc.narg(beatport_id)
+    OR beatport_slug IS DISTINCT FROM COALESCE(sqlc.narg(beatport_slug), beatport_slug)
     OR mix_name      IS DISTINCT FROM sqlc.narg(mix_name)
     OR release_date  IS DISTINCT FROM sqlc.arg(release_date)
     OR release_name  IS DISTINCT FROM sqlc.narg(release_name)
@@ -245,7 +252,7 @@ UPDATE songs SET match_key = $2, base_key = $3
 WHERE id = $1 AND (match_key IS DISTINCT FROM $2 OR base_key IS DISTINCT FROM $3);
 
 -- name: GetSongsForKeying :many
-SELECT id, name, artists, mix_name, length_ms, is_collection FROM songs ORDER BY id;
+SELECT id, name, artists, mix_name, length_ms, is_collection, apple_music_url, stmpd_slug FROM songs ORDER BY id;
 
 -- name: GetRandomSongForRadio :one
 -- Canonical rows only, so the rotation does not play six versions of one track, and
@@ -475,3 +482,34 @@ UPDATE songs SET youtube_url = NULL
 WHERE youtube_url IS NOT NULL
   AND youtube_url NOT LIKE '%watch?v=%'
   AND youtube_url NOT LIKE '%youtu.be/%';
+
+-- name: SetSongTitle :execrows
+UPDATE songs SET name = sqlc.arg(name), mix_name = sqlc.narg(mix_name)
+WHERE id = sqlc.arg(id)
+  AND (name IS DISTINCT FROM sqlc.arg(name) OR mix_name IS DISTINCT FROM sqlc.narg(mix_name));
+
+-- name: GetSongsForSubsetDedupe :many
+-- Everything needed to spot rows that are the same recording credited to different
+-- subsets of the same artists.
+SELECT id, name, artists, mix_name, release_date, source, stmpd_slug, beatport_id,
+       spotify_url, apple_music_url, youtube_url, lyrics, parent_song_id, is_collection
+FROM songs ORDER BY id;
+
+-- name: SetBeatportSlug :execrows
+-- Fills the slug that turns a stored beatport_id into a URL that resolves.
+UPDATE songs SET beatport_slug = $2
+WHERE id = $1 AND beatport_slug IS DISTINCT FROM $2;
+
+-- name: GetSongsMissingBeatportSlug :many
+-- Rows carrying a Beatport track id whose page URL cannot be built yet.
+SELECT id, name, artists, mix_name, beatport_id FROM songs
+WHERE beatport_id IS NOT NULL AND beatport_slug IS NULL ORDER BY id;
+
+-- name: GetSongsForAudit :many
+-- Everything the invariant checker needs to recompute a row's derived state and
+-- compare it against what is stored.
+SELECT id, name, artists, mix_name, length_ms, is_collection, parent_song_id,
+       match_key, base_key, release_date, apple_music_url, spotify_url, youtube_url, stmpd_slug,
+       beatport_id, beatport_slug, beatport_url, deezer_url, tidal_url,
+       amazon_music_url, youtube_music_url, source
+FROM songs ORDER BY id;

@@ -49,8 +49,10 @@ func main() {
 	}
 	index := utils.NewSongIndex(rows)
 
-	var inserted, matched, failed int
+	var inserted, matched, failed, slugged, unreachable int
+	prog := script.NewProgress("import beatport tracks", len(tracks))
 	for _, track := range tracks {
+		prog.Step()
 		artists := utils.FormatBeatportArtists(track.Artists)
 
 		if existing, tier := index.Lookup(utils.SongQuery{
@@ -62,14 +64,25 @@ func main() {
 			matched++
 			slog.Debug("track already represented",
 				slog.String("name", track.Name), slog.String("tier", string(tier)))
-			continue
-		}
 
-		if env.DryRun {
-			slog.Info("would insert beatport track",
-				slog.String("name", track.Name), slog.String("artists", artists),
-				slog.String("release_date", track.ReleaseDate))
-			inserted++
+			// A row that already exists still needs the slug. Beatport track pages
+			// are /track/<slug>/<id> and the catalogue only ever stored the id, so
+			// every Beatport button led to a 404. The slug cannot be derived from
+			// the stored title -- Beatport slugifies the full name including the
+			// feature credit this catalogue strips out -- so this walk, which has
+			// the authoritative value in hand, is where it gets filled in.
+			if track.Slug != "" {
+				n, err := env.Queries.SetBeatportSlug(ctx, db.SetBeatportSlugParams{
+					ID:           existing.ID,
+					BeatportSlug: utils.Text(track.Slug),
+				})
+				if err != nil {
+					script.Fatal("failed to store a beatport slug", err)
+				}
+				if n > 0 {
+					slugged++
+				}
+			}
 			continue
 		}
 
@@ -105,10 +118,53 @@ func main() {
 		})
 	}
 
+	prog.Done()
+
+	// The listings cover the label and the configured artists. Rows that came from
+	// elsewhere hold a track id those pages never mention, so their slug -- and with
+	// it their only working Beatport link -- has to be fetched one at a time.
+	stragglers, err := env.Queries.GetSongsMissingBeatportSlug(ctx)
+	if err != nil {
+		script.Fatal("failed to list rows missing a beatport slug", err)
+	}
+	if len(stragglers) > 0 {
+		slog.Info("Fetching slugs for tracks outside the configured sources",
+			slog.Int("rows", len(stragglers)))
+		sp := script.NewProgress("fetch individual track slugs", len(stragglers))
+		for _, row := range stragglers {
+			sp.Step()
+			track, err := client.GetTrack(row.BeatportID.Int32)
+			if err != nil {
+				// Territory-restricted and delisted tracks are expected here. The
+				// row simply shows one fewer button rather than a broken one.
+				unreachable++
+				slog.Debug("no slug available for track",
+					slog.Int("track_id", int(row.BeatportID.Int32)), slog.Any("err", err))
+				continue
+			}
+			if track.Slug == "" {
+				unreachable++
+				continue
+			}
+			n, err := env.Queries.SetBeatportSlug(ctx, db.SetBeatportSlugParams{
+				ID: row.ID, BeatportSlug: utils.Text(track.Slug),
+			})
+			if err != nil {
+				script.Fatal("failed to store a beatport slug", err)
+			}
+			if n > 0 {
+				slugged++
+			}
+		}
+		sp.Done()
+	}
+
 	slog.Info("Beatport import complete",
 		slog.Int("tracks_seen", len(tracks)),
 		slog.Int("inserted", inserted),
 		slog.Int("already_represented", matched),
+		slog.Int("beatport_slugs_filled", slugged),
+		slog.Int("tracks_with_no_reachable_slug", unreachable),
 		slog.Int("failed", failed))
 	slog.Info("Run link-remix-parents next so the new remix rows are grouped")
 }
@@ -146,6 +202,7 @@ func insertParams(track utils.BeatportTrack, artists string) db.InsertBeatportSo
 		Name: track.Name, Artists: artists, ReleaseDate: utils.Text(track.ReleaseDate),
 		ThumbnailUrl: utils.Text(track.ThumbnailURL),
 		BeatportID:   pgtype.Int4{Int32: int32(track.ID), Valid: true},
+		BeatportSlug: utils.Text(track.Slug),
 		MixName:      utils.Text(track.MixName),
 		ReleaseName:  utils.Text(track.Release.Name),
 		Genre:        utils.Text(track.Genre.Name),

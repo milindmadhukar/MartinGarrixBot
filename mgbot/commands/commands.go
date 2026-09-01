@@ -50,8 +50,10 @@ func SetupHandlers(b *mgbot.MartinGarrixBot) *handler.Mux {
 	rootHandler.Command("/radio", RadioHandler(b))
 
 	rootHandler.Command("/moderation", ModerationHandler(b))
+	rootHandler.Component("/modlogs/{userID}/{action}/{page}", ModlogsPaginationHandler(b))
 
 	rootHandler.Command("/config", ConfigHandler(b))
+	rootHandler.Autocomplete("/config", ConfigAutocompleteHandler(b))
 
 	fun := handler.New()
 	fun.Command("/8ball", EightBallHandler)

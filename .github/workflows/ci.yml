@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build, vet and test
+    runs-on: ubuntu-latest
+    steps:
+      # Full history: the formatting step below diffs against the base commit,
+      # and the default shallow clone has no parent to diff against.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # go.mod is the single source of truth for the Go version, matching the
+      # Dockerfile's golang:1.25-alpine. check-latest picks up the newest patch
+      # release rather than whatever the runner has cached.
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      # -race because RadioManager is shared between gateway listeners and
+      # command handlers; -shuffle to catch order-dependent tests.
+      - name: Test
+        run: go test -race -shuffle=on ./...
+
+      # Only the files this change touches. A repo-wide `gofmt -l .` would drag
+      # untouched files into every diff, which is churn deliberately avoided here.
+      - name: Formatting (changed files only)
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          [ -n "$base" ] || base="$(git rev-parse --verify -q HEAD~1 || true)"
+          [ -n "$base" ] || exit 0
+          git merge-base --is-ancestor "$base" HEAD 2>/dev/null || exit 0
+          changed="$(git diff --name-only --diff-filter=d "$base" HEAD -- '*.go')"
+          [ -n "$changed" ] || exit 0
+          unformatted="$(gofmt -l $changed)"
+          if [ -n "$unformatted" ]; then
+            echo "not gofmt-clean:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      # disgo v0.19 builders use value receivers, so a discarded result is a silent
+      # no-op that both the compiler and `go vet` accept. This is the only automated
+      # check for it. The method list is an explicit whitelist: a generic
+      # `\w+\.Add\w+\(` would false-positive on the project's own notifier.AddItem.
+      - name: No discarded builder results
+        run: |
+          ! grep -rnE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*\.(With(Title|Titlef|Description|Descriptionf|Color|Footer|FooterText|Image|Thumbnail|URL|Timestamp|Fields|Field|Author|Content|Contentf|Embeds|Embed|Components|Ephemeral|Files|Flags|AllowedMentions|MessageReference|MessageReferenceByID)|Add(Field|Fields|Embeds|Embed|Components|ActionRow|Files|File|Flags))\(' --include='*.go' .
+          # Same thing in the multi-line form, where the receiver sits alone on
+          # its line and the method call continues on the next one.
+          ! grep -rnE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*\.[[:space:]]*$' --include='*.go' .
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.13.2
+
+  integration:
+    name: Database integration tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: garrixbot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      # The suite runs the real migrations from db/migrations against this
+      # database, so the queries are exercised against the schema that ships.
+      - name: Test
+        env:
+          MGBOT_TEST_DATABASE_URL: postgres://postgres:password@localhost:5432/garrixbot_test?sslmode=disable
+        run: go test -tags integration -count=1 ./db/...
