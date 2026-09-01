@@ -12,6 +12,13 @@ config.docker.toml
 /martin-garrix-bot
 config.prod.toml
 
+# Timestamped config backups, e.g. from a token rotation. These hold the
+# credentials the live config held a moment ago, so an untracked one is exactly
+# the file a `git add -A` should not sweep up.
+config.toml.bak-*
+config.docker.toml.bak-*
+config.*.bak-*
+
 # Binaries from `go build ./scripts/...`, which lands them in the repo root.
 /backfill-stmpd
 /backfill-dates
