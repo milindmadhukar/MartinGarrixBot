@@ -19,3 +19,6 @@ config.prod.toml
 /link-remix-parents
 /rekey-songs
 /import-beatport
+
+# Agent scratch worktrees; these are separate git repos and must not be committed.
+.claude/
