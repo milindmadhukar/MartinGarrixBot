@@ -11,3 +11,11 @@ config.docker.toml
 /lavalink/plugins/*.jar
 /martin-garrix-bot
 config.prod.toml
+
+# Binaries from `go build ./scripts/...`, which lands them in the repo root.
+/backfill-stmpd
+/backfill-dates
+/dedupe-songs
+/link-remix-parents
+/rekey-songs
+/import-beatport
