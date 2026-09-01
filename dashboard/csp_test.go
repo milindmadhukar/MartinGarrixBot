@@ -1,0 +1,151 @@
+package dashboard
+
+import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"regexp"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+)
+
+// The charts on this dashboard are CSS: a bar is a div with an inline width, a
+// column is a div with an inline height, a heatmap cell is a span with an inline
+// opacity. That works only if the CSP permits inline styles.
+//
+// It once did not. `style-src 'self'` blocks inline style ATTRIBUTES as well as
+// <style> blocks, so the browser dropped every one of them and the page rendered
+// full-width bars, invisible columns and a flat heatmap -- while the HTML was
+// perfectly correct and every existing test passed. curl does not enforce CSP,
+// so nothing caught it.
+//
+// These two tests are deliberately a pair. One asserts the templates still emit
+// the styles; the other asserts the policy still allows them. Breaking either
+// half reintroduces the bug, and either half alone would not notice.
+
+func TestCSPAllowsInlineStyles(t *testing.T) {
+	s := &Server{opts: testOptions(t)}
+
+	rec := httptest.NewRecorder()
+	s.securityHeaders(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	csp := rec.Header().Get("Content-Security-Policy")
+	if csp == "" {
+		t.Fatal("no Content-Security-Policy header")
+	}
+
+	styleSrc := directive(csp, "style-src")
+	if styleSrc == "" {
+		t.Fatalf("no style-src in %q", csp)
+	}
+	if !strings.Contains(styleSrc, "'unsafe-inline'") {
+		t.Errorf("style-src is %q; without 'unsafe-inline' the browser drops every "+
+			"chart's inline style and the panels render blank", styleSrc)
+	}
+
+	// The other half of the policy must stay strict -- that is where the real
+	// XSS exposure is, and relaxing style-src is not a reason to relax this.
+	if scriptSrc := directive(csp, "script-src"); strings.Contains(scriptSrc, "unsafe-inline") {
+		t.Errorf("script-src must not allow inline script, got %q", scriptSrc)
+	}
+}
+
+// TestChartBarsCarryDistinctWidths renders the busiest-channels panel with two
+// very different values. If the bars come out the same width the chart is
+// meaningless, which is exactly how the CSP bug looked in the browser.
+func TestChartBarsCarryDistinctWidths(t *testing.T) {
+	r, err := newRenderer(testOptions(t), false)
+	if err != nil {
+		t.Fatalf("newRenderer: %v", err)
+	}
+
+	p := &pageData{GuildID: "1", Data: map[string]any{
+		"WindowDays": 30,
+		"Channels": []namedChannel{
+			{ID: "1", Name: "#busy", Messages: 4000},
+			{ID: "2", Name: "#quiet", Messages: 40},
+		},
+	}}
+
+	var buf bytes.Buffer
+	if err := r.pages["overview"].ExecuteTemplate(&buf, "panel-channels", p); err != nil {
+		t.Fatalf("panel-channels: %v", err)
+	}
+
+	widths := widthPercents(buf.String())
+	if len(widths) != 2 {
+		t.Fatalf("expected 2 bar widths, got %d in:\n%s", len(widths), buf.String())
+	}
+	if widths[0] != 100 {
+		t.Errorf("the largest channel should fill the bar, got %v%%", widths[0])
+	}
+	if widths[1] >= widths[0] {
+		t.Errorf("a channel with 1%% of the traffic rendered at %v%% next to %v%% -- "+
+			"bars are not proportional", widths[1], widths[0])
+	}
+
+	// html/template must not have neutered the value into ZgotmplZ.
+	if strings.Contains(buf.String(), "ZgotmplZ") {
+		t.Error("template escaping replaced a style value; the chart would render unstyled")
+	}
+}
+
+// TestChartColumnsCarryHeights covers the growth panel, which sizes with height
+// rather than width and failed the same way.
+func TestChartColumnsCarryHeights(t *testing.T) {
+	r, err := newRenderer(testOptions(t), false)
+	if err != nil {
+		t.Fatalf("newRenderer: %v", err)
+	}
+
+	p := &pageData{GuildID: "1", Data: map[string]any{
+		"WindowDays": 30,
+		"Max":        int64(100),
+		"Series": []db.DashJoinLeaveDailyRow{
+			{Day: pgtype.Timestamp{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Valid: true}, Joins: 100, Leaves: 10},
+			{Day: pgtype.Timestamp{Time: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), Valid: true}, Joins: 5, Leaves: 90},
+		},
+	}}
+
+	var buf bytes.Buffer
+	if err := r.pages["overview"].ExecuteTemplate(&buf, "panel-growth", p); err != nil {
+		t.Fatalf("panel-growth: %v", err)
+	}
+
+	if !strings.Contains(buf.String(), "style=\"height:") {
+		t.Fatalf("growth columns carry no inline height:\n%s", buf.String())
+	}
+	if strings.Contains(buf.String(), "ZgotmplZ") {
+		t.Error("template escaping replaced a style value")
+	}
+}
+
+func directive(csp, name string) string {
+	for _, part := range strings.Split(csp, ";") {
+		part = strings.TrimSpace(part)
+		if after, ok := strings.CutPrefix(part, name+" "); ok {
+			return after
+		}
+	}
+	return ""
+}
+
+var widthRe = regexp.MustCompile(`style="width:\s*([0-9.]+)%"`)
+
+func widthPercents(html string) []float64 {
+	var out []float64
+	for _, m := range widthRe.FindAllStringSubmatch(html, -1) {
+		v, err := strconv.ParseFloat(m[1], 64)
+		if err != nil {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
+}

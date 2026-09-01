@@ -7,13 +7,14 @@
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js" defer></script>
 </head>
-<body class="h-full bg-slate-950 text-slate-200 antialiased"
+<body class="h-full bg-ink text-slate-200 antialiased"
       {{if .CSRFToken}}hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'{{end}}>
 
-  <header class="border-b border-slate-800 bg-slate-900/60">
+  {{if not .Bare}}
+  <header class="border-b border-slate-800 bg-slate-900/40">
     <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 sm:px-4">
       <a href="/" class="flex shrink-0 items-center gap-2 font-semibold text-slate-100">
-        <span class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
+        <span class="inline-block h-2.5 w-2.5 rounded-full bg-mint-300"></span>
         <span class="hidden sm:inline">Garrix Dashboard</span>
         <span class="sm:hidden">Garrix</span>
       </a>
@@ -40,7 +41,7 @@
             </button>
           </form>
         {{else}}
-          <a href="/login" class="rounded-md bg-indigo-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-400">
+          <a href="/login" class="rounded-full border border-mint-300/30 bg-mint-300/10 px-3 py-1.5 text-sm font-medium text-mint-100 hover:border-mint-300/60 hover:bg-mint-300/20">
             Sign in<span class="hidden sm:inline"> with Discord</span>
           </a>
         {{end}}
@@ -51,14 +52,15 @@
       {{/* Scrolls sideways rather than wrapping on a phone: four tabs stacked
            two-high pushes the content below the fold on a small screen. */}}
       <nav class="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-3 sm:px-4
-                  [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden">
+                  [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {{template "navlink" dict "Href" (printf "/g/%s" .GuildID) "Label" "Overview" "Active" (eq .Nav "overview")}}
         {{template "navlink" dict "Href" (printf "/g/%s/modlogs" .GuildID) "Label" "Moderation" "Active" (eq .Nav "modlogs")}}
-        {{template "navlink" dict "Href" (printf "/g/%s/members" .GuildID) "Label" "Joins &amp; leaves" "Active" (eq .Nav "members")}}
+        {{template "navlink" dict "Href" (printf "/g/%s/members" .GuildID) "Label" "Joins & leaves" "Active" (eq .Nav "members")}}
         {{template "navlink" dict "Href" (printf "/g/%s/settings" .GuildID) "Label" "Settings" "Active" (eq .Nav "settings")}}
       </nav>
     {{end}}
   </header>
+  {{end}}
 
   {{if .Degraded}}
     <div class="border-b border-amber-900/60 bg-amber-950/40">
@@ -69,20 +71,22 @@
     </div>
   {{end}}
 
-  <main class="mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-6">
+  <main class="{{if not .Bare}}mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-6{{end}}">
     {{block "page" .}}{{end}}
   </main>
 
+  {{if not .Bare}}
   <footer class="mx-auto max-w-7xl px-3 pb-8 pt-4 text-xs text-slate-600 sm:px-4">
     Martin Garrix Bot
   </footer>
+  {{end}}
 </body>
 </html>
 {{end}}
 
 {{define "navlink"}}
 <a href="{{.Href}}"
-   class="shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm {{if .Active}}border-indigo-400 text-white{{else}}border-transparent text-slate-400 hover:text-slate-200{{end}}">
+   class="shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm {{if .Active}}border-mint-300 text-white{{else}}border-transparent text-slate-400 hover:text-slate-200{{end}}">
   {{.Label}}
 </a>
 {{end}}
