@@ -40,13 +40,13 @@ func preprocessString(s string) string {
 	s = strings.ToLower(s)
 
 	// Remove all spaces
-	// TEST: Idk if this works
 	s = strings.ReplaceAll(s, " ", "")
 
-	// Remove non-alphanumeric characters except spaces
+	// Keep only letters and digits, so punctuation and mix suffixes do not
+	// count as edits. Spaces are already gone by this point.
 	var result strings.Builder
 	for _, ch := range s {
-		if unicode.IsLetter(ch) || unicode.IsNumber(ch) || ch == ' ' {
+		if unicode.IsLetter(ch) || unicode.IsNumber(ch) {
 			result.WriteRune(ch)
 		}
 	}

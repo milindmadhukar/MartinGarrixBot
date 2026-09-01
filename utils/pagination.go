@@ -2,7 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/disgoorg/disgo/discord"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
@@ -64,9 +63,15 @@ func CreateModlogEmbed(logs []db.Modlog, userID int64, page, totalPages int) dis
 	return eb.Build()
 }
 
-// CalculateTotalPages calculates the total number of pages for pagination
+// CalculateTotalPages calculates the total number of pages for pagination.
+// A non-positive page size has no meaningful answer, so it reports zero pages
+// rather than dividing by zero: the float form used to yield int(+Inf), which
+// the Go spec leaves undefined.
 func CalculateTotalPages(totalItems int, itemsPerPage int) int {
-	return int(math.Ceil(float64(totalItems) / float64(itemsPerPage)))
+	if itemsPerPage <= 0 || totalItems <= 0 {
+		return 0
+	}
+	return (totalItems + itemsPerPage - 1) / itemsPerPage
 }
 
 // CreatePaginationButtons creates the navigation buttons for pagination
