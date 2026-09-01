@@ -161,6 +161,29 @@ func (ix *SongIndex) ClaimBeatport(row *db.GetAllSongsForMatchingRow, id pgtype.
 	}
 }
 
+// Detach removes a row's claim to an STMPD release.
+//
+// Both the row's own field and the bySlug map have to be updated. Clearing only the
+// field leaves the map still pointing the slug at this row, so the very next lookup
+// resolves to it again and rewrites the slug it was just told to give up -- which is
+// exactly how a repair pass turned into a loop that detached 469 rows every run
+// forever without ever changing anything.
+func (ix *SongIndex) Detach(row *db.GetAllSongsForMatchingRow) {
+	if row == nil || !row.StmpdSlug.Valid || row.StmpdSlug.String == "" {
+		return
+	}
+
+	slug := row.StmpdSlug.String
+	row.StmpdSlug = pgtype.Text{}
+	for i := range ix.rows {
+		if ix.rows[i].ID == row.ID {
+			ix.rows[i].StmpdSlug = pgtype.Text{}
+			break
+		}
+	}
+	delete(ix.bySlug, slug)
+}
+
 // SongQuery is everything known about an incoming release that could identify it.
 type SongQuery struct {
 	Title             string
@@ -242,7 +265,7 @@ func (ix *SongIndex) Lookup(q SongQuery) (*db.GetAllSongsForMatchingRow, MatchTi
 			note(i)
 			continue
 		}
-		if variant == storedVariant(ix.rows[i]) {
+		if RenditionsAgree(variant, storedVariant(ix.rows[i])) {
 			return &ix.rows[i], MatchBaseKeyVariant
 		}
 	}
@@ -261,9 +284,12 @@ func (ix *SongIndex) Lookup(q SongQuery) (*db.GetAllSongsForMatchingRow, MatchTi
 			continue
 		}
 		otherBase, otherVariant := SplitVariant(ix.rows[i].Name, "", ix.rows[i].MixName.String)
-		// Same asymmetry as the base-key tier: a rendition must not match a row that
-		// records a different one, nor a row that records none at all.
-		if variant != otherVariant && variant != "" {
+		// Renditions must agree here too, and by the same rule the other tiers use.
+		// A looser test here silently undid the stricter ones above: a release with no
+		// rendition would fall through to this tier and match a row recording a named
+		// remix, which is how a repair pass kept handing back the very slug it had
+		// just reclaimed, fifty rows at a time, every run.
+		if !RenditionsAgree(variant, otherVariant) {
 			continue
 		}
 		if digitsOf(base) != digitsOf(otherBase) {

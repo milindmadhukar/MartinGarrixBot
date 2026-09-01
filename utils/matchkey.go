@@ -320,3 +320,46 @@ func featureSuffix(title string) string {
 	}
 	return ""
 }
+
+// defaultRenditions are the ones that mean "the standard release" rather than a
+// distinct artistic version. Beatport files nearly every plain release as an
+// "Extended Mix"; the STMPD catalogue names no version for the same release. Reading
+// that as a disagreement would call 389 correctly-matched rows mismatched.
+//
+// A named remix, an acoustic version or a radio edit is a different matter: those
+// name a specific rendition, and a row carrying one does not belong to a release that
+// names none.
+var defaultRenditions = map[string]struct{}{
+	"":                {},
+	"originalmix":     {},
+	"extendedmix":     {},
+	"extended":        {},
+	"extendedversion": {},
+	"mixcut":          {},
+	"originalversion": {},
+}
+
+// IsDefaultRendition reports whether a normalized variant just means "the release
+// itself" rather than naming a particular version of it.
+func IsDefaultRendition(variant string) bool {
+	_, ok := defaultRenditions[variant]
+	return ok
+}
+
+// RenditionsAgree reports whether two renditions describe the same version of a song,
+// treating the house defaults above as "unspecified" on either side.
+func RenditionsAgree(a, b string) bool {
+	da, dbf := IsDefaultRendition(a), IsDefaultRendition(b)
+	if da && dbf {
+		return true
+	}
+	if da != dbf {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	// One elaborating on the other is agreement: beatport writes "Drove Extended
+	// Remix" where the catalogue writes "Drove Remix".
+	return strings.Contains(a, b) || strings.Contains(b, a)
+}

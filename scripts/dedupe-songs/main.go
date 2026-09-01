@@ -84,7 +84,9 @@ func main() {
 
 	var merged, deferred, failed int
 
+	prog := script.NewProgress("dedupe groups", len(order))
 	for _, key := range order {
+		prog.Step()
 		group := groups[key]
 		if len(group) < 2 {
 			continue
@@ -176,6 +178,8 @@ func main() {
 				slog.Int64("kept", winner.ID), slog.Int64("dropped", r.ID))
 		}
 	}
+
+	prog.Done()
 
 	slog.Info("Dedupe complete",
 		slog.Int("groups", len(order)),

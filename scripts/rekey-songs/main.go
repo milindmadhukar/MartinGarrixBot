@@ -26,7 +26,9 @@ func main() {
 	}
 
 	var changed, unchanged int
+	prog := script.NewProgress("rekey songs", len(rows))
 	for _, row := range rows {
+		prog.Step()
 		matchKey := utils.MatchKey(row.Name, "", row.MixName.String, row.Artists)
 		baseKey := utils.BaseKey(row.Name, row.Artists)
 
@@ -53,6 +55,8 @@ func main() {
 			unchanged++
 		}
 	}
+
+	prog.Done()
 
 	slog.Info("Rekey complete",
 		slog.Int("total", len(rows)),

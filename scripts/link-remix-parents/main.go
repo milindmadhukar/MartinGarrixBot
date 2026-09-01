@@ -53,7 +53,9 @@ func main() {
 
 	var linked, cleared, unchanged, instrumental int
 
+	prog := script.NewProgress("link remixes", len(byTitle))
 	for _, group := range byTitle {
+		prog.Step()
 		if len(group) < 2 {
 			continue
 		}
@@ -126,6 +128,8 @@ func main() {
 		}
 		instrumental += int(n)
 	}
+
+	prog.Done()
 
 	slog.Info("Parent linking complete",
 		slog.Int("linked", linked),

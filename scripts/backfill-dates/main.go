@@ -37,7 +37,9 @@ func main() {
 	client := utils.NewItunesClient()
 	var resolved, viaSearch, unresolvable, notFound, merged, failed, suspicious, playlist int
 
+	prog := script.NewProgress("resolve dates", len(rows))
 	for _, row := range rows {
+		prog.Step()
 		if utils.IsApplePlaylistURL(row.AppleMusicUrl.String) {
 			playlist++
 			slog.Warn("apple link points at a playlist, not a release - the button sends users to the wrong place",
@@ -139,6 +141,8 @@ func main() {
 				slog.String("date", date))
 		}
 	}
+
+	prog.Done()
 
 	slog.Info("Date backfill complete",
 		slog.Int("placeholder_rows", len(rows)),

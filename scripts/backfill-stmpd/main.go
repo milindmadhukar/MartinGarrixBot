@@ -21,7 +21,11 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
+	"flag"
 	"log/slog"
+	"os"
+	"strconv"
 
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"github.com/milindmadhukar/MartinGarrixBot/scripts/internal/script"
@@ -37,7 +41,20 @@ type counters struct {
 	merged        int
 	dateCorrected int
 	failed        int
+	conflated     []conflict
 }
+
+// conflict is a row holding one release's identity and another rendition's metadata.
+type conflict struct {
+	Release string
+	Version string
+	SongID  int64
+	Row     string
+	RowMix  string
+}
+
+var conflatedPath = flag.String("report-conflated", "",
+	"write rows whose slug belongs to a release with a different rendition to this CSV")
 
 func main() {
 	env, ctx, cleanup := script.Setup("backfill-stmpd")
@@ -82,6 +99,7 @@ func main() {
 		slog.Int("inserted", c.inserted),
 		slog.Int("merged_duplicates", c.merged),
 		slog.Int("dates_corrected", c.dateCorrected),
+		slog.Int("conflated_rows", len(c.conflated)),
 		slog.Int("failed", c.failed))
 
 	// Which tier resolved each match is the honest measure of how much of this run
@@ -100,12 +118,36 @@ func main() {
 	}
 	slog.Info("Songs with no streaming links",
 		slog.Int64("before", before), slog.Int64("after", after))
+
+	if len(c.conflated) > 0 {
+		slog.Warn("Rows carrying one release's identity and another rendition's metadata",
+			slog.Int("count", len(c.conflated)),
+			slog.String("note", "each needs a human decision; nothing was changed"))
+		if *conflatedPath != "" {
+			writeConflicts(*conflatedPath, c.conflated)
+		} else {
+			slog.Info("Pass -report-conflated=<file.csv> to write the full list")
+		}
+	}
 }
 
 func processRelease(ctx context.Context, env *script.Env, index *utils.SongIndex, release utils.SanityRelease, c *counters) {
 	name := release.Name()
 
 	matched, tier := index.Lookup(release.Query())
+
+	// A row whose slug belongs to a release with a different rendition is conflated:
+	// it carries beatport's metadata for one version and STMPD's links for another.
+	// Reclaiming the slug does not undo that -- the shared streaming URL re-identifies
+	// the row immediately -- and untangling it means deciding which half of the row is
+	// wrong, which is a judgement call. Report, do not guess.
+	if matched != nil && tier == utils.MatchStmpdSlug &&
+		!utils.RenditionsAgree(releaseVariant(release), rowVariant(*matched)) {
+		c.conflated = append(c.conflated, conflict{
+			Release: release.Name(), Version: orNone(release.Version),
+			SongID: matched.ID, Row: matched.Name, RowMix: orNone(matched.MixName.String),
+		})
+	}
 
 	if matched == nil {
 		insertRelease(ctx, env, index, release, c)
@@ -311,4 +353,38 @@ func updateParams(id int64, r utils.SanityRelease, correctDate bool) db.UpdateSo
 		AmazonMusicUrl: utils.Text(l.AmazonMusic), BeatportUrl: utils.Text(l.Beatport),
 		BeatportReleaseID: utils.BeatportReleaseID(l.Beatport),
 	}
+}
+
+func releaseVariant(r utils.SanityRelease) string {
+	_, v := utils.SplitVariant(r.Title, r.Version, "")
+	return v
+}
+
+func rowVariant(row db.GetAllSongsForMatchingRow) string {
+	_, v := utils.SplitVariant(row.Name, "", row.MixName.String)
+	return v
+}
+
+func orNone(s string) string {
+	if s == "" {
+		return "(none)"
+	}
+	return s
+}
+
+func writeConflicts(path string, rows []conflict) {
+	f, err := os.Create(path)
+	if err != nil {
+		slog.Error("failed to write the conflated-rows report", slog.Any("err", err))
+		return
+	}
+	defer f.Close()
+
+	w := csv.NewWriter(f)
+	defer w.Flush()
+	_ = w.Write([]string{"song_id", "stored_name", "stored_rendition", "release_it_is_filed_under", "release_rendition"})
+	for _, r := range rows {
+		_ = w.Write([]string{strconv.FormatInt(r.SongID, 10), r.Row, r.RowMix, r.Release, r.Version})
+	}
+	slog.Info("Wrote conflated-rows report", slog.String("path", path), slog.Int("rows", len(rows)))
 }
