@@ -15,7 +15,7 @@ const createGuild = `-- name: CreateGuild :one
 INSERT INTO guilds(guild_id)
 VALUES ($1)
 ON CONFLICT (guild_id) DO NOTHING
-RETURNING guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role
+RETURNING guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone
 `
 
 func (q *Queries) CreateGuild(ctx context.Context, guildID int64) (Guild, error) {
@@ -41,12 +41,16 @@ func (q *Queries) CreateGuild(ctx context.Context, guildID int64) (Guild, error)
 		&i.TourNotificationsChannel,
 		&i.TourNotificationsRole,
 		&i.ModeratorRole,
+		&i.AnniversaryNotificationsChannel,
+		&i.AnniversaryNotificationsRole,
+		&i.AnniversaryHour,
+		&i.AnniversaryTimezone,
 	)
 	return i, err
 }
 
 const getGuild = `-- name: GetGuild :one
-SELECT guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role FROM guilds WHERE guild_id = $1
+SELECT guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone FROM guilds WHERE guild_id = $1
 `
 
 func (q *Queries) GetGuild(ctx context.Context, guildID int64) (Guild, error) {
@@ -72,6 +76,10 @@ func (q *Queries) GetGuild(ctx context.Context, guildID int64) (Guild, error) {
 		&i.TourNotificationsChannel,
 		&i.TourNotificationsRole,
 		&i.ModeratorRole,
+		&i.AnniversaryNotificationsChannel,
+		&i.AnniversaryNotificationsRole,
+		&i.AnniversaryHour,
+		&i.AnniversaryTimezone,
 	)
 	return i, err
 }

@@ -154,6 +154,13 @@ func main() {
 				// time, so the maintenance scripts stay one-off repairs.
 				go handlers.GetSongEnrichment(b, time.NewTicker(1*time.Hour))
 
+				// Ticks far more often than it posts. Unlike the feeds above there
+				// is no remote source to poll -- what it waits for is each guild's
+				// own configured local hour, so the schedule lives per guild and
+				// this is only how often that gets checked. The 5 minute poll is
+				// also what lets a restart pick up a window it slept through.
+				go handlers.GetSongAnniversaries(b, time.NewTicker(5*time.Minute))
+
 				// Auto-start radio in all configured guilds (only if Lavalink is connected)
 				go func() {
 					time.Sleep(5 * time.Second) // Wait for everything to be ready
