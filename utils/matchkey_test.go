@@ -245,3 +245,26 @@ func TestRenditionSurvivesAFeatureClause(t *testing.T) {
 		t.Errorf("credit key folded the rendition into the artists: %q", got)
 	}
 }
+
+func TestIsCollectionName(t *testing.T) {
+	for _, name := range []string{
+		"Dawn EP", "Half Human [ALBUM]", "Catharina (Remixes)", "Eyes On Me [EP]",
+		"STMPD RCRDS Mixtape 2025 Side A", "Another World (Festival Edits Part I)",
+		"Ocean [Remixes Vol. 1]", "XXX EP",
+	} {
+		if !IsCollectionName(name) {
+			t.Errorf("IsCollectionName(%q) = false; it is a release, not a track", name)
+		}
+	}
+
+	// The markers must not fire inside longer words, or ordinary songs get pulled
+	// out of the radio rotation.
+	for _, name := range []string{
+		"Deep End", "Help Me", "Sleepless Nights", "Repeat It", "Epiphany",
+		"Remix Contest Winner", "Alps",
+	} {
+		if IsCollectionName(name) {
+			t.Errorf("IsCollectionName(%q) = true; it is a song", name)
+		}
+	}
+}

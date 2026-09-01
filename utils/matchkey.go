@@ -378,3 +378,46 @@ func RenditionsAgree(a, b string) bool {
 	// Remix" where the catalogue writes "Drove Remix".
 	return strings.Contains(a, b) || strings.Contains(b, a)
 }
+
+// collectionMarkers name a release that contains songs rather than being one: an EP,
+// an album, a remix package, a mixtape. The word-boundary check matters -- "EP" must
+// not fire on "Deep", "LP" must not fire on "Help".
+var collectionMarkers = []string{"ep", "album", "lp", "remixes", "mixtape", "festival edits"}
+
+// IsCollectionName reports whether a title names a release rather than a track.
+//
+// This has to exist in Go, not only in the migration that first populated the column,
+// or every EP published from now on arrives flagged as a song -- and a song is
+// something the radio will try to stream end to end.
+func IsCollectionName(name string) bool {
+	lower := strings.ToLower(name)
+	for _, marker := range collectionMarkers {
+		if containsWord(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsWord reports whether lower contains marker delimited by non-alphanumerics,
+// so that a marker inside a longer word does not count.
+func containsWord(lower, marker string) bool {
+	for i := 0; ; {
+		j := strings.Index(lower[i:], marker)
+		if j < 0 {
+			return false
+		}
+		start := i + j
+		end := start + len(marker)
+		beforeOK := start == 0 || !isAlnum(rune(lower[start-1]))
+		afterOK := end == len(lower) || !isAlnum(rune(lower[end]))
+		if beforeOK && afterOK {
+			return true
+		}
+		i = start + 1
+	}
+}
+
+func isAlnum(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+}

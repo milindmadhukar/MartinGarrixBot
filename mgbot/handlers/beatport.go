@@ -357,6 +357,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 			}
 
 			newCount++
+			finaliseNewSong(context.Background(), b, song, index)
 
 			// Register it so later tracks in this same batch -- the six remixes of
 			// one release arrive together -- match against it instead of inserting

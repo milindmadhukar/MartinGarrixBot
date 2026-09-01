@@ -123,6 +123,9 @@ func main() {
 				go handlers.GetAllStmpdReleases(b, time.NewTicker(15*time.Minute))
 				go handlers.GetBeatportReleases(b, time.NewTicker(15*time.Minute))
 				go handlers.GetAllTourShows(b, time.NewTicker(10*time.Minute))
+				// Fills gaps neither STMPD nor beatport can, a small batch at a
+				// time, so the maintenance scripts stay one-off repairs.
+				go handlers.GetSongEnrichment(b, time.NewTicker(1*time.Hour))
 
 				// Auto-start radio in all configured guilds (only if Lavalink is connected)
 				go func() {

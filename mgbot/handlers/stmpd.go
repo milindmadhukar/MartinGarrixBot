@@ -202,6 +202,7 @@ func runStmpdCycle(ctx context.Context, b *mgbot.MartinGarrixBot, client *utils.
 		}
 
 		newCount++
+		finaliseNewSong(ctx, b, song, index)
 		index.Append(db.GetAllSongsForMatchingRow{
 			ID: song.ID, Name: song.Name, Artists: song.Artists, Source: song.Source,
 			StmpdSlug: song.StmpdSlug, SpotifyUrl: song.SpotifyUrl,

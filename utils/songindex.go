@@ -184,6 +184,21 @@ func (ix *SongIndex) HasBetterRendition(q SongQuery, freeable map[int64]bool) bo
 	return false
 }
 
+// FindCanonical returns the row a rendition should be filed under: the one sharing
+// its song that records no rendition of its own.
+func (ix *SongIndex) FindCanonical(baseKey string, excludeID int64) *db.GetAllSongsForMatchingRow {
+	for _, i := range ix.byBaseKey[baseKey] {
+		row := ix.rows[i]
+		if row.ID == excludeID {
+			continue
+		}
+		if storedVariant(row) == "" {
+			return &ix.rows[i]
+		}
+	}
+	return nil
+}
+
 // Detach removes a row's claim to an STMPD release.
 //
 // Both the row's own field and the bySlug map have to be updated. Clearing only the
