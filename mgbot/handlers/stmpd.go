@@ -186,6 +186,13 @@ func fetchStmpdReleases() ([]utils.StmpdRelease, error) {
 		return nil, fmt.Errorf("failed to read stmpd archive body: %w", err)
 	}
 
+	return parseStmpdReleases(body)
+}
+
+// parseStmpdReleases turns an archive page into its releases. Split out of
+// fetchStmpdReleases so the payload handling can be tested against a captured
+// page without reaching stmpdrcrds.com.
+func parseStmpdReleases(body []byte) ([]utils.StmpdRelease, error) {
 	payload := nextFlightPayload(string(body))
 	if payload == "" {
 		return nil, fmt.Errorf("no next.js payload found in stmpd archive")

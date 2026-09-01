@@ -323,7 +323,7 @@ func (bc *BeatportClient) Authenticate() error {
 
 // EnsureAuthenticated checks and refreshes auth if needed
 func (bc *BeatportClient) EnsureAuthenticated() error {
-	if bc.accessToken == "" || time.Now().After(bc.tokenExpiry.Add(-5*time.Minute)) {
+	if NeedsRefresh(bc.accessToken, bc.tokenExpiry, time.Now(), TokenRefreshMargin) {
 		return bc.Authenticate()
 	}
 	return nil
