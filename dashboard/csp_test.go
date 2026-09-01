@@ -149,3 +149,53 @@ func widthPercents(html string) []float64 {
 	}
 	return out
 }
+
+// TestAssetURLsAreContentVersioned guards the deploy failure this fixes: with a
+// stable filename and a long max-age, Cloudflare served the previous build's
+// stylesheet for hours after a redeploy. The new HTML plus the old CSS rendered
+// a white page with white text on it.
+func TestAssetURLsAreContentVersioned(t *testing.T) {
+	css := assetURL("/static/app.css")
+	if !strings.Contains(css, "?v=") {
+		t.Fatalf("assetURL returned %q; without a content hash a cache can shadow a redeploy", css)
+	}
+
+	// The same content must produce the same URL, or every render would bust
+	// the cache and the max-age would buy nothing.
+	if again := assetURL("/static/app.css"); again != css {
+		t.Errorf("assetURL is not stable: %q then %q", css, again)
+	}
+
+	// Different files must not collide on the same version.
+	if js := assetURL("/static/htmx.min.js"); js == css {
+		t.Error("two different assets produced the same URL")
+	}
+
+	// An unknown path passes through rather than breaking the page.
+	if got := assetURL("/static/nope.png"); got != "/static/nope.png" {
+		t.Errorf("unknown asset = %q, want it unchanged", got)
+	}
+}
+
+// TestLayoutUsesVersionedAssets checks the template actually calls it -- the
+// helper existing is no use if the layout still hardcodes the plain path.
+func TestLayoutUsesVersionedAssets(t *testing.T) {
+	r, err := newRenderer(testOptions(t), false)
+	if err != nil {
+		t.Fatalf("newRenderer: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := r.pages["landing"].ExecuteTemplate(&buf, "layout.html",
+		&pageData{Title: "Sign in", Bare: true}); err != nil {
+		t.Fatalf("layout: %v", err)
+	}
+
+	html := buf.String()
+	if !strings.Contains(html, "/static/app.css?v=") {
+		t.Error("the stylesheet link is not content-versioned")
+	}
+	if !strings.Contains(html, "/static/htmx.min.js?v=") {
+		t.Error("the script src is not content-versioned")
+	}
+}

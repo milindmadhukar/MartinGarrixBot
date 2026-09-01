@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{if .Title}}{{.Title}} · {{end}}Garrix Dashboard</title>
-  <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/htmx.min.js" defer></script>
+  <link rel="stylesheet" href="{{asset "/static/app.css"}}">
+  <script src="{{asset "/static/htmx.min.js"}}" defer></script>
 </head>
 <body class="h-full bg-ink text-slate-200 antialiased"
       {{if .CSRFToken}}hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'{{end}}>
