@@ -2,12 +2,14 @@ package commands
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
 	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
+	"github.com/milindmadhukar/MartinGarrixBot/mgbot/handlers"
 	"github.com/milindmadhukar/MartinGarrixBot/utils"
 )
 
@@ -27,11 +29,64 @@ var config = discord.SlashCommandCreate{
 			},
 		},
 		discord.ApplicationCommandOptionSubCommand{
+			Name:        "set-anniversary-channel",
+			Description: "Where to post daily song anniversaries",
+			Options: []discord.ApplicationCommandOption{
+				discord.ApplicationCommandOptionChannel{
+					Name:        "channel",
+					Description: "The channel to post anniversaries in",
+					Required:    true,
+					ChannelTypes: []discord.ChannelType{
+						discord.ChannelTypeGuildText,
+						discord.ChannelTypeGuildNews,
+					},
+				},
+				discord.ApplicationCommandOptionRole{
+					Name:        "role",
+					Description: "Role to ping (omit to clear the ping)",
+					Required:    false,
+				},
+			},
+		},
+		discord.ApplicationCommandOptionSubCommand{
+			Name:        "set-anniversary-time",
+			Description: "What time of day anniversaries post, in your server's timezone",
+			Options: []discord.ApplicationCommandOption{
+				discord.ApplicationCommandOptionInt{
+					Name:        "hour",
+					Description: "Hour of the day, 0-23, in the timezone below",
+					Required:    true,
+					MinValue:    &anniversaryMinHour,
+					MaxValue:    &anniversaryMaxHour,
+				},
+				discord.ApplicationCommandOptionString{
+					Name:         "timezone",
+					Description:  "IANA timezone, e.g. Europe/Amsterdam",
+					Required:     true,
+					Autocomplete: true,
+				},
+			},
+		},
+		discord.ApplicationCommandOptionSubCommand{
+			Name:        "anniversary-preview",
+			Description: "Privately preview today's anniversary post without sending it",
+		},
+		discord.ApplicationCommandOptionSubCommand{
+			Name:        "disable-anniversaries",
+			Description: "Stop posting daily song anniversaries",
+		},
+		discord.ApplicationCommandOptionSubCommand{
 			Name:        "view",
 			Description: "View current server configuration",
 		},
 	},
 }
+
+// Discord's Min/MaxValue are *int, so the bounds need addressable homes.
+var (
+	anniversaryMinHour = 0
+	anniversaryMaxHour = 23
+)
 
 func ConfigHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
@@ -52,6 +107,14 @@ func ConfigHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		switch *subcommand {
 		case "set-moderator-role":
 			return handleSetModeratorRole(b, e)
+		case "set-anniversary-channel":
+			return handleSetAnniversaryChannel(b, e)
+		case "set-anniversary-time":
+			return handleSetAnniversaryTime(b, e)
+		case "anniversary-preview":
+			return handleAnniversaryPreview(b, e)
+		case "disable-anniversaries":
+			return handleDisableAnniversaries(b, e)
 		case "view":
 			return handleViewConfig(b, e)
 		default:
@@ -102,6 +165,183 @@ func handleSetModeratorRole(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) e
 			SetEmbeds(embed.Build()).
 			Build(),
 	)
+}
+
+// ephemeralFailure is the reply shape every misconfiguration in this file uses.
+func ephemeralFailure(e *handler.CommandEvent, title, description string) error {
+	return e.Respond(discord.InteractionResponseTypeCreateMessage,
+		discord.NewMessageCreateBuilder().
+			SetEmbeds(utils.FailureEmbed(title, description)).
+			SetEphemeral(true).
+			Build(),
+	)
+}
+
+// nextAnniversaryPost is when the configured schedule will next fire.
+//
+// Shown back to the admin because an hour and a timezone are easy to get subtly
+// wrong, and "next post in 3 hours" is a far better check than re-reading the two
+// values you just typed.
+func nextAnniversaryPost(hour int, loc *time.Location) time.Time {
+	now := time.Now().In(loc)
+	next := time.Date(now.Year(), now.Month(), now.Day(), hour, 0, 0, 0, loc)
+	if !next.After(now) {
+		next = next.AddDate(0, 0, 1)
+	}
+	return next
+}
+
+func handleSetAnniversaryChannel(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
+	data := e.SlashCommandInteractionData()
+	guildID := *e.GuildID()
+
+	channel := data.Channel("channel")
+
+	// The role is written on every call, so omitting it clears a stale ping rather
+	// than silently keeping one the admin thinks they removed.
+	role := pgtype.Int8{}
+	if r, ok := data.OptRole("role"); ok {
+		role = pgtype.Int8{Int64: int64(r.ID), Valid: true}
+	}
+
+	if err := b.Queries.SetAnniversaryChannel(e.Ctx, db.SetAnniversaryChannelParams{
+		GuildID:                         int64(guildID),
+		AnniversaryNotificationsChannel: pgtype.Int8{Int64: int64(channel.ID), Valid: true},
+	}); err != nil {
+		return ephemeralFailure(e, "Configuration Failed",
+			fmt.Sprintf("Failed to set the anniversary channel: %s", err.Error()))
+	}
+
+	if err := b.Queries.SetAnniversaryRole(e.Ctx, db.SetAnniversaryRoleParams{
+		GuildID:                      int64(guildID),
+		AnniversaryNotificationsRole: role,
+	}); err != nil {
+		return ephemeralFailure(e, "Configuration Failed",
+			fmt.Sprintf("Failed to set the anniversary role: %s", err.Error()))
+	}
+
+	ping := "no role will be pinged"
+	if role.Valid {
+		ping = fmt.Sprintf("<@&%d> will be pinged", role.Int64)
+	}
+
+	embed := discord.NewEmbedBuilder().
+		SetTitle("Anniversary Channel Updated").
+		SetDescription(fmt.Sprintf("Daily song anniversaries will post in <#%d>, and %s.",
+			channel.ID, ping)).
+		SetColor(utils.ColorSuccess)
+
+	// Read the schedule back so the admin sees the default rather than assuming one.
+	if config, err := b.Queries.GetGuild(e.Ctx, int64(guildID)); err == nil {
+		embed.AddField("Schedule",
+			fmt.Sprintf("%02d:00 in `%s` — change it with `/config set-anniversary-time`",
+				config.AnniversaryHour, config.AnniversaryTimezone), false)
+	}
+
+	return e.Respond(discord.InteractionResponseTypeCreateMessage,
+		discord.NewMessageCreateBuilder().SetEmbeds(embed.Build()).Build(),
+	)
+}
+
+func handleSetAnniversaryTime(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
+	data := e.SlashCommandInteractionData()
+	guildID := *e.GuildID()
+
+	hour := data.Int("hour")
+	timezone := data.String("timezone")
+
+	// Validate before writing. A zone the scheduler cannot resolve would leave the
+	// feature silently dead, with nothing in the channel to show it.
+	loc, ok := utils.ValidateTimezone(timezone)
+	if !ok {
+		return ephemeralFailure(e, "Unknown Timezone",
+			fmt.Sprintf("`%s` is not an IANA timezone name. Try `Europe/Amsterdam`, "+
+				"`America/New_York`, `Asia/Kolkata` or `UTC`.", timezone))
+	}
+
+	if err := b.Queries.SetAnniversarySchedule(e.Ctx, db.SetAnniversaryScheduleParams{
+		GuildID:             int64(guildID),
+		AnniversaryHour:     int32(hour),
+		AnniversaryTimezone: timezone,
+	}); err != nil {
+		return ephemeralFailure(e, "Configuration Failed",
+			fmt.Sprintf("Failed to update the anniversary schedule: %s", err.Error()))
+	}
+
+	next := nextAnniversaryPost(hour, loc)
+
+	embed := discord.NewEmbedBuilder().
+		SetTitle("Anniversary Schedule Updated").
+		SetDescription(fmt.Sprintf("Anniversaries will post at **%02d:00** in `%s`.", hour, timezone)).
+		AddField("Next post", fmt.Sprintf("<t:%d:F> (<t:%d:R>)", next.Unix(), next.Unix()), false).
+		SetColor(utils.ColorSuccess)
+
+	return e.Respond(discord.InteractionResponseTypeCreateMessage,
+		discord.NewMessageCreateBuilder().SetEmbeds(embed.Build()).Build(),
+	)
+}
+
+func handleAnniversaryPreview(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
+	guildID := *e.GuildID()
+
+	config, err := b.Queries.GetGuild(e.Ctx, int64(guildID))
+	if err != nil {
+		return ephemeralFailure(e, "Error", "Failed to fetch server configuration")
+	}
+
+	content, embeds, err := handlers.PreviewAnniversaries(e.Ctx, b, config.AnniversaryTimezone)
+	if err != nil {
+		return ephemeralFailure(e, "Preview Failed", err.Error())
+	}
+
+	builder := discord.NewMessageCreateBuilder().
+		SetContent(content).
+		SetEphemeral(true)
+
+	if len(embeds) > 0 {
+		builder.SetEmbeds(embeds...)
+	}
+
+	return e.Respond(discord.InteractionResponseTypeCreateMessage, builder.Build())
+}
+
+func handleDisableAnniversaries(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
+	guildID := *e.GuildID()
+
+	// Only the channel is cleared. The hour and timezone stay, so re-enabling later
+	// remembers the schedule the admin already picked.
+	if err := b.Queries.SetAnniversaryChannel(e.Ctx, db.SetAnniversaryChannelParams{
+		GuildID:                         int64(guildID),
+		AnniversaryNotificationsChannel: pgtype.Int8{},
+	}); err != nil {
+		return ephemeralFailure(e, "Configuration Failed",
+			fmt.Sprintf("Failed to disable anniversaries: %s", err.Error()))
+	}
+
+	embed := discord.NewEmbedBuilder().
+		SetTitle("Anniversaries Disabled").
+		SetDescription("Daily song anniversaries will no longer be posted. " +
+			"Your posting time and timezone have been kept for when you turn it back on.").
+		SetColor(utils.ColorSuccess)
+
+	return e.Respond(discord.InteractionResponseTypeCreateMessage,
+		discord.NewMessageCreateBuilder().SetEmbeds(embed.Build()).Build(),
+	)
+}
+
+// ConfigAutocompleteHandler serves the timezone suggestions on
+// /config set-anniversary-time. It is registered against "/config" because the
+// handler mux matches on the pattern's path segments, so one registration covers
+// every subcommand -- the same reason rootHandler.Command("/config", ...) does.
+func ConfigAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHandler {
+	return func(e *handler.AutocompleteEvent) error {
+		focused := e.Data.Focused()
+		if focused.Name != "timezone" {
+			return e.AutocompleteResult(nil)
+		}
+
+		return e.AutocompleteResult(utils.FilterTimezones(e.Data.String("timezone")))
+	}
 }
 
 func handleViewConfig(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
@@ -186,6 +426,15 @@ func handleViewConfig(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 			notificationsText += fmt.Sprintf(" (<@&%d>)", config.TourNotificationsRole.Int64)
 		}
 		notificationsText += "\n"
+	}
+
+	if config.AnniversaryNotificationsChannel.Valid {
+		notificationsText += fmt.Sprintf("**Anniversaries:** <#%d>", config.AnniversaryNotificationsChannel.Int64)
+		if config.AnniversaryNotificationsRole.Valid {
+			notificationsText += fmt.Sprintf(" (<@&%d>)", config.AnniversaryNotificationsRole.Int64)
+		}
+		notificationsText += fmt.Sprintf(" — daily at %02d:00 `%s`\n",
+			config.AnniversaryHour, config.AnniversaryTimezone)
 	}
 
 	if notificationsText == "" {

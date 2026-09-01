@@ -52,6 +52,7 @@ func SetupHandlers(b *mgbot.MartinGarrixBot) *handler.Mux {
 	rootHandler.Command("/moderation", ModerationHandler(b))
 
 	rootHandler.Command("/config", ConfigHandler(b))
+	rootHandler.Autocomplete("/config", ConfigAutocompleteHandler(b))
 
 	fun := handler.New()
 	fun.Command("/8ball", EightBallHandler)
