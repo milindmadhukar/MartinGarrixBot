@@ -788,16 +788,17 @@ func (q *Queries) GetSongMixes(ctx context.Context, parentSongID pgtype.Int8) ([
 }
 
 const getSongsForKeying = `-- name: GetSongsForKeying :many
-SELECT id, name, artists, mix_name, length_ms, is_collection FROM songs ORDER BY id
+SELECT id, name, artists, mix_name, length_ms, is_collection, apple_music_url FROM songs ORDER BY id
 `
 
 type GetSongsForKeyingRow struct {
-	ID           int64       `json:"id"`
-	Name         string      `json:"name"`
-	Artists      string      `json:"artists"`
-	MixName      pgtype.Text `json:"mixName"`
-	LengthMs     pgtype.Int4 `json:"lengthMs"`
-	IsCollection bool        `json:"isCollection"`
+	ID            int64       `json:"id"`
+	Name          string      `json:"name"`
+	Artists       string      `json:"artists"`
+	MixName       pgtype.Text `json:"mixName"`
+	LengthMs      pgtype.Int4 `json:"lengthMs"`
+	IsCollection  bool        `json:"isCollection"`
+	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
 }
 
 func (q *Queries) GetSongsForKeying(ctx context.Context) ([]GetSongsForKeyingRow, error) {
@@ -816,6 +817,7 @@ func (q *Queries) GetSongsForKeying(ctx context.Context) ([]GetSongsForKeyingRow
 			&i.MixName,
 			&i.LengthMs,
 			&i.IsCollection,
+			&i.AppleMusicUrl,
 		); err != nil {
 			return nil, err
 		}

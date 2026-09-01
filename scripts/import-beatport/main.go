@@ -65,14 +65,6 @@ func main() {
 			continue
 		}
 
-		if env.DryRun {
-			slog.Info("would insert beatport track",
-				slog.String("name", track.Name), slog.String("artists", artists),
-				slog.String("release_date", track.ReleaseDate))
-			inserted++
-			continue
-		}
-
 		song, err := env.Queries.InsertBeatportSong(ctx, insertParams(track, artists))
 		if err != nil {
 			if db.ErrorCode(err) == db.UniqueViolation {

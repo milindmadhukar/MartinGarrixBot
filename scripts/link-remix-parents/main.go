@@ -81,20 +81,6 @@ func main() {
 				continue
 			}
 
-			if env.DryRun {
-				if want.Valid {
-					slog.Info("would link remix to parent",
-						slog.String("remix", r.Name), slog.String("mix", r.MixName.String),
-						slog.String("artists", r.Artists),
-						slog.String("parent", parent.Name), slog.String("parent_artists", parent.Artists),
-						slog.Int64("song_id", r.ID), slog.Int64("parent_id", parent.ID))
-					linked++
-				} else {
-					cleared++
-				}
-				continue
-			}
-
 			n, err := env.Queries.SetSongParent(ctx, db.SetSongParentParams{
 				ID: r.ID, ParentSongID: want,
 			})
@@ -114,10 +100,6 @@ func main() {
 
 	for _, r := range rows {
 		if !looksInstrumental(r.Name, r.MixName.String) {
-			continue
-		}
-		if env.DryRun {
-			instrumental++
 			continue
 		}
 		n, err := env.Queries.SetSongInstrumental(ctx, db.SetSongInstrumentalParams{

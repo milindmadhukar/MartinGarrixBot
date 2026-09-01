@@ -36,6 +36,48 @@ const itunesRateLimit = 3 * time.Second
 // of the collection, which for a compilation is not the song's own release.
 var appleIDPattern = regexp.MustCompile(`/(?:id)?(\d{6,})(?:\?|$|/)`)
 
+// appleSlugPattern pulls the human-readable slug out of an Apple album URL:
+// https://music.apple.com/ca/album/seven-ep/1168670107 -> "seven-ep".
+var appleSlugPattern = regexp.MustCompile(`/album/([^/]+)/`)
+
+// releaseSlugSuffixes are how Apple's own URLs label the kind of release.
+var releaseSlugSuffixes = []string{"-ep", "-album", "-lp"}
+
+// AppleURLNamesThisRelease reports whether an Apple link points at a multi-track
+// release that the row is named after -- meaning the row is the release, not a track.
+//
+// The suffix alone is not enough. "Mind The Grind" links to /album/bombai-ep/ because
+// it is a track on the Bombai EP; the row is a song. Only when the slug reduces to the
+// row's own name is the row the release itself.
+//
+// This is deliberately offline. The same question can be answered by asking Apple for
+// the release's track count, but that is one rate-limited request per row and nearly
+// an hour for the catalogue, to learn something the URL already says.
+func AppleURLNamesThisRelease(name, appleURL string) bool {
+	if appleURL == "" {
+		return false
+	}
+
+	m := appleSlugPattern.FindStringSubmatch(appleURL)
+	if len(m) < 2 {
+		return false
+	}
+
+	slug := strings.ToLower(m[1])
+	trimmed := ""
+	for _, suffix := range releaseSlugSuffixes {
+		if strings.HasSuffix(slug, suffix) {
+			trimmed = strings.TrimSuffix(slug, suffix)
+			break
+		}
+	}
+	if trimmed == "" {
+		return false
+	}
+
+	return NormalizeToken(trimmed) == NormalizeToken(name)
+}
+
 // AppleAlbumIDFromURL returns the id of the release an Apple URL points at, ignoring
 // any track within it. Asking about the release is what tells an EP from a single.
 func AppleAlbumIDFromURL(rawURL string) string {

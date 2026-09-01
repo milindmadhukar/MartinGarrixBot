@@ -245,7 +245,7 @@ UPDATE songs SET match_key = $2, base_key = $3
 WHERE id = $1 AND (match_key IS DISTINCT FROM $2 OR base_key IS DISTINCT FROM $3);
 
 -- name: GetSongsForKeying :many
-SELECT id, name, artists, mix_name, length_ms, is_collection FROM songs ORDER BY id;
+SELECT id, name, artists, mix_name, length_ms, is_collection, apple_music_url FROM songs ORDER BY id;
 
 -- name: GetRandomSongForRadio :one
 -- Canonical rows only, so the rotation does not play six versions of one track, and
