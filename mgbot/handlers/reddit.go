@@ -73,7 +73,7 @@ var redditClient = &http.Client{Timeout: 30 * time.Second}
 
 // redditTokenRefreshMargin re-authenticates slightly ahead of the advertised
 // expiry so a cycle can never start with a token that dies mid-request.
-const redditTokenRefreshMargin = 5 * time.Minute
+const redditTokenRefreshMargin = utils.TokenRefreshMargin
 
 // redditUserAgent builds the User-Agent Reddit's API rules ask for
 // (platform:app-id:version, plus the owning account). Generic agents are one of
@@ -86,7 +86,8 @@ func redditUserAgent(b *mgbot.MartinGarrixBot) string {
 // expiring. This runs on every cycle: Reddit's tokens last 24h, so authenticating
 // only once at startup leaves a long-lived process silently unauthenticated.
 func ensureRedditToken(b *mgbot.MartinGarrixBot) error {
-	if b.RedditToken.AccessToken != "" && time.Now().Before(b.RedditToken.ExpiresAt.Add(-redditTokenRefreshMargin)) {
+	if !utils.NeedsRefresh(b.RedditToken.AccessToken, b.RedditToken.ExpiresAt,
+		time.Now(), redditTokenRefreshMargin) {
 		return nil
 	}
 

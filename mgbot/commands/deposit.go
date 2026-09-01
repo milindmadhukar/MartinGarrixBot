@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/disgoorg/disgo/discord"
@@ -39,26 +40,6 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		isAll := e.SlashCommandInteractionData().Bool("all")
 		isHalf := e.SlashCommandInteractionData().Bool("half")
 
-		if amtOk && amt <= 0 {
-			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage,
-				discord.NewMessageCreateBuilder().
-					SetEmbeds(utils.FailureEmbed("Amount of coins to deposit should be positive.", "")).
-					SetEphemeral(true).
-					Build(),
-			)
-		}
-
-		if !amtOk && !isAll && !isHalf {
-			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage,
-				discord.NewMessageCreateBuilder().
-					SetEmbeds(utils.FailureEmbed("Please provide amount of coins to deposit.", "")).
-					SetEphemeral(true).
-					Build(),
-			)
-		}
-
 		balanceInfo, err := b.Queries.GetBalance(e.Ctx, db.GetBalanceParams{
 			ID:      int64(e.Member().User.ID),
 			GuildID: int64(*e.GuildID()),
@@ -67,23 +48,23 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			return err
 		}
 
-		var amtToDeposit int64
-
-		if isHalf {
-			amtToDeposit = balanceInfo.InHand.Int64 / 2
-		} else if isAll {
-			amtToDeposit = balanceInfo.InHand.Int64
-		} else if amtOk {
-			if int64(amt) > balanceInfo.InHand.Int64 {
-				return e.Respond(
-					discord.InteractionResponseTypeCreateMessage,
-					discord.NewMessageCreateBuilder().
-						SetEmbeds(utils.FailureEmbed("You don't have enough coins in hand to deposit.", "")).
-						SetEphemeral(true).
-						Build(),
-				)
+		amtToDeposit, err := resolveAmount(balanceInfo.InHand.Int64, amt, amtOk, isAll, isHalf)
+		if err != nil {
+			message := "Please provide amount of coins to deposit."
+			switch {
+			case errors.Is(err, ErrAmountNotPositive):
+				message = "Amount of coins to deposit should be positive."
+			case errors.Is(err, ErrInsufficientBalance):
+				message = "You don't have enough coins in hand to deposit."
 			}
-			amtToDeposit = int64(amt)
+
+			return e.Respond(
+				discord.InteractionResponseTypeCreateMessage,
+				discord.NewMessageCreateBuilder().
+					SetEmbeds(utils.FailureEmbed(message, "")).
+					SetEphemeral(true).
+					Build(),
+			)
 		}
 
 		err = b.Queries.DepositAmount(e.Ctx, db.DepositAmountParams{

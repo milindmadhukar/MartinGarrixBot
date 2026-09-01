@@ -138,6 +138,13 @@ func fetchTourShows() ([]utils.TourShow, error) {
 		return nil, fmt.Errorf("failed to read tour page body: %w", err)
 	}
 
+	return parseTourShows(body)
+}
+
+// parseTourShows turns a tour page into the shows worth announcing. Split out
+// of fetchTourShows so the payload handling can be tested against a captured
+// page without reaching martingarrix.com.
+func parseTourShows(body []byte) ([]utils.TourShow, error) {
 	payload, err := nextDataPayload(string(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to locate tour data: %w", err)

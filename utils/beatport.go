@@ -431,7 +431,7 @@ func (bc *BeatportClient) Authenticate() error {
 // expiry, and holds a cooldown after a failure so that a broken credential cannot
 // turn every fetch cycle into another five login attempts.
 func (bc *BeatportClient) EnsureAuthenticated() error {
-	if bc.accessToken != "" && time.Now().Before(bc.tokenExpiry.Add(-5*time.Minute)) {
+	if !NeedsRefresh(bc.accessToken, bc.tokenExpiry, time.Now(), TokenRefreshMargin) {
 		return nil
 	}
 

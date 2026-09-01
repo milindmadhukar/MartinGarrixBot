@@ -22,3 +22,6 @@ config.prod.toml
 
 # Agent scratch worktrees; these are separate git repos and must not be committed.
 .claude/
+/garrixbot
+coverage.out
+coverage.html

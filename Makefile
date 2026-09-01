@@ -21,7 +21,7 @@ migrate_force:
 	docker run -v $(ROOT_DIR)/db/migrations:/migrations --network=host migrate/migrate -path=migrations/ -database postgresql://postgres:password@localhost:5432/garrixbot?sslmode=disable force $$VERSION
 
 build:
-	go build -o garrixbot cmd/main.go
+	go build -o garrixbot .
 
 dev:
 	air -c .air.toml
@@ -62,3 +62,41 @@ dedupe_songs_dry:
 
 dedupe_songs:
 	go run ./scripts/dedupe-songs -config=$(CONFIG)
+
+verify_catalogue:
+	go run ./scripts/verify-catalogue -config=$(CONFIG)
+
+fmt:
+	gofmt -w .
+
+fmt-check:
+	@test -z "$$(gofmt -l .)" || (echo "gofmt needed:"; gofmt -l .; exit 1)
+
+vet:
+	go vet ./...
+
+test:
+	go test -race -shuffle=on ./...
+
+test-integration:
+	go test -tags integration -count=1 ./db/...
+
+cover:
+	go test -covermode=atomic -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out
+
+cover-html: cover
+	go tool cover -html=coverage.out -o coverage.html
+
+fuzz:
+	go test -run=^$$ -fuzz=Fuzz -fuzztime=30s ./mgbot/handlers/
+
+# Hits the real tour and STMPD pages to check they still serve the shape the
+# parsers expect. Not part of `test` or CI; run it when a fetcher goes quiet.
+live-check:
+	go test -tags livefetch -count=1 -v ./mgbot/handlers/
+
+check: fmt-check vet test
+
+.PHONY: build dev run kill fmt fmt-check vet test test-integration cover cover-html fuzz live-check check \
+	migrate_up migrate_down make_migration sqlc psql migrate_force
