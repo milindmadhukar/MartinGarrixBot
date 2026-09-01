@@ -69,23 +69,31 @@ func CalculateTotalPages(totalItems int, itemsPerPage int) int {
 	return int(math.Ceil(float64(totalItems) / float64(itemsPerPage)))
 }
 
-// CreatePaginationButtons creates the navigation buttons for pagination
+// CreatePaginationButtons creates the navigation buttons for pagination.
+//
+// customID must be a router path such as "/modlogs/123", because disgo's
+// handler.Mux matches component custom IDs as slash-separated patterns. The
+// action and the current page are appended as two further path segments.
 func CreatePaginationButtons(currentPage, totalPages int, customID string) []discord.LayoutComponent {
 	if totalPages <= 1 {
 		return []discord.LayoutComponent{}
 	}
 
+	id := func(action string) string {
+		return fmt.Sprintf("%s/%s/%d", customID, action, currentPage)
+	}
+
 	return []discord.LayoutComponent{
 		discord.NewActionRow(
-			discord.NewSecondaryButton("◀◀", fmt.Sprintf("%s:first:%d", customID, currentPage)).
+			discord.NewSecondaryButton("◀◀", id("first")).
 				WithDisabled(currentPage == 1),
-			discord.NewSecondaryButton("◀", fmt.Sprintf("%s:prev:%d", customID, currentPage)).
+			discord.NewSecondaryButton("◀", id("prev")).
 				WithDisabled(currentPage == 1),
-			discord.NewSecondaryButton(fmt.Sprintf("%d / %d", currentPage, totalPages), fmt.Sprintf("%s:current:%d", customID, currentPage)).
+			discord.NewSecondaryButton(fmt.Sprintf("%d / %d", currentPage, totalPages), id("current")).
 				WithDisabled(true),
-			discord.NewSecondaryButton("▶", fmt.Sprintf("%s:next:%d", customID, currentPage)).
+			discord.NewSecondaryButton("▶", id("next")).
 				WithDisabled(currentPage == totalPages),
-			discord.NewSecondaryButton("▶▶", fmt.Sprintf("%s:last:%d", customID, currentPage)).
+			discord.NewSecondaryButton("▶▶", id("last")).
 				WithDisabled(currentPage == totalPages),
 		),
 	}

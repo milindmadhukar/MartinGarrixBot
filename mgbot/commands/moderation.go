@@ -744,7 +744,7 @@ func handleLogs(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 
 	totalPages := utils.CalculateTotalPages(int(totalCount), utils.ModlogsPerPage)
 	embed := utils.CreateModlogEmbed(logs, int64(targetUser.ID), 1, totalPages)
-	buttons := utils.CreatePaginationButtons(1, totalPages, fmt.Sprintf("modlogs:%d", targetUser.ID))
+	buttons := utils.CreatePaginationButtons(1, totalPages, modlogsCustomID(targetUser.ID))
 
 	messageBuilder := discord.NewMessageCreate().
 		WithEmbeds(embed).
@@ -755,4 +755,78 @@ func handleLogs(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	}
 
 	return e.Respond(discord.InteractionResponseTypeCreateMessage, messageBuilder)
+}
+
+// modlogsCustomID builds the router path that the modlog pagination buttons
+// carry as their component custom ID.
+func modlogsCustomID(userID snowflake.ID) string {
+	return fmt.Sprintf("/modlogs/%d", userID)
+}
+
+// ModlogsPaginationHandler backs the navigation buttons attached to
+// /moderation logs. The buttons existed before but nothing was routed to them,
+// so clicking one only produced "This interaction failed".
+func ModlogsPaginationHandler(b *mgbot.MartinGarrixBot) handler.ComponentHandler {
+	return func(e *handler.ComponentEvent) error {
+		// The page counter in the middle is a disabled no-op button.
+		if e.Vars["action"] == "current" {
+			return e.DeferUpdateMessage()
+		}
+
+		// The message is ephemeral, so only the invoker can click these. Re-check
+		// anyway, in case their moderator role was revoked while it was open.
+		if !utils.HasModeratorPermissions(e.Ctx, b.DB, b.Client.Rest, *e.GuildID(), e.Member()) {
+			return e.DeferUpdateMessage()
+		}
+
+		userID, err := strconv.ParseInt(e.Vars["userID"], 10, 64)
+		if err != nil {
+			return err
+		}
+		currentPage, err := strconv.Atoi(e.Vars["page"])
+		if err != nil {
+			return err
+		}
+		guildID := *e.GuildID()
+
+		totalCount, err := b.Queries.GetModlogsByUserCount(e.Ctx, db.GetModlogsByUserCountParams{
+			UserID:  userID,
+			GuildID: int64(guildID),
+		})
+		if err != nil {
+			return err
+		}
+
+		totalPages := utils.CalculateTotalPages(int(totalCount), utils.ModlogsPerPage)
+		if totalPages < 1 {
+			totalPages = 1
+		}
+
+		page := currentPage
+		switch e.Vars["action"] {
+		case "first":
+			page = 1
+		case "prev":
+			page = currentPage - 1
+		case "next":
+			page = currentPage + 1
+		case "last":
+			page = totalPages
+		}
+		page = min(max(page, 1), totalPages)
+
+		logs, err := b.Queries.GetModlogsByUser(e.Ctx, db.GetModlogsByUserParams{
+			UserID:  userID,
+			GuildID: int64(guildID),
+			Limit:   utils.ModlogsPerPage,
+			Offset:  int32((page - 1) * utils.ModlogsPerPage),
+		})
+		if err != nil {
+			return err
+		}
+
+		return e.UpdateMessage(discord.NewMessageUpdate().
+			WithEmbeds(utils.CreateModlogEmbed(logs, userID, page, totalPages)).
+			WithComponents(utils.CreatePaginationButtons(page, totalPages, modlogsCustomID(snowflake.ID(userID)))...))
+	}
 }
