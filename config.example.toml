@@ -62,3 +62,48 @@ port = 5432
 # Lavalink is reported in the response but never fails the check, since the
 # bot runs fine without it (radio features are simply disabled).
 address = ":8081"
+
+[internal]
+# Listen address for the bot's internal API, which serves live guild data
+# (roles, channels, member counts) to the dashboard from the disgo cache. This
+# is how the dashboard renders role and channel names without ever holding the
+# bot token. Container-internal only: never publish this port to the host.
+address = ":8082"
+# Shared secret the dashboard presents in the X-Internal-Token header. It must
+# match dashboard.bot_api_secret below. Leaving it empty disables the API
+# entirely rather than serving guild data unauthenticated.
+#   openssl rand -hex 32
+secret = ""
+
+[dashboard]
+# Read only by the dashboard binary (cmd/dashboard); the bot ignores this
+# section, and the dashboard ignores [bot] and [lavalink].
+
+# listen address for the web UI
+address = ":8080"
+# The externally reachable origin. An https:// value turns on Secure cookies
+# and the __Host- cookie prefix, so getting this wrong in production ships
+# insecure cookies -- it is not cosmetic.
+public_base_url = "http://localhost:8080"
+
+# Discord application credentials, from the Developer Portal.
+client_id = ""
+client_secret = ""
+# Must match a redirect registered on the Discord application byte for byte.
+redirect_uri = "http://localhost:8080/auth/callback"
+
+# Keys the HMAC over the session cookie. At least 32 characters. Rotating it
+# logs everyone out, which is the intended emergency response.
+#   openssl rand -hex 32
+session_secret = ""
+
+# Where the bot's internal API lives, and the secret to present to it. Inside
+# compose this is the bot's container name. bot_api_secret must equal
+# internal.secret above; the dashboard refuses to start if they disagree.
+bot_api_url = "http://127.0.0.1:8082"
+bot_api_secret = ""
+
+# Discord user IDs that may administer every server the bot is in, regardless
+# of their permissions there. Everyone else needs Administrator in a server the
+# bot is already a member of.
+owner_ids = []

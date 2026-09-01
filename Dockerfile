@@ -20,9 +20,35 @@ RUN export GOOS=$(echo ${TARGETPLATFORM} | cut -d'/' -f1) \
     && if [ "${GOARCH}" = "arm64" ]; then export GOARCH=arm64; fi \
     && echo "Building for GOOS=${GOOS} GOARCH=${GOARCH}" \
     && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
-       go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT}" -o bot .
+       go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT}" -o bot . \
+    && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
+       go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT}" -o dashboard ./cmd/dashboard
 
-FROM --platform=$TARGETPLATFORM alpine
+# --- dashboard image -------------------------------------------------------
+# Deliberately before the bot stage: buildx defaults to the LAST stage, so
+# keeping `bot` last means every existing `docker build .` keeps working.
+FROM --platform=$TARGETPLATFORM alpine AS dashboard
+
+RUN apk add --no-cache tzdata
+
+WORKDIR /dashboard
+
+# Nothing else is copied in: templates and static assets are go:embed-ed, and
+# db/migrations is deliberately absent because the dashboard never migrates --
+# the bot owns the schema.
+COPY --from=build /build/dashboard /dashboard/dashboard
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://127.0.0.1:8080/healthz || exit 1
+
+ENTRYPOINT ["/dashboard/dashboard"]
+
+CMD ["-config", "/var/lib/config.toml"]
+
+# --- bot image (default target) ---------------------------------------------
+FROM --platform=$TARGETPLATFORM alpine AS bot
 
 # The Go binary embeds its own copy of the tz database, so the bot does not need
 # this. It is here so that anything else running in the container -- a shell, date,

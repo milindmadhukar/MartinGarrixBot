@@ -10,8 +10,10 @@ make_migration:
 	@read -p "Enter file name: " MIGRATION_NAME; \
 	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate create -ext sql -dir db/migrations -seq $$MIGRATION_NAME
 
+# Pinned: sqlc/sqlc:latest regenerates every file in db/sqlc, so a generator
+# version drift shows up as an unrelated whole-directory diff.
 sqlc:
-	docker run --rm -v $(ROOT_DIR):/src -w /src sqlc/sqlc generate
+	docker run --rm -v $(ROOT_DIR):/src -w /src sqlc/sqlc:1.31.1 generate
 
 psql:
 	docker exec -it postgres-db-1 psql -U postgres -d garrixbot
@@ -62,3 +64,27 @@ dedupe_songs_dry:
 
 dedupe_songs:
 	go run ./scripts/dedupe-songs -config=$(CONFIG)
+
+# --- dashboard -------------------------------------------------------------
+# The standalone Tailwind CLI is a single static binary with no Node runtime.
+# Its output, dashboard/static/app.css, is COMMITTED and go:embed-ed, which is
+# what keeps Node out of the Docker image entirely.
+TAILWIND ?= ./bin/tailwindcss
+
+tailwind_install:
+	mkdir -p bin
+	curl -sL -o $(TAILWIND) https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
+	chmod +x $(TAILWIND)
+
+tailwind:
+	$(TAILWIND) -i dashboard/tailwind.css -o dashboard/static/app.css --minify
+
+tailwind_watch:
+	$(TAILWIND) -i dashboard/tailwind.css -o dashboard/static/app.css --watch
+
+# -dev re-parses templates from disk per request, so edits show up on reload.
+dashboard:
+	go run ./cmd/dashboard -config=$(CONFIG) -dev
+
+build_dashboard:
+	go build -o garrixdashboard ./cmd/dashboard

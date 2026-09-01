@@ -19,3 +19,12 @@ config.prod.toml
 /link-remix-parents
 /rekey-songs
 /import-beatport
+
+# The standalone Tailwind CLI, fetched by `make tailwind_install`. Its OUTPUT,
+# dashboard/static/app.css, is deliberately committed: it is go:embed-ed, so a
+# stray *.css ignore rule would turn the dashboard build into a failure that
+# only reproduces on a clean clone.
+/bin/
+
+# Dashboard binary from `go build ./cmd/dashboard`.
+/garrixdashboard

@@ -57,9 +57,54 @@ services:
       - db
     depends_on:
       - lavalink
+    expose:
+      # Internal control plane for the dashboard. expose, not ports: it is
+      # reachable on the garrixbot network only and must never be published.
+      - 8082
+
+  dashboard:
+    image: ghcr.io/milindmadhukar/martingarrixbot-dashboard:main
+    container_name: martingarrixbot-dashboard
+    volumes:
+      # The same file the bot reads. The database credentials and the
+      # internal-API shared secret therefore exist exactly once; the dashboard
+      # refuses to start if its copy of the secret disagrees with the bot's.
+      - ./config.docker.toml:/var/lib/config.toml
+    command: -config=/var/lib/config.toml
+    environment:
+      - TZ=Asia/Kolkata
+    restart: unless-stopped
+    networks:
+      - garrixbot      # reaches the bot's internal API
+      - db             # reaches postgres
+      - reverse_proxy  # reached by traefik
+    depends_on:
+      - bot
+    # No `ports:` on purpose -- traefik reaches 8080 over reverse_proxy, the
+    # same way every other service on this host is published.
+    expose:
+      - 8080
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.garrixdashboard.rule=Host(`bot.milind.dev`)"
+      - "traefik.http.routers.garrixdashboard.entrypoints=websecure"
+      - "traefik.http.routers.garrixdashboard.tls=true"
+      - "traefik.http.routers.garrixdashboard.tls.certresolver=milindresolver"
+      # Authelia in front of the dashboard's own Discord login. The two are not
+      # redundant: Authelia decides who may reach the box at all, the Discord
+      # login decides which guilds they may see once here. authelia's
+      # access_control already covers *.milind.dev with two_factor, so this
+      # host needs no rule of its own.
+      - "traefik.http.routers.garrixdashboard.middlewares=authelia@docker"
+      - "traefik.http.services.garrixdashboard.loadbalancer.server.port=8080"
+      # Same rolling-tag digest watch as the bot, so a push to main redeploys
+      # both halves the same way.
+      - "wud.watch.digest=true"
 
 networks:
   garrixbot:
     name: garrixbot
   db:
+    external: true
+  reverse_proxy:
     external: true
