@@ -38,6 +38,7 @@ func LinksAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHand
 			for _, song := range songs {
 				songChoices = append(songChoices, utils.SongChoice{
 					ID: song.ID, Name: song.Name, Artists: song.Artists,
+					Mix: song.MixName.String,
 				})
 			}
 		} else {
@@ -49,6 +50,7 @@ func LinksAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHand
 			for _, song := range songs {
 				songChoices = append(songChoices, utils.SongChoice{
 					ID: song.ID, Name: song.Name, Artists: song.Artists,
+					Mix: song.MixName.String,
 				})
 			}
 		}

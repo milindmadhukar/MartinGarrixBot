@@ -38,6 +38,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 			for _, song := range songs {
 				songChoices = append(songChoices, utils.SongChoice{
 					ID: song.ID, Name: song.Name, Artists: song.Artists,
+					Mix: song.MixName.String,
 				})
 			}
 		} else {
@@ -49,6 +50,7 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 			for _, song := range songs {
 				songChoices = append(songChoices, utils.SongChoice{
 					ID: song.ID, Name: song.Name, Artists: song.Artists,
+					Mix: song.MixName.String,
 				})
 			}
 		}

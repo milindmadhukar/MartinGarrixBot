@@ -11,36 +11,40 @@ SELECT * FROM songs WHERE id = $1;
 SELECT * FROM songs WHERE beatport_id = $1;
 
 -- name: GetSongsLike :many
--- Autocomplete offers one entry per song. Remix rows are excluded: ten "Told You
--- So" choices is not a useful list, and the choice payload is capped at 100 bytes
--- by Discord, which long remix names were overflowing.
-SELECT id, name, artists, release_date
+-- Renditions are listed, not hidden. A remix is its own recording with its own links,
+-- and excluding it made those links unreachable through the bot at all. What made the
+-- old list unusable was the same song appearing twice under one name -- that is a
+-- duplicate, and duplicates are merged rather than filtered out of sight.
+--
+-- Collections are still excluded: an EP is not something to fetch links for as a song.
+-- mix_name comes back so the caller can tell two renditions apart in the label.
+SELECT id, name, artists, mix_name, release_date
 FROM songs
-WHERE parent_song_id IS NULL
-  AND LOWER(artists || ' - ' || name) LIKE LOWER($1)
-ORDER BY release_date DESC
+WHERE NOT is_collection
+  AND LOWER(artists || ' - ' || name || ' ' || COALESCE(mix_name, '')) LIKE LOWER($1)
+ORDER BY (parent_song_id IS NOT NULL), release_date DESC
 LIMIT 20;
 
 -- name: GetRandomSongNames :many
-SELECT id, name, artists, release_date
+SELECT id, name, artists, mix_name, release_date
 FROM songs
-WHERE parent_song_id IS NULL
+WHERE NOT is_collection AND parent_song_id IS NULL
 ORDER BY RANDOM()
 LIMIT 20;
 
 -- name: GetSongsWithLyricsLike :many
-SELECT id, name, artists, release_date
+SELECT id, name, artists, mix_name, release_date
 FROM songs
 WHERE lyrics IS NOT NULL
-  AND parent_song_id IS NULL
+  AND NOT is_collection
   AND LOWER(artists || ' - ' || name) LIKE LOWER($1)
-ORDER BY release_date DESC
+ORDER BY (parent_song_id IS NOT NULL), release_date DESC
 LIMIT 20;
 
 -- name: GetRandomSongNamesWithLyrics :many
-SELECT id, name, artists, release_date
+SELECT id, name, artists, mix_name, release_date
 FROM songs
-WHERE lyrics IS NOT NULL AND parent_song_id IS NULL
+WHERE lyrics IS NOT NULL AND NOT is_collection AND parent_song_id IS NULL
 ORDER BY RANDOM()
 LIMIT 20;
 
@@ -481,3 +485,10 @@ WHERE youtube_url IS NOT NULL
 UPDATE songs SET name = sqlc.arg(name), mix_name = sqlc.narg(mix_name)
 WHERE id = sqlc.arg(id)
   AND (name IS DISTINCT FROM sqlc.arg(name) OR mix_name IS DISTINCT FROM sqlc.narg(mix_name));
+
+-- name: GetSongsForSubsetDedupe :many
+-- Everything needed to spot rows that are the same recording credited to different
+-- subsets of the same artists.
+SELECT id, name, artists, mix_name, release_date, source, stmpd_slug, beatport_id,
+       spotify_url, apple_music_url, youtube_url, lyrics, parent_song_id, is_collection
+FROM songs ORDER BY id;

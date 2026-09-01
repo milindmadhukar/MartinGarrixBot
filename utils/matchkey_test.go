@@ -300,3 +300,20 @@ func TestIsCollectionCatchesSetsAndLongRecordings(t *testing.T) {
 		t.Error("a five-minute original mix is a track")
 	}
 }
+
+func TestStrokeLettersFoldToPlainLetters(t *testing.T) {
+	// NFD decomposes an accent away from its letter, but the stroke in "Ø" is part of
+	// the glyph, so "NØ SIGNE" and "NO SIGNE" stayed two different artists and their
+	// one song stayed two rows.
+	if ArtistSetKey("NØ SIGNE") != ArtistSetKey("NO SIGNE") {
+		t.Errorf("Ø did not fold: %q vs %q", ArtistSetKey("NØ SIGNE"), ArtistSetKey("NO SIGNE"))
+	}
+	for _, pair := range [][2]string{
+		{"Mø", "Mo"}, {"Æther", "Aether"}, {"Þor", "Thor"}, {"Łukasz", "Lukasz"},
+	} {
+		if NormalizeToken(pair[0]) != NormalizeToken(pair[1]) {
+			t.Errorf("%q did not fold to %q: %q vs %q",
+				pair[0], pair[1], NormalizeToken(pair[0]), NormalizeToken(pair[1]))
+		}
+	}
+}

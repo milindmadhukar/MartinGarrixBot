@@ -25,7 +25,7 @@ func main() {
 		script.Fatal("failed to load songs", err)
 	}
 
-	var changed, unchanged, flagged, renamed int
+	var changed, unchanged, flagged, renamed, defeatured int
 	prog := script.NewProgress("rekey songs", len(rows))
 	for _, row := range rows {
 		prog.Step()
@@ -59,6 +59,25 @@ func main() {
 				slog.Info("moved the rendition out of the name",
 					slog.Int64("song_id", row.ID), slog.String("was", row.Name),
 					slog.String("now", name), slog.String("mix", mix))
+			}
+		}
+
+		// A feature clause in the name is redundant when the artists column already
+		// credits those people -- "All I Need Is You feat. Myke Tyler" by "Megisto,
+		// Myke Tyler" says it twice. Drop it from the name so the same song is not
+		// written two ways depending on which source supplied the row.
+		if stripped, featured := utils.SplitTitleFeature(name); featured != "" &&
+			utils.ArtistsSubsume(row.Artists, featured) {
+			if _, err := env.Queries.SetSongTitle(ctx, db.SetSongTitleParams{
+				ID: row.ID, Name: stripped, MixName: utils.Text(mix),
+			}); err != nil {
+				slog.Warn("could not drop a redundant credit from the name",
+					slog.Int64("song_id", row.ID), slog.String("name", name), slog.Any("err", err))
+			} else {
+				defeatured++
+				slog.Info("dropped a credit already in the artists",
+					slog.Int64("song_id", row.ID), slog.String("was", name), slog.String("now", stripped))
+				name = stripped
 			}
 		}
 
@@ -115,5 +134,6 @@ func main() {
 		slog.Int("written", changed),
 		slog.Int("already_current", unchanged),
 		slog.Int("newly_flagged_as_collections", flagged),
-		slog.Int("renditions_moved_out_of_name", renamed))
+		slog.Int("renditions_moved_out_of_name", renamed),
+		slog.Int("redundant_credits_dropped", defeatured))
 }

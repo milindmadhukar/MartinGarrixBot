@@ -41,13 +41,28 @@ var variantTerms = []string{
 	"festival edit", "live version",
 }
 
+// strokeLetters are the letters NFD cannot decompose, because the mark is part of the
+// glyph rather than a combining accent. "NØ SIGNE" and "NO SIGNE" are the same act,
+// and no amount of Unicode normalisation will tell you that on its own.
+var strokeLetters = strings.NewReplacer(
+	"ø", "o", "Ø", "o",
+	"æ", "ae", "Æ", "ae",
+	"œ", "oe", "Œ", "oe",
+	"ð", "d", "Ð", "d",
+	"đ", "d", "Đ", "d",
+	"þ", "th", "Þ", "th",
+	"ł", "l", "Ł", "l",
+	"ß", "ss",
+	"ı", "i", "İ", "i",
+)
+
 // NormalizeToken lowercases, folds diacritics away and drops everything that is not
 // a letter or a digit. Punctuation and spacing are the noisiest difference between
 // the two catalogues ("Bad B*tch", "Steppin'", "&friends") and carry no meaning.
 func NormalizeToken(s string) string {
 	folded, _, err := transform.String(
 		transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC),
-		s,
+		strokeLetters.Replace(s),
 	)
 	if err != nil {
 		folded = s
@@ -465,4 +480,18 @@ func SplitTitleRendition(title string) (base, rendition string) {
 		return title, ""
 	}
 	return strings.TrimSpace(rest), strings.TrimSpace(variant)
+}
+
+// SplitTitleFeature separates a stored title from a featured-artist clause written
+// into it, preserving the original spelling because the result is written back.
+func SplitTitleFeature(title string) (base, featured string) {
+	rest, variant := splitTrailingVariant(title)
+	stripped, credit := splitFeature(rest)
+	if credit == "" {
+		return title, ""
+	}
+	if variant != "" {
+		stripped = strings.TrimSpace(stripped) + " (" + variant + ")"
+	}
+	return strings.TrimSpace(stripped), strings.TrimSpace(credit)
 }

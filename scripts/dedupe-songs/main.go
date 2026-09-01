@@ -19,6 +19,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log/slog"
 	"time"
@@ -143,40 +144,8 @@ func main() {
 				continue
 			}
 
-			// Remixes hanging off the row about to disappear have to be moved first,
-			// or the foreign key nulls them and they resurface as separate songs.
-			if _, err := env.Queries.RepointChildren(ctx, db.RepointChildrenParams{
-				NewParent: pgInt8(winner.ID), OldParent: pgInt8(r.ID),
-			}); err != nil {
-				slog.Error("failed to repoint children", slog.Int64("song_id", r.ID), slog.Any("err", err))
-				failed++
-				continue
-			}
-
-			// beatport_id and stmpd_slug are uniquely indexed, so the losing row has
-			// to let go of them before the winner can take them on.
-			if err := env.Queries.ReleaseSongIdentifiers(ctx, r.ID); err != nil {
-				slog.Error("failed to release identifiers", slog.Int64("song_id", r.ID), slog.Any("err", err))
-				failed++
-				continue
-			}
-			if err := env.Queries.AdoptSongIdentifiers(ctx, db.AdoptSongIdentifiersParams{
-				ID: winner.ID, BeatportID: r.BeatportID, StmpdSlug: r.StmpdSlug,
-			}); err != nil {
-				slog.Error("failed to adopt identifiers", slog.Int64("song_id", winner.ID), slog.Any("err", err))
-				failed++
-				continue
-			}
-
-			if err := env.Queries.MergeSongRows(ctx, db.MergeSongRowsParams{
-				WinnerID: winner.ID, LoserID: r.ID,
-			}); err != nil {
-				slog.Error("failed to merge", slog.Int64("song_id", r.ID), slog.Any("err", err))
-				failed++
-				continue
-			}
-			if err := env.Queries.DeleteSong(ctx, r.ID); err != nil {
-				slog.Error("failed to delete merged row", slog.Int64("song_id", r.ID), slog.Any("err", err))
+			if !mergeRows(ctx, env, winner.ID, r.ID, winner.StmpdSlug, r.StmpdSlug,
+				winner.BeatportID, r.BeatportID) {
 				failed++
 				continue
 			}
@@ -189,10 +158,14 @@ func main() {
 
 	prog.Done()
 
+	subsetMerged, subsetDeferred := dedupeBySubsetCredit(ctx, env)
+
 	slog.Info("Dedupe complete",
 		slog.Int("groups", len(order)),
 		slog.Int("rows_merged_away", merged),
 		slog.Int("groups_left_for_review", deferred),
+		slog.Int("merged_by_subset_credit", subsetMerged),
+		slog.Int("subset_pairs_left_for_review", subsetDeferred),
 		slog.Int("failed", failed))
 }
 
@@ -299,4 +272,43 @@ func itoa(v int64) string {
 
 func pgInt8(v int64) pgtype.Int8 {
 	return pgtype.Int8{Int64: v, Valid: true}
+}
+
+// mergeRows folds loser into winner and deletes it, in the order the constraints
+// require.
+//
+// Renditions hanging off the losing row move first, or the foreign key nulls them and
+// they resurface as separate songs. Then the loser gives up its uniquely-indexed
+// identifiers -- beatport_id and stmpd_slug -- because the winner cannot take them on
+// while another row still holds them.
+func mergeRows(ctx context.Context, env *script.Env, winnerID, loserID int64,
+	winnerSlug, loserSlug pgtype.Text, winnerBP, loserBP pgtype.Int4) bool {
+
+	if _, err := env.Queries.RepointChildren(ctx, db.RepointChildrenParams{
+		NewParent: pgInt8(winnerID), OldParent: pgInt8(loserID),
+	}); err != nil {
+		slog.Error("failed to repoint renditions", slog.Int64("song_id", loserID), slog.Any("err", err))
+		return false
+	}
+	if err := env.Queries.ReleaseSongIdentifiers(ctx, loserID); err != nil {
+		slog.Error("failed to release identifiers", slog.Int64("song_id", loserID), slog.Any("err", err))
+		return false
+	}
+	if err := env.Queries.AdoptSongIdentifiers(ctx, db.AdoptSongIdentifiersParams{
+		ID: winnerID, BeatportID: loserBP, StmpdSlug: loserSlug,
+	}); err != nil {
+		slog.Error("failed to adopt identifiers", slog.Int64("song_id", winnerID), slog.Any("err", err))
+		return false
+	}
+	if err := env.Queries.MergeSongRows(ctx, db.MergeSongRowsParams{
+		WinnerID: winnerID, LoserID: loserID,
+	}); err != nil {
+		slog.Error("failed to merge", slog.Int64("song_id", loserID), slog.Any("err", err))
+		return false
+	}
+	if err := env.Queries.DeleteSong(ctx, loserID); err != nil {
+		slog.Error("failed to delete merged row", slog.Int64("song_id", loserID), slog.Any("err", err))
+		return false
+	}
+	return true
 }

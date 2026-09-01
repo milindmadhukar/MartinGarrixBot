@@ -360,9 +360,9 @@ func (q *Queries) GetRandomSongForRadio(ctx context.Context) (GetRandomSongForRa
 }
 
 const getRandomSongNames = `-- name: GetRandomSongNames :many
-SELECT id, name, artists, release_date
+SELECT id, name, artists, mix_name, release_date
 FROM songs
-WHERE parent_song_id IS NULL
+WHERE NOT is_collection AND parent_song_id IS NULL
 ORDER BY RANDOM()
 LIMIT 20
 `
@@ -371,6 +371,7 @@ type GetRandomSongNamesRow struct {
 	ID          int64       `json:"id"`
 	Name        string      `json:"name"`
 	Artists     string      `json:"artists"`
+	MixName     pgtype.Text `json:"mixName"`
 	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
@@ -387,6 +388,7 @@ func (q *Queries) GetRandomSongNames(ctx context.Context) ([]GetRandomSongNamesR
 			&i.ID,
 			&i.Name,
 			&i.Artists,
+			&i.MixName,
 			&i.ReleaseDate,
 		); err != nil {
 			return nil, err
@@ -400,9 +402,9 @@ func (q *Queries) GetRandomSongNames(ctx context.Context) ([]GetRandomSongNamesR
 }
 
 const getRandomSongNamesWithLyrics = `-- name: GetRandomSongNamesWithLyrics :many
-SELECT id, name, artists, release_date
+SELECT id, name, artists, mix_name, release_date
 FROM songs
-WHERE lyrics IS NOT NULL AND parent_song_id IS NULL
+WHERE lyrics IS NOT NULL AND NOT is_collection AND parent_song_id IS NULL
 ORDER BY RANDOM()
 LIMIT 20
 `
@@ -411,6 +413,7 @@ type GetRandomSongNamesWithLyricsRow struct {
 	ID          int64       `json:"id"`
 	Name        string      `json:"name"`
 	Artists     string      `json:"artists"`
+	MixName     pgtype.Text `json:"mixName"`
 	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
@@ -427,6 +430,7 @@ func (q *Queries) GetRandomSongNamesWithLyrics(ctx context.Context) ([]GetRandom
 			&i.ID,
 			&i.Name,
 			&i.Artists,
+			&i.MixName,
 			&i.ReleaseDate,
 		); err != nil {
 			return nil, err
@@ -885,12 +889,72 @@ func (q *Queries) GetSongsForParentLinking(ctx context.Context) ([]GetSongsForPa
 	return items, nil
 }
 
+const getSongsForSubsetDedupe = `-- name: GetSongsForSubsetDedupe :many
+SELECT id, name, artists, mix_name, release_date, source, stmpd_slug, beatport_id,
+       spotify_url, apple_music_url, youtube_url, lyrics, parent_song_id, is_collection
+FROM songs ORDER BY id
+`
+
+type GetSongsForSubsetDedupeRow struct {
+	ID            int64       `json:"id"`
+	Name          string      `json:"name"`
+	Artists       string      `json:"artists"`
+	MixName       pgtype.Text `json:"mixName"`
+	ReleaseDate   pgtype.Text `json:"releaseDate"`
+	Source        string      `json:"source"`
+	StmpdSlug     pgtype.Text `json:"stmpdSlug"`
+	BeatportID    pgtype.Int4 `json:"beatportId"`
+	SpotifyUrl    pgtype.Text `json:"spotifyUrl"`
+	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
+	YoutubeUrl    pgtype.Text `json:"youtubeUrl"`
+	Lyrics        pgtype.Text `json:"lyrics"`
+	ParentSongID  pgtype.Int8 `json:"parentSongId"`
+	IsCollection  bool        `json:"isCollection"`
+}
+
+// Everything needed to spot rows that are the same recording credited to different
+// subsets of the same artists.
+func (q *Queries) GetSongsForSubsetDedupe(ctx context.Context) ([]GetSongsForSubsetDedupeRow, error) {
+	rows, err := q.db.Query(ctx, getSongsForSubsetDedupe)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSongsForSubsetDedupeRow
+	for rows.Next() {
+		var i GetSongsForSubsetDedupeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Artists,
+			&i.MixName,
+			&i.ReleaseDate,
+			&i.Source,
+			&i.StmpdSlug,
+			&i.BeatportID,
+			&i.SpotifyUrl,
+			&i.AppleMusicUrl,
+			&i.YoutubeUrl,
+			&i.Lyrics,
+			&i.ParentSongID,
+			&i.IsCollection,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSongsLike = `-- name: GetSongsLike :many
-SELECT id, name, artists, release_date
+SELECT id, name, artists, mix_name, release_date
 FROM songs
-WHERE parent_song_id IS NULL
-  AND LOWER(artists || ' - ' || name) LIKE LOWER($1)
-ORDER BY release_date DESC
+WHERE NOT is_collection
+  AND LOWER(artists || ' - ' || name || ' ' || COALESCE(mix_name, '')) LIKE LOWER($1)
+ORDER BY (parent_song_id IS NOT NULL), release_date DESC
 LIMIT 20
 `
 
@@ -898,12 +962,17 @@ type GetSongsLikeRow struct {
 	ID          int64       `json:"id"`
 	Name        string      `json:"name"`
 	Artists     string      `json:"artists"`
+	MixName     pgtype.Text `json:"mixName"`
 	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
-// Autocomplete offers one entry per song. Remix rows are excluded: ten "Told You
-// So" choices is not a useful list, and the choice payload is capped at 100 bytes
-// by Discord, which long remix names were overflowing.
+// Renditions are listed, not hidden. A remix is its own recording with its own links,
+// and excluding it made those links unreachable through the bot at all. What made the
+// old list unusable was the same song appearing twice under one name -- that is a
+// duplicate, and duplicates are merged rather than filtered out of sight.
+//
+// Collections are still excluded: an EP is not something to fetch links for as a song.
+// mix_name comes back so the caller can tell two renditions apart in the label.
 func (q *Queries) GetSongsLike(ctx context.Context, lower string) ([]GetSongsLikeRow, error) {
 	rows, err := q.db.Query(ctx, getSongsLike, lower)
 	if err != nil {
@@ -917,6 +986,7 @@ func (q *Queries) GetSongsLike(ctx context.Context, lower string) ([]GetSongsLik
 			&i.ID,
 			&i.Name,
 			&i.Artists,
+			&i.MixName,
 			&i.ReleaseDate,
 		); err != nil {
 			return nil, err
@@ -1140,12 +1210,12 @@ func (q *Queries) GetSongsToCheckForCollection(ctx context.Context) ([]GetSongsT
 }
 
 const getSongsWithLyricsLike = `-- name: GetSongsWithLyricsLike :many
-SELECT id, name, artists, release_date
+SELECT id, name, artists, mix_name, release_date
 FROM songs
 WHERE lyrics IS NOT NULL
-  AND parent_song_id IS NULL
+  AND NOT is_collection
   AND LOWER(artists || ' - ' || name) LIKE LOWER($1)
-ORDER BY release_date DESC
+ORDER BY (parent_song_id IS NOT NULL), release_date DESC
 LIMIT 20
 `
 
@@ -1153,6 +1223,7 @@ type GetSongsWithLyricsLikeRow struct {
 	ID          int64       `json:"id"`
 	Name        string      `json:"name"`
 	Artists     string      `json:"artists"`
+	MixName     pgtype.Text `json:"mixName"`
 	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
@@ -1169,6 +1240,7 @@ func (q *Queries) GetSongsWithLyricsLike(ctx context.Context, lower string) ([]G
 			&i.ID,
 			&i.Name,
 			&i.Artists,
+			&i.MixName,
 			&i.ReleaseDate,
 		); err != nil {
 			return nil, err
