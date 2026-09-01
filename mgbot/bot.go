@@ -16,7 +16,6 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/disgolink/v3/disgolink"
-	"github.com/disgoorg/paginator"
 	"github.com/golang-migrate/migrate/v4"
 	migratePgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -30,20 +29,18 @@ import (
 
 func New(cfg Config, version string, commit string) *MartinGarrixBot {
 	return &MartinGarrixBot{
-		Cfg:       cfg,
-		Paginator: paginator.New(),
-		Version:   version,
-		Commit:    commit,
+		Cfg:     cfg,
+		Version: version,
+		Commit:  commit,
 	}
 }
 
 type MartinGarrixBot struct {
-	Cfg       Config
-	Client    bot.Client
-	Paginator *paginator.Manager
-	Version   string
-	Commit    string
-	IsReady   bool
+	Cfg     Config
+	Client  bot.Client
+	Version string
+	Commit  string
+	IsReady bool
 
 	DB             *pgxpool.Pool
 	Queries        *db.Queries
@@ -58,7 +55,6 @@ func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
 	client, err := disgo.New(b.Cfg.Bot.Token,
 		bot.WithGatewayConfigOpts(gateway.WithIntents(gateway.IntentGuilds, gateway.IntentGuildMessages, gateway.IntentMessageContent, gateway.IntentGuildMembers, gateway.IntentGuildVoiceStates)),
 		bot.WithCacheConfigOpts(cache.WithCaches(cache.FlagGuilds, cache.FlagMessages, cache.FlagVoiceStates, cache.FlagMembers)),
-		bot.WithEventListeners(b.Paginator),
 		bot.WithEventListeners(listeners...),
 	)
 	if err != nil {
