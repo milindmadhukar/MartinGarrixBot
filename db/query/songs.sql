@@ -434,3 +434,15 @@ WHERE id = sqlc.arg(id) AND youtube_url IS DISTINCT FROM sqlc.narg(youtube_url);
 -- Spotify playlist links cannot be resolved without the Spotify API, and pointing a
 -- song's Spotify button at a playlist is worse than showing no button.
 UPDATE songs SET spotify_url = NULL WHERE spotify_url LIKE '%/playlist/%';
+
+-- name: GetSongsMissingArtwork :many
+-- Rows with no cover art. Beatport cannot help with these: every row it knows about
+-- already has artwork, and none of these carry a beatport_id. Apple can -- most of
+-- them have an Apple link, and the lookup returns a cover.
+SELECT id, name, artists, apple_music_url
+FROM songs WHERE coalesce(thumbnail_url, '') = ''
+ORDER BY (apple_music_url IS NULL), id;
+
+-- name: SetSongArtwork :execrows
+UPDATE songs SET thumbnail_url = sqlc.narg(thumbnail_url)
+WHERE id = sqlc.arg(id) AND coalesce(thumbnail_url, '') = '';

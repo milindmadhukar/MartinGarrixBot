@@ -904,6 +904,47 @@ func (q *Queries) GetSongsLike(ctx context.Context, lower string) ([]GetSongsLik
 	return items, nil
 }
 
+const getSongsMissingArtwork = `-- name: GetSongsMissingArtwork :many
+SELECT id, name, artists, apple_music_url
+FROM songs WHERE coalesce(thumbnail_url, '') = ''
+ORDER BY (apple_music_url IS NULL), id
+`
+
+type GetSongsMissingArtworkRow struct {
+	ID            int64       `json:"id"`
+	Name          string      `json:"name"`
+	Artists       string      `json:"artists"`
+	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
+}
+
+// Rows with no cover art. Beatport cannot help with these: every row it knows about
+// already has artwork, and none of these carry a beatport_id. Apple can -- most of
+// them have an Apple link, and the lookup returns a cover.
+func (q *Queries) GetSongsMissingArtwork(ctx context.Context) ([]GetSongsMissingArtworkRow, error) {
+	rows, err := q.db.Query(ctx, getSongsMissingArtwork)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSongsMissingArtworkRow
+	for rows.Next() {
+		var i GetSongsMissingArtworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Artists,
+			&i.AppleMusicUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSongsMissingLinks = `-- name: GetSongsMissingLinks :many
 SELECT id, name, artists, release_date, source, beatport_id
 FROM songs WHERE stmpd_synced_at IS NULL ORDER BY id
@@ -1434,6 +1475,24 @@ type RepointChildrenParams struct {
 // Move a merged-away row's remixes onto the row that survives.
 func (q *Queries) RepointChildren(ctx context.Context, arg RepointChildrenParams) (int64, error) {
 	result, err := q.db.Exec(ctx, repointChildren, arg.NewParent, arg.OldParent)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setSongArtwork = `-- name: SetSongArtwork :execrows
+UPDATE songs SET thumbnail_url = $1
+WHERE id = $2 AND coalesce(thumbnail_url, '') = ''
+`
+
+type SetSongArtworkParams struct {
+	ThumbnailUrl pgtype.Text `json:"thumbnailUrl"`
+	ID           int64       `json:"id"`
+}
+
+func (q *Queries) SetSongArtwork(ctx context.Context, arg SetSongArtworkParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSongArtwork, arg.ThumbnailUrl, arg.ID)
 	if err != nil {
 		return 0, err
 	}

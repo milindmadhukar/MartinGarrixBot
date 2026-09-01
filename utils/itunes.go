@@ -78,6 +78,20 @@ type ItunesResult struct {
 	TrackName      string `json:"trackName"`
 	CollectionName string `json:"collectionName"`
 	ReleaseDate    string `json:"releaseDate"`
+	ArtworkURL100  string `json:"artworkUrl100"`
+}
+
+// artworkSize is what the thumbnail is rewritten to. Apple returns a 100px URL and
+// serves any size from the same path, so the dimensions are simply substituted.
+const artworkSize = "1000x1000bb"
+
+// Artwork returns the cover at a size worth putting in a Discord embed, or "" when
+// Apple has none.
+func (r ItunesResult) Artwork() string {
+	if r.ArtworkURL100 == "" {
+		return ""
+	}
+	return strings.Replace(r.ArtworkURL100, "100x100bb", artworkSize, 1)
 }
 
 // Title returns whichever name the entry carries.
