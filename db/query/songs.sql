@@ -420,10 +420,21 @@ UPDATE songs SET stmpd_slug = NULL WHERE id = $1;
 -- Rows whose YouTube button is missing or points at a playlist rather than a video.
 -- A playlist link is worse than none: it sends people to a playlist instead of the
 -- song they asked for.
+-- youtu.be short links are perfectly good videos -- the radio already follows them
+-- -- so they are not "missing". Only a genuine playlist or an absent link is.
 SELECT id, name, artists, mix_name, youtube_url, spotify_url
 FROM songs
 WHERE youtube_url IS NULL
-   OR youtube_url NOT LIKE '%watch?v=%'
+   OR (youtube_url NOT LIKE '%watch?v=%' AND youtube_url NOT LIKE '%youtu.be/%')
+ORDER BY id;
+
+-- name: GetSongsWithUntidyYoutubeURL :many
+-- Rows whose link is a video but not in canonical form: a short link, or one carrying
+-- share tracking. Rewriting them makes every query and report agree on what a video
+-- looks like.
+SELECT id, youtube_url FROM songs
+WHERE youtube_url IS NOT NULL
+  AND (youtube_url LIKE '%youtu.be/%' OR youtube_url LIKE '%si=%' OR youtube_url LIKE '%&t=%')
 ORDER BY id;
 
 -- name: SetSongYoutubeURL :execrows
@@ -454,3 +465,13 @@ FROM songs
 WHERE NOT is_collection AND apple_music_url IS NOT NULL
   AND apple_music_url NOT LIKE '%/playlist/%'
 ORDER BY id;
+
+-- name: ClearUnresolvedYoutubePlaylists :execrows
+-- A YouTube link that names a playlist rather than a video buys nothing: the radio
+-- ignores it and falls back to a search either way, and the button sends a listener
+-- to a playlist they did not ask for. Once everything resolvable has been resolved,
+-- what is left is better as no button at all.
+UPDATE songs SET youtube_url = NULL
+WHERE youtube_url IS NOT NULL
+  AND youtube_url NOT LIKE '%watch?v=%'
+  AND youtube_url NOT LIKE '%youtu.be/%';

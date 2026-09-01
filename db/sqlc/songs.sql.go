@@ -58,6 +58,25 @@ func (q *Queries) ClearStmpdSlug(ctx context.Context, id int64) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const clearUnresolvedYoutubePlaylists = `-- name: ClearUnresolvedYoutubePlaylists :execrows
+UPDATE songs SET youtube_url = NULL
+WHERE youtube_url IS NOT NULL
+  AND youtube_url NOT LIKE '%watch?v=%'
+  AND youtube_url NOT LIKE '%youtu.be/%'
+`
+
+// A YouTube link that names a playlist rather than a video buys nothing: the radio
+// ignores it and falls back to a search either way, and the button sends a listener
+// to a playlist they did not ask for. Once everything resolvable has been resolved,
+// what is left is better as no button at all.
+func (q *Queries) ClearUnresolvedYoutubePlaylists(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, clearUnresolvedYoutubePlaylists)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const copyLyricsToRemixes = `-- name: CopyLyricsToRemixes :execrows
 UPDATE songs t SET lyrics = s.lyrics
 FROM songs s
@@ -996,7 +1015,7 @@ const getSongsNeedingYoutube = `-- name: GetSongsNeedingYoutube :many
 SELECT id, name, artists, mix_name, youtube_url, spotify_url
 FROM songs
 WHERE youtube_url IS NULL
-   OR youtube_url NOT LIKE '%watch?v=%'
+   OR (youtube_url NOT LIKE '%watch?v=%' AND youtube_url NOT LIKE '%youtu.be/%')
 ORDER BY id
 `
 
@@ -1012,6 +1031,8 @@ type GetSongsNeedingYoutubeRow struct {
 // Rows whose YouTube button is missing or points at a playlist rather than a video.
 // A playlist link is worse than none: it sends people to a playlist instead of the
 // song they asked for.
+// youtu.be short links are perfectly good videos -- the radio already follows them
+// -- so they are not "missing". Only a genuine playlist or an absent link is.
 func (q *Queries) GetSongsNeedingYoutube(ctx context.Context) ([]GetSongsNeedingYoutubeRow, error) {
 	rows, err := q.db.Query(ctx, getSongsNeedingYoutube)
 	if err != nil {
@@ -1194,6 +1215,41 @@ func (q *Queries) GetSongsWithPlaceholderDate(ctx context.Context) ([]GetSongsWi
 			&i.AppleMusicUrl,
 			&i.SpotifyUrl,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSongsWithUntidyYoutubeURL = `-- name: GetSongsWithUntidyYoutubeURL :many
+SELECT id, youtube_url FROM songs
+WHERE youtube_url IS NOT NULL
+  AND (youtube_url LIKE '%youtu.be/%' OR youtube_url LIKE '%si=%' OR youtube_url LIKE '%&t=%')
+ORDER BY id
+`
+
+type GetSongsWithUntidyYoutubeURLRow struct {
+	ID         int64       `json:"id"`
+	YoutubeUrl pgtype.Text `json:"youtubeUrl"`
+}
+
+// Rows whose link is a video but not in canonical form: a short link, or one carrying
+// share tracking. Rewriting them makes every query and report agree on what a video
+// looks like.
+func (q *Queries) GetSongsWithUntidyYoutubeURL(ctx context.Context) ([]GetSongsWithUntidyYoutubeURLRow, error) {
+	rows, err := q.db.Query(ctx, getSongsWithUntidyYoutubeURL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSongsWithUntidyYoutubeURLRow
+	for rows.Next() {
+		var i GetSongsWithUntidyYoutubeURLRow
+		if err := rows.Scan(&i.ID, &i.YoutubeUrl); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

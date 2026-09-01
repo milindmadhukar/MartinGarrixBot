@@ -1,6 +1,9 @@
 package utils
 
-import "strings"
+import (
+	"net/url"
+	"strings"
+)
 
 // decorations are the suffixes uploaders append to a video title. They describe the
 // upload, not the recording, so they must come off before the title is compared with
@@ -57,4 +60,42 @@ func isDecoration(inner string) bool {
 		}
 	}
 	return false
+}
+
+// NormalizeYoutubeURL rewrites a YouTube link to the canonical watch form and drops
+// the tracking parameters share links carry.
+//
+// The STMPD dataset hands out "youtu.be/<id>?si=<token>" short links, which are
+// perfectly good videos -- the radio already recognises them -- but every query and
+// report written against "watch?v=" read them as missing. Eighty-six rows looked like
+// they had no video and were queued to have one guessed at, when they already had the
+// label's own link.
+//
+// Returns "" when the URL names something other than a single video, such as a
+// playlist, so callers can tell "not a video" from "not normalised".
+func NormalizeYoutubeURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+
+	var id string
+	switch {
+	case strings.EqualFold(u.Host, "youtu.be"):
+		id = strings.Trim(u.Path, "/")
+	case strings.Contains(u.Path, "/watch"):
+		id = u.Query().Get("v")
+	case strings.HasPrefix(u.Path, "/embed/"):
+		id = strings.TrimPrefix(u.Path, "/embed/")
+	}
+
+	// A bare playlist or channel link has no video of its own.
+	if id == "" || strings.Contains(id, "/") {
+		return ""
+	}
+	return "https://www.youtube.com/watch?v=" + id
 }

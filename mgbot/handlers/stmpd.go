@@ -64,7 +64,7 @@ func newStmpdReleaseParams(r utils.SanityRelease) stmpdReleaseParams {
 		Thumbnail:         utils.Text(r.Artwork()),
 		Spotify:           utils.Text(l.Spotify),
 		AppleMusic:        utils.Text(l.AppleMusic),
-		YouTube:           utils.Text(l.YouTube),
+		YouTube:           utils.Text(utils.NormalizeYoutubeURL(l.YouTube)),
 		YouTubeMusic:      utils.Text(l.YouTubeMusic),
 		Deezer:            utils.Text(l.Deezer),
 		Tidal:             utils.Text(l.Tidal),

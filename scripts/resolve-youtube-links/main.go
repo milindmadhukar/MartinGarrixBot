@@ -43,6 +43,9 @@ type video struct {
 	Track   string
 }
 
+var clearYoutube = flag.Bool("clear-unresolved-playlists", false,
+	"clear youtube_url where it still names a playlist after everything resolvable has been resolved")
+
 var clearSpotify = flag.Bool("clear-spotify-playlists", false,
 	"also clear spotify_url where it points at a playlist (they cannot be resolved without the Spotify API)")
 
@@ -61,6 +64,8 @@ func main() {
 
 	videos := fetchUploads(ctx, svc)
 	slog.Info("Indexed channel uploads", slog.Int("videos", len(videos)))
+
+	tidied := tidyYoutubeURLs(ctx, env)
 
 	rows, err := env.Queries.GetSongsNeedingYoutube(ctx)
 	if err != nil {
@@ -106,6 +111,14 @@ func main() {
 	}
 	prog.Done()
 
+	var youtubeCleared int64
+	if *clearYoutube {
+		youtubeCleared, err = env.Queries.ClearUnresolvedYoutubePlaylists(ctx)
+		if err != nil {
+			script.Fatal("failed to clear unresolved youtube playlists", err)
+		}
+	}
+
 	var spotifyCleared int64
 	if *clearSpotify {
 		spotifyCleared, err = env.Queries.ClearPlaylistSpotifyLinks(ctx)
@@ -119,6 +132,8 @@ func main() {
 		slog.Int("resolved", resolved),
 		slog.Int("already_correct", unchanged),
 		slog.Int("no_matching_upload", unmatched),
+		slog.Int("links_tidied", tidied),
+		slog.Int64("youtube_playlist_links_cleared", youtubeCleared),
 		slog.Int64("spotify_playlist_links_cleared", spotifyCleared))
 }
 
@@ -204,4 +219,36 @@ func findVideo(videos []video, row db.GetSongsNeedingYoutubeRow) *video {
 			slog.String("row", row.Name), slog.String("video", fallback.Title))
 	}
 	return nil
+}
+
+// tidyYoutubeURLs rewrites short and tracking-laden links to the canonical watch form.
+func tidyYoutubeURLs(ctx context.Context, env *script.Env) int {
+	rows, err := env.Queries.GetSongsWithUntidyYoutubeURL(ctx)
+	if err != nil {
+		slog.Error("failed to load untidy youtube links", slog.Any("err", err))
+		return 0
+	}
+	if len(rows) == 0 {
+		return 0
+	}
+
+	changed := 0
+	for _, row := range rows {
+		canonical := utils.NormalizeYoutubeURL(row.YoutubeUrl.String)
+		if canonical == "" || canonical == row.YoutubeUrl.String {
+			continue
+		}
+		n, err := env.Queries.SetSongYoutubeURL(ctx, db.SetSongYoutubeURLParams{
+			ID: row.ID, YoutubeUrl: utils.Text(canonical),
+		})
+		if err != nil {
+			slog.Error("failed to tidy a youtube link", slog.Int64("song_id", row.ID), slog.Any("err", err))
+			continue
+		}
+		if n > 0 {
+			changed++
+		}
+	}
+	slog.Info("Rewrote youtube links to canonical form", slog.Int("count", changed))
+	return changed
 }

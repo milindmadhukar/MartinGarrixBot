@@ -37,3 +37,22 @@ func TestParseYoutubeTitleKeepsRenditions(t *testing.T) {
 		t.Errorf("got %q, want %q", title, "Catharina (Extended Mix)")
 	}
 }
+
+func TestNormalizeYoutubeURL(t *testing.T) {
+	tests := []struct{ in, want string }{
+		// The shape the STMPD dataset actually hands out.
+		{"https://youtu.be/XkI-hwuRprU?si=7CBvwdkBRa0ylfuA", "https://www.youtube.com/watch?v=XkI-hwuRprU"},
+		{"https://www.youtube.com/watch?v=gcCZKHi43AU", "https://www.youtube.com/watch?v=gcCZKHi43AU"},
+		// Tracking parameters are noise.
+		{"https://www.youtube.com/watch?v=abc123&si=xyz&t=30", "https://www.youtube.com/watch?v=abc123"},
+		{"https://www.youtube.com/embed/abc123", "https://www.youtube.com/watch?v=abc123"},
+		// Not a single video.
+		{"https://www.youtube.com/playlist?list=PLxxx", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := NormalizeYoutubeURL(tt.in); got != tt.want {
+			t.Errorf("NormalizeYoutubeURL(%q) = %q; want %q", tt.in, got, tt.want)
+		}
+	}
+}
