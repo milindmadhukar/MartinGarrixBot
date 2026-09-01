@@ -22,8 +22,19 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Formatting
-        run: test -z "$(gofmt -l .)"
+      # Only the files this change touches. A repo-wide `gofmt -l .` would drag
+      # untouched files into every diff, which is churn we deliberately avoid.
+      - name: Formatting (changed files only)
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          [ -n "$base" ] || base="$(git rev-parse HEAD~1 2>/dev/null || true)"
+          [ -n "$base" ] || exit 0
+          changed="$(git diff --name-only --diff-filter=d "$base"...HEAD -- '*.go')"
+          [ -n "$changed" ] || exit 0
+          unformatted="$(gofmt -l $changed)"
+          if [ -n "$unformatted" ]; then
+            echo "not gofmt-clean:"; echo "$unformatted"; exit 1
+          fi
 
       - name: go.mod is tidy
         run: |

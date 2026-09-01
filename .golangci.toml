@@ -13,5 +13,6 @@ enable = [
     "importas"
 ]
 
-[formatters]
-enable = ["gofmt"]
+# gofmt is deliberately not enabled here. golangci-lint would apply it to the
+# whole repo, and formatting files that a change does not otherwise touch is
+# churn. The CI workflow runs gofmt against changed files only.
