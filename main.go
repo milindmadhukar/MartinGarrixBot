@@ -26,8 +26,14 @@ var (
 )
 
 func main() {
-	Version = os.Getenv("VERSION")
-	Commit = os.Getenv("COMMIT")
+	// Version/Commit are normally stamped in at build time via -ldflags; fall back
+	// to the environment (and then to placeholders) for `go run` and local builds.
+	if Version == "" {
+		Version = os.Getenv("VERSION")
+	}
+	if Commit == "" {
+		Commit = os.Getenv("COMMIT")
+	}
 	if Version == "" {
 		Version = "dev"
 	}

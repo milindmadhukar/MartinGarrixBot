@@ -11,7 +11,7 @@ make_migration:
 	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate create -ext sql -dir db/migrations -seq $$MIGRATION_NAME
 
 sqlc:
-	docker run --rm -v $(ROOT_DIR):/src -w /src sqlc/sqlc generate
+	docker run --rm -v $(ROOT_DIR):/src -w /src sqlc/sqlc:1.30.0 generate
 
 psql:
 	docker exec -it postgres-db-1 psql -U postgres -d garrixbot
@@ -21,7 +21,7 @@ migrate_force:
 	docker run -v $(ROOT_DIR)/db/migrations:/migrations --network=host migrate/migrate -path=migrations/ -database postgresql://postgres:password@localhost:5432/garrixbot?sslmode=disable force $$VERSION
 
 build:
-	go build -o garrixbot cmd/main.go
+	go build -o garrixbot .
 
 dev:
 	air -c .air.toml
@@ -31,3 +31,10 @@ run:
 
 kill:
 	@pgrep -f "mgbot_bin\|garrixbot" | xargs kill || true
+
+test:
+	go build ./...
+	go vet ./...
+
+lint:
+	golangci-lint run

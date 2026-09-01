@@ -13,7 +13,7 @@ require (
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/pelletier/go-toml/v2 v2.4.3
 	golang.org/x/image v0.45.0
-	google.golang.org/api v0.293.0
+	google.golang.org/api v0.296.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -47,6 +47,6 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
-	google.golang.org/grpc v1.83.1 // indirect
+	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )

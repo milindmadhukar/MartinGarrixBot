@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      # disgo v0.19 builders use value receivers, so a discarded result is a silent
+      # no-op that both the compiler and `go vet` accept. This is the only automated
+      # check for it. The method list is an explicit whitelist: a generic
+      # `\w+\.Add\w+\(` would false-positive on the project's own notifier.AddItem.
+      - name: No discarded builder results
+        run: |
+          ! grep -rnE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*\.(With(Title|Titlef|Description|Descriptionf|Color|Footer|FooterText|Image|Thumbnail|URL|Timestamp|Fields|Field|Author|Content|Contentf|Embeds|Embed|Components|Ephemeral|Files|Flags|AllowedMentions|MessageReference|MessageReferenceByID)|Add(Field|Fields|Embeds|Embed|Components|ActionRow|Files|File|Flags))\(' --include='*.go' .
+
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.13.2

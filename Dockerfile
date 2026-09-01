@@ -20,7 +20,7 @@ RUN export GOOS=$(echo ${TARGETPLATFORM} | cut -d'/' -f1) \
     && if [ "${GOARCH}" = "arm64" ]; then export GOARCH=arm64; fi \
     && echo "Building for GOOS=${GOOS} GOARCH=${GOARCH}" \
     && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
-       go build -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT}" -o bot .
+       go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o bot .
 
 FROM --platform=$TARGETPLATFORM alpine
 

@@ -1,9 +1,9 @@
+version = "2"
+
 [linters]
-disable-all = true
+default = "none"
 enable = [
-    "gosimple",
     "govet",
-    "gofmt",
     "ineffassign",
     "staticcheck",
     "sloglint",
@@ -12,3 +12,6 @@ enable = [
     "errorlint",
     "importas"
 ]
+
+[formatters]
+enable = ["gofmt"]
