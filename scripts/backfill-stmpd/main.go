@@ -82,9 +82,12 @@ func main() {
 	slog.Info("Fetched STMPD catalogue", slog.Int("releases", len(releases)))
 
 	c := counters{byTier: map[utils.MatchTier]int{}}
+	prog := script.NewProgress("reconcile catalogue", len(releases))
 	for _, release := range releases {
 		processRelease(ctx, env, index, release, &c)
+		prog.Step()
 	}
+	prog.Done()
 
 	after, err := env.Queries.CountLinklessSongs(ctx)
 	if err != nil {
