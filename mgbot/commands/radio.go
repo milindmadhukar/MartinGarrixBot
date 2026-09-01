@@ -261,7 +261,7 @@ func handleRadioSkip(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 
 	// Get the radio voice channel ID
 	player := b.RadioManager.Client.ExistingPlayer(guildID)
-	if player == nil || player.ChannelID() == nil {
+	if player == nil || player.Voice.ChannelID == 0 {
 		return e.CreateMessage(discord.NewMessageCreateBuilder().
 			SetEmbeds(discord.NewEmbedBuilder().
 				SetTitle("Error").
@@ -273,7 +273,7 @@ func handleRadioSkip(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	}
 
 	// Check if user is in the same channel as the bot
-	if *voiceState.ChannelID != *player.ChannelID() {
+	if *voiceState.ChannelID != player.Voice.ChannelID {
 		return e.CreateMessage(discord.NewMessageCreateBuilder().
 			SetEmbeds(discord.NewEmbedBuilder().
 				SetTitle("Wrong Voice Channel").
@@ -285,7 +285,7 @@ func handleRadioSkip(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	}
 
 	// Count members in voice channel (excluding bots)
-	humanCount := utils.CountHumansInVoiceChannel(b.Client, guildID, *player.ChannelID())
+	humanCount := utils.CountHumansInVoiceChannel(b.Client, guildID, player.Voice.ChannelID)
 
 	if humanCount == 0 {
 		return e.CreateMessage(discord.NewMessageCreateBuilder().

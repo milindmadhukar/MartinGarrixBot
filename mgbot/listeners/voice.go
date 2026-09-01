@@ -50,11 +50,11 @@ func VoiceStateUpdateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 
 		// Get the bot's voice channel
 		player := b.RadioManager.Client.ExistingPlayer(e.VoiceState.GuildID)
-		if player == nil || player.ChannelID() == nil {
+		if player == nil || player.Voice.ChannelID == 0 {
 			return
 		}
 
-		radioChannelID := *player.ChannelID()
+		radioChannelID := player.Voice.ChannelID
 
 		// Check if this is a user joining the radio channel (not leaving or already in)
 		// User is joining if:

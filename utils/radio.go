@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/disgoorg/disgo/bot"
-	"github.com/disgoorg/disgolink/v3/disgolink"
-	"github.com/disgoorg/disgolink/v3/lavalink"
+	"github.com/disgoorg/disgolink/v4/disgolink"
+	"github.com/disgoorg/disgolink/v4/lavalink"
 	"github.com/disgoorg/snowflake/v2"
 )
 
@@ -26,7 +26,7 @@ type SkipVote struct {
 }
 
 type RadioManager struct {
-	Client               disgolink.Client
+	Client               *disgolink.Client
 	ActiveGuilds         map[snowflake.ID]bool
 	PausedGuilds         map[snowflake.ID]bool      // Guilds where radio is paused (waiting for listeners)
 	CurrentTracks        map[snowflake.ID]TrackInfo // Store current track info per guild
@@ -216,8 +216,14 @@ func (rm *RadioManager) PlayTrack(ctx context.Context, guildID snowflake.ID, que
 
 	player := rm.Client.Player(guildID)
 
-	// Load tracks
-	result, err := rm.Client.BestNode().LoadTracks(ctx, query)
+	// Load tracks. BestNode returns a typed pointer in disgolink v4, so a missing
+	// node is a nil deref rather than a nil-interface panic further down.
+	node := rm.Client.BestNode()
+	if node == nil {
+		return fmt.Errorf("no lavalink node available")
+	}
+
+	result, err := node.Rest.LoadTracks(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to load tracks: %w", err)
 	}
@@ -265,7 +271,7 @@ func (rm *RadioManager) PlayTrack(ctx context.Context, guildID snowflake.ID, que
 	}
 
 	// Play the track
-	if err := player.Update(ctx, lavalink.WithTrack(selectedTrack)); err != nil {
+	if err := player.Update(ctx, disgolink.WithTrack(selectedTrack)); err != nil {
 		return fmt.Errorf("failed to play track: %w", err)
 	}
 
@@ -285,7 +291,7 @@ func (rm *RadioManager) StopRadio(ctx context.Context, guildID snowflake.ID) err
 		return nil
 	}
 
-	if err := player.Update(ctx, lavalink.WithNullTrack()); err != nil {
+	if err := player.Update(ctx, disgolink.WithNullTrack()); err != nil {
 		return fmt.Errorf("failed to stop track: %w", err)
 	}
 
@@ -303,8 +309,8 @@ func (rm *RadioManager) StopRadioAndClearStatus(ctx context.Context, client bot.
 	// Clear voice channel status
 	player := rm.Client.ExistingPlayer(guildID)
 	if player != nil {
-		if channelID := player.ChannelID(); channelID != nil {
-			if err := UpdateVoiceChannelStatus(ctx, client, botToken, *channelID, ""); err != nil {
+		if channelID := player.Voice.ChannelID; channelID != 0 {
+			if err := UpdateVoiceChannelStatus(ctx, client, botToken, channelID, ""); err != nil {
 				slog.Error("Failed to clear voice channel status", slog.Any("err", err))
 			}
 		}
@@ -352,7 +358,7 @@ func (rm *RadioManager) StopAllRadios(ctx context.Context) {
 			// Stop the player
 			player := rm.Client.ExistingPlayer(guildID)
 			if player != nil {
-				if err := player.Update(ctx, lavalink.WithNullTrack()); err != nil {
+				if err := player.Update(ctx, disgolink.WithNullTrack()); err != nil {
 					slog.Error("Failed to stop player", slog.Any("err", err), slog.String("guild_id", guildID.String()))
 				}
 			}

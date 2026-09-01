@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/disgoorg/disgo v0.18.14
-	github.com/disgoorg/disgolink/v3 v3.1.0
+	github.com/disgoorg/disgolink/v4 v4.0.0-20260522172606-c51182f6e828
 	github.com/disgoorg/json v1.2.0
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/golang-migrate/migrate/v4 v4.19.1
@@ -21,6 +21,8 @@ require (
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/disgoorg/json/v2 v2.0.0 // indirect
+	github.com/disgoorg/omit v1.0.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
