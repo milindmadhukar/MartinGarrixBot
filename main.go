@@ -72,7 +72,26 @@ func main() {
 	// rather than refusing connections.
 	b.StartHealthServer()
 
-	service, err := youtube.NewService(context.Background(), option.WithAPIKey(b.Cfg.Bot.YoutubeAPIKey), option.WithCredentialsFile(b.Cfg.Bot.GoogleServiceFile))
+	// Exactly one credential, never both: the Google client rejects being handed an
+	// API key and a service-account file together with "multiple credential options
+	// provided". This went unnoticed for as long as BotConfig read the key from the
+	// wrong TOML name, because the key was always empty and only the file was really
+	// being passed.
+	//
+	// The API key is preferred. Everything the bot asks YouTube for is public, and a
+	// key needs no account to be kept alive.
+	var ytOption option.ClientOption
+	switch {
+	case b.Cfg.Bot.YoutubeAPIKey != "":
+		ytOption = option.WithAPIKey(b.Cfg.Bot.YoutubeAPIKey)
+	case b.Cfg.Bot.GoogleServiceFile != "":
+		ytOption = option.WithCredentialsFile(b.Cfg.Bot.GoogleServiceFile)
+	default:
+		slog.Error("No YouTube credentials configured: set yt_api_key or google_service_file")
+		os.Exit(-1)
+	}
+
+	service, err := youtube.NewService(context.Background(), ytOption)
 	if err != nil {
 		slog.Error("Failed to create youtube service", slog.Any("err", err))
 		os.Exit(-1)
