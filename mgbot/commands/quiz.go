@@ -75,17 +75,16 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		selectedLines := selectLyricLines(validLines, difficulty)
 		lyricsToGuessFrom := strings.Join(selectedLines, "\n")
 
-		lyricsGuessEmbed := discord.NewEmbedBuilder().
-			SetTitle(fmt.Sprintf("Guess the song title from the lyrics! (%s)", difficulty)).
-			SetDescription("Guess the song name within 45 seconds.").
-			SetColor(utils.ColorSuccess).
+		lyricsGuessEmbed := discord.NewEmbed().
+			WithTitle(fmt.Sprintf("Guess the song title from the lyrics! (%s)", difficulty)).
+			WithDescription("Guess the song name within 45 seconds.").
+			WithColor(utils.ColorSuccess).
 			AddField("Lyrics", lyricsToGuessFrom, false)
 
 		err = e.Respond(
 			discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(lyricsGuessEmbed.Build()).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(lyricsGuessEmbed),
 		)
 		if err != nil {
 			return err
@@ -93,10 +92,7 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 		go func() {
 			filterAuthorMessagesFunc := func(messageEvent *events.MessageCreate) bool {
-				if messageEvent.Message.Author.ID == e.Member().User.ID {
-					return true
-				}
-				return false
+				return messageEvent.Message.Author.ID == e.Member().User.ID
 			}
 
 			answerCheckFunc := func(messageEvent *events.MessageCreate) {
@@ -125,29 +121,26 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 						return
 					}
 
-					followUpResponseEmbed = discord.NewEmbedBuilder().
-						SetTitle(fmt.Sprintf("<a:tick:810462879374770186> Your guess is correct and you earned %d coins.", earnings)).
-						SetColor(utils.ColorSuccess).
+					followUpResponseEmbed = discord.NewEmbed().
+						WithTitle(fmt.Sprintf("<a:tick:810462879374770186> Your guess is correct and you earned %d coins.", earnings)).
+						WithColor(utils.ColorSuccess).
 						AddField("Song Name", fmt.Sprintf("%s - %s", song.Artists, song.Name), false).
-						SetThumbnail(song.ThumbnailUrl.String).
-						Build()
-
+						WithThumbnail(song.ThumbnailUrl.String)
 				} else {
-					followUpResponseEmbed = discord.NewEmbedBuilder().
-						SetTitle("<a:cross:810462920810561556> Your guess is incorrect").
-						SetColor(utils.ColorError).
+					followUpResponseEmbed = discord.NewEmbed().
+						WithTitle("<a:cross:810462920810561556> Your guess is incorrect").
+						WithColor(utils.ColorError).
 						AddField("Song Name", fmt.Sprintf("%s - %s", song.Artists, song.Name), false).
-						SetThumbnail(song.ThumbnailUrl.String).
-						Build()
+						WithThumbnail(song.ThumbnailUrl.String)
 				}
 
-				followUpMessage := discord.NewMessageCreateBuilder().
-					SetEmbeds(followUpResponseEmbed)
+				followUpMessage := discord.NewMessageCreate().
+					WithEmbeds(followUpResponseEmbed)
 
-				followUpMessage = followUpMessage.AddContainerComponents(utils.GetSongButtonRows(song)...)
+				followUpMessage = followUpMessage.AddComponents(utils.GetSongButtonRows(song)...)
 
-				_, err := b.Client.Rest().CreateFollowupMessage(e.ApplicationID(), e.Token(),
-					followUpMessage.Build(),
+				_, err := b.Client.Rest.CreateFollowupMessage(e.ApplicationID(), e.Token(),
+					followUpMessage,
 				)
 				if err != nil {
 					slog.Error("Error while sending response to quiz answered by user", slog.Any("err", err))
@@ -158,17 +151,15 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			defer cancel()
 
 			bot.WaitForEvent(b.Client, ctx, filterAuthorMessagesFunc, answerCheckFunc, func() {
-				timerExpiredEmbed := discord.NewEmbedBuilder().
-					SetTitle("<a:cross:810462920810561556> Oops, you ran out of time").
-					SetColor(utils.ColorError).
+				timerExpiredEmbed := discord.NewEmbed().
+					WithTitle("<a:cross:810462920810561556> Oops, you ran out of time").
+					WithColor(utils.ColorError).
 					AddField("Song Name", fmt.Sprintf("%s - %s", song.Artists, song.Name), false).
-					SetThumbnail(song.ThumbnailUrl.String).
-					Build()
+					WithThumbnail(song.ThumbnailUrl.String)
 
-				_, err := b.Client.Rest().CreateFollowupMessage(e.ApplicationID(), e.Token(),
-					discord.NewMessageCreateBuilder().
-						SetEmbeds(timerExpiredEmbed).
-						Build(),
+				_, err := b.Client.Rest.CreateFollowupMessage(e.ApplicationID(), e.Token(),
+					discord.NewMessageCreate().
+						WithEmbeds(timerExpiredEmbed),
 				)
 
 				if err != nil {

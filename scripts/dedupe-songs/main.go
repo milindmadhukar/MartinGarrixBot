@@ -283,7 +283,6 @@ func pgInt8(v int64) pgtype.Int8 {
 // while another row still holds them.
 func mergeRows(ctx context.Context, env *script.Env, winnerID, loserID int64,
 	winnerSlug, loserSlug pgtype.Text, winnerBP, loserBP pgtype.Int4) bool {
-
 	if _, err := env.Queries.RepointChildren(ctx, db.RepointChildrenParams{
 		NewParent: pgInt8(winnerID), OldParent: pgInt8(loserID),
 	}); err != nil {

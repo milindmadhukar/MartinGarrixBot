@@ -36,16 +36,16 @@ func MessageDeleteListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 		channelID := snowflake.ID(config.Int64)
 
 		// Build embed based on whether message was cached
-		embedBuilder := discord.NewEmbedBuilder().
-			SetTitle("Message Deleted").
-			SetColor(0xFF0000). // Red
+		embedBuilder := discord.NewEmbed().
+			WithTitle("Message Deleted").
+			WithColor(0xFF0000). // Red
 			AddField("Channel", fmt.Sprintf("<#%d>", e.ChannelID), true).
 			AddField("Message ID", e.MessageID.String(), true).
-			SetTimestamp(time.Now().UTC())
+			WithTimestamp(time.Now().UTC())
 
 		// If message was cached, we have full details
 		if e.Message.ID != 0 && e.Message.Author.ID != 0 {
-			embedBuilder.
+			embedBuilder = embedBuilder.
 				AddField("Author", fmt.Sprintf("<@%d> (%s)", e.Message.Author.ID, e.Message.Author.Tag()), true)
 
 			// Add content if available
@@ -54,7 +54,7 @@ func MessageDeleteListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 				if len(content) > 1024 {
 					content = content[:1021] + "..."
 				}
-				embedBuilder.AddField("Content", content, false)
+				embedBuilder = embedBuilder.AddField("Content", content, false)
 			}
 
 			// Add attachment info if any
@@ -63,24 +63,24 @@ func MessageDeleteListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 				for _, att := range e.Message.Attachments {
 					attachmentList = append(attachmentList, fmt.Sprintf("[%s](%s)", att.Filename, att.URL))
 				}
-				embedBuilder.AddField(fmt.Sprintf("Attachments (%d)", len(e.Message.Attachments)),
+				embedBuilder = embedBuilder.AddField(fmt.Sprintf("Attachments (%d)", len(e.Message.Attachments)),
 					strings.Join(attachmentList, "\n"), false)
 			}
 
 			// Add embed info if any
 			if len(e.Message.Embeds) > 0 {
-				embedBuilder.AddField("Embeds", fmt.Sprintf("%d embed(s)", len(e.Message.Embeds)), true)
+				embedBuilder = embedBuilder.AddField("Embeds", fmt.Sprintf("%d embed(s)", len(e.Message.Embeds)), true)
 			}
 		} else {
 			// Message was not cached
-			embedBuilder.SetDescription("⚠️ Message details unavailable (not cached)")
+			embedBuilder = embedBuilder.WithDescription("⚠️ Message details unavailable (not cached)")
 		}
 
-		embed := embedBuilder.Build()
+		embed := embedBuilder
 
-		_, err = b.Client.Rest().CreateMessage(channelID, discord.NewMessageCreateBuilder().
-			SetEmbeds(embed).
-			Build())
+		_, err = b.Client.Rest.CreateMessage(channelID, discord.NewMessageCreate().
+			WithEmbeds(embed),
+		)
 		if err != nil {
 			slog.Error("Failed to send message delete log", slog.Any("err", err))
 		}
@@ -112,15 +112,15 @@ func MessageUpdateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 		channelID := snowflake.ID(config.Int64)
 
 		// Build embed
-		embedBuilder := discord.NewEmbedBuilder().
-			SetTitle("Message Edited").
-			SetColor(0xFFA500). // Orange
+		embedBuilder := discord.NewEmbed().
+			WithTitle("Message Edited").
+			WithColor(0xFFA500). // Orange
 			AddField("Channel", fmt.Sprintf("<#%d>", e.ChannelID), true).
 			AddField("Message ID", e.MessageID.String(), true).
 			AddField("Author", fmt.Sprintf("<@%d> (%s)", e.Message.Author.ID, e.Message.Author.Tag()), true).
 			AddField("Jump to Message", fmt.Sprintf("[Click Here](https://discord.com/channels/%d/%d/%d)",
 				e.GuildID, e.ChannelID, e.MessageID), true).
-			SetTimestamp(time.Now().UTC())
+			WithTimestamp(time.Now().UTC())
 
 		// If old message was cached, show before/after
 		if e.OldMessage.ID != 0 {
@@ -131,7 +131,7 @@ func MessageUpdateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 			if len(oldContent) > 1024 {
 				oldContent = oldContent[:1021] + "..."
 			}
-			embedBuilder.AddField("Before", oldContent, false)
+			embedBuilder = embedBuilder.AddField("Before", oldContent, false)
 
 			newContent := e.Message.Content
 			if newContent == "" {
@@ -140,10 +140,10 @@ func MessageUpdateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 			if len(newContent) > 1024 {
 				newContent = newContent[:1021] + "..."
 			}
-			embedBuilder.AddField("After", newContent, false)
+			embedBuilder = embedBuilder.AddField("After", newContent, false)
 		} else {
 			// Old message was not cached, only show new content
-			embedBuilder.SetDescription("⚠️ Old message content unavailable (not cached)")
+			embedBuilder = embedBuilder.WithDescription("⚠️ Old message content unavailable (not cached)")
 
 			newContent := e.Message.Content
 			if newContent == "" {
@@ -152,14 +152,14 @@ func MessageUpdateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 			if len(newContent) > 1024 {
 				newContent = newContent[:1021] + "..."
 			}
-			embedBuilder.AddField("New Content", newContent, false)
+			embedBuilder = embedBuilder.AddField("New Content", newContent, false)
 		}
 
-		embed := embedBuilder.Build()
+		embed := embedBuilder
 
-		_, err = b.Client.Rest().CreateMessage(channelID, discord.NewMessageCreateBuilder().
-			SetEmbeds(embed).
-			Build())
+		_, err = b.Client.Rest.CreateMessage(channelID, discord.NewMessageCreate().
+			WithEmbeds(embed),
+		)
 		if err != nil {
 			slog.Error("Failed to send message edit log", slog.Any("err", err))
 		}

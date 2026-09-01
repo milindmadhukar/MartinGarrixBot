@@ -16,7 +16,7 @@ import (
 
 // UpdateVoiceChannelStatus updates the voice channel status using Discord's REST API
 // Status text can be up to 500 characters, pass empty string to clear the status
-func UpdateVoiceChannelStatus(ctx context.Context, client bot.Client, botToken string, channelID snowflake.ID, status string) error {
+func UpdateVoiceChannelStatus(ctx context.Context, client *bot.Client, botToken string, channelID snowflake.ID, status string) error {
 	// Discord API endpoint: PUT /channels/{channel.id}/voice-status
 	// This is a custom call since disgo doesn't have built-in support yet
 	type voiceStatusUpdate struct {
@@ -39,7 +39,7 @@ func UpdateVoiceChannelStatus(ctx context.Context, client bot.Client, botToken s
 	req.Header.Set("Authorization", "Bot "+botToken)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Rest().HTTPClient().Do(req)
+	resp, err := client.Rest.HTTPClient().Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -54,15 +54,15 @@ func UpdateVoiceChannelStatus(ctx context.Context, client bot.Client, botToken s
 }
 
 // GetMember gets a guild member, checking cache first then falling back to REST API
-func GetMember(client bot.Client, guildID, userID snowflake.ID) (*discord.Member, error) {
+func GetMember(client *bot.Client, guildID, userID snowflake.ID) (*discord.Member, error) {
 	// Try cache first
-	member, ok := client.Caches().Member(guildID, userID)
+	member, ok := client.Caches.Member(guildID, userID)
 	if ok {
 		return &member, nil
 	}
 
 	// Cache miss - fetch from REST API
-	memberPtr, err := client.Rest().GetMember(guildID, userID)
+	memberPtr, err := client.Rest.GetMember(guildID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get member from REST API: %w", err)
 	}
@@ -71,15 +71,15 @@ func GetMember(client bot.Client, guildID, userID snowflake.ID) (*discord.Member
 }
 
 // GetVoiceState gets a user's voice state in a guild, checking cache first then falling back to REST API
-func GetVoiceState(client bot.Client, guildID, userID snowflake.ID) (*discord.VoiceState, error) {
+func GetVoiceState(client *bot.Client, guildID, userID snowflake.ID) (*discord.VoiceState, error) {
 	// Try cache first
-	voiceState, ok := client.Caches().VoiceState(guildID, userID)
+	voiceState, ok := client.Caches.VoiceState(guildID, userID)
 	if ok {
 		return &voiceState, nil
 	}
 
 	// Cache miss - fetch from REST API
-	voiceStatePtr, err := client.Rest().GetUserVoiceState(guildID, userID)
+	voiceStatePtr, err := client.Rest.GetUserVoiceState(guildID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get voice state from REST API: %w", err)
 	}
@@ -89,32 +89,37 @@ func GetVoiceState(client bot.Client, guildID, userID snowflake.ID) (*discord.Vo
 
 // CountHumansInVoiceChannel counts the number of human (non-bot) members in a voice channel
 // Uses cache first, then falls back to REST API for cache misses
-func CountHumansInVoiceChannel(client bot.Client, guildID, channelID snowflake.ID) int {
+func CountHumansInVoiceChannel(client *bot.Client, guildID, channelID snowflake.ID) int {
 	humanCount := 0
 
-	client.Caches().VoiceStatesForEach(guildID, func(vs discord.VoiceState) {
-		if vs.ChannelID != nil && *vs.ChannelID == channelID {
-			// Skip if it's the bot itself
-			if vs.UserID == client.ApplicationID() {
-				return
-			}
-
-			// Use the utility function to get member (cache-first-then-REST)
-			member, err := GetMember(client, guildID, vs.UserID)
-			if err != nil {
-				// Failed to fetch member, assume human (safer for skip logic)
-				slog.Debug("Failed to get member",
-					slog.String("guild_id", guildID.String()),
-					slog.String("user_id", vs.UserID.String()),
-					slog.Any("err", err))
-				humanCount++
-				return
-			}
-
-			if !member.User.Bot {
-				humanCount++
-			}
+	// Note: these are `continue`, not `return`. The pre-v0.19 form was a
+	// VoiceStatesForEach callback where `return` skipped one voice state; in a
+	// range loop the same `return` would abandon the whole count.
+	for vs := range client.Caches.VoiceStates(guildID) {
+		if vs.ChannelID == nil || *vs.ChannelID != channelID {
+			continue
 		}
-	})
+
+		// Skip if it's the bot itself
+		if vs.UserID == client.ApplicationID {
+			continue
+		}
+
+		// Use the utility function to get member (cache-first-then-REST)
+		member, err := GetMember(client, guildID, vs.UserID)
+		if err != nil {
+			// Failed to fetch member, assume human (safer for skip logic)
+			slog.Debug("Failed to get member",
+				slog.String("guild_id", guildID.String()),
+				slog.String("user_id", vs.UserID.String()),
+				slog.Any("err", err))
+			humanCount++
+			continue
+		}
+
+		if !member.User.Bot {
+			humanCount++
+		}
+	}
 	return humanCount
 }

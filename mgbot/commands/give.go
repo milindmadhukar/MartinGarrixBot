@@ -70,10 +70,9 @@ func GiveHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			}
 
 			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-					SetEmbeds(utils.FailureEmbed(message, "")).
-					SetEphemeral(true).
-					Build(),
+				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+					WithEmbeds(utils.FailureEmbed(message, "")).
+					WithEphemeral(true),
 			)
 		}
 
@@ -99,9 +98,8 @@ func GiveHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		)
 
 		return e.Respond(
-			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-				SetEmbeds(embed).
-				Build(),
+			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+				WithEmbeds(embed),
 		)
 	}
 }

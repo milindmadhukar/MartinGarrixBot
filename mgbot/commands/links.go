@@ -64,13 +64,11 @@ func LinksHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		if !ok {
 			// The user submitted free text instead of picking a suggestion.
 			return e.Respond(discord.InteractionResponseTypeCreateMessage,
-				discord.NewMessageCreateBuilder().
-					SetEmbeds(discord.NewEmbedBuilder().
-						SetDescription("Please pick a song from the suggestions.").
-						SetColor(utils.ColorWarning).
-						Build()).
-					SetEphemeral(true).
-					Build())
+				discord.NewMessageCreate().
+					WithEmbeds(discord.NewEmbed().
+						WithDescription("Please pick a song from the suggestions.").
+						WithColor(utils.ColorWarning)).
+					WithEphemeral(true))
 		}
 
 		song, err := b.Queries.GetSongByID(e.Ctx, songID)
@@ -84,25 +82,22 @@ func LinksHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		buttonRows := utils.GetSongButtonRows(song)
 		if len(buttonRows) == 0 {
 			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-					SetEmbeds(
+				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+					WithEmbeds(
 						utils.FailureEmbed("No streaming links found for this song.", ""),
-					).
-					Build(),
+					),
 			)
 		}
 
-		embed := discord.NewEmbedBuilder().
-			SetTitle(utils.SongHeading(song.Artists, song.Name, song.MixName.String)).
-			SetColor(utils.ColorSuccess).
-			SetImage(song.ThumbnailUrl.String).
-			Build()
+		embed := discord.NewEmbed().
+			WithTitle(utils.SongHeading(song.Artists, song.Name, song.MixName.String)).
+			WithColor(utils.ColorSuccess).
+			WithImage(song.ThumbnailUrl.String)
 
 		return e.Respond(
-			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-				SetEmbeds(embed).
-				AddContainerComponents(buttonRows...).
-				Build(),
+			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+				WithEmbeds(embed).
+				AddComponents(buttonRows...),
 		)
 	}
 }

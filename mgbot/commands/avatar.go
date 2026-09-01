@@ -25,14 +25,13 @@ func AvatarHandler(e *handler.CommandEvent) error {
 	}
 	avatarURL := user.AvatarURL(discord.WithFormat(discord.FileFormatJPEG), discord.WithSize(1024))
 
-	eb := discord.NewEmbedBuilder().
-		SetTitle("Avatar").
-		SetColor(utils.ColorSuccess).
-		SetImage(*avatarURL)
+	eb := discord.NewEmbed().
+		WithTitle("Avatar").
+		WithColor(utils.ColorSuccess).
+		WithImage(*avatarURL)
 
 	return e.Respond(
-		discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-			SetEmbeds(eb.Build()).
-			Build(),
+		discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+			WithEmbeds(eb),
 	)
 }

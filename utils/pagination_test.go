@@ -230,17 +230,18 @@ func TestCreatePaginationButtons(t *testing.T) {
 		func(t *testing.T) {
 			t.Parallel()
 
-			// No component handler is registered for these today, so the buttons
-			// are inert. Pinning the format here gives a future handler a stable
-			// contract to route on.
-			buttons := actionRowButtons(t, utils.CreatePaginationButtons(2, 5, "modlogs:123"))
+			// The custom ID is a router path: commands.go registers
+			// "/modlogs/{userID}/{action}/{page}" against these buttons, so the
+			// separator has to be "/" for the handler to match. Colons made every
+			// click fail with "This interaction failed".
+			buttons := actionRowButtons(t, utils.CreatePaginationButtons(2, 5, "/modlogs/123"))
 
 			wantIDs := []string{
-				"modlogs:123:first:2",
-				"modlogs:123:prev:2",
-				"modlogs:123:current:2",
-				"modlogs:123:next:2",
-				"modlogs:123:last:2",
+				"/modlogs/123/first/2",
+				"/modlogs/123/prev/2",
+				"/modlogs/123/current/2",
+				"/modlogs/123/next/2",
+				"/modlogs/123/last/2",
 			}
 			if len(buttons) != len(wantIDs) {
 				t.Fatalf("got %d buttons, want %d", len(buttons), len(wantIDs))
@@ -296,7 +297,7 @@ func TestCreatePaginationButtons(t *testing.T) {
 }
 
 // actionRowButtons flattens the single action row into its buttons.
-func actionRowButtons(t *testing.T, rows []discord.ContainerComponent) []discord.ButtonComponent {
+func actionRowButtons(t *testing.T, rows []discord.LayoutComponent) []discord.ButtonComponent {
 	t.Helper()
 
 	if len(rows) != 1 {
@@ -308,8 +309,8 @@ func actionRowButtons(t *testing.T, rows []discord.ContainerComponent) []discord
 		t.Fatalf("component is %T, want discord.ActionRowComponent", rows[0])
 	}
 
-	buttons := make([]discord.ButtonComponent, 0, len(row))
-	for i, component := range row {
+	buttons := make([]discord.ButtonComponent, 0, len(row.Components))
+	for i, component := range row.Components {
 		button, ok := component.(discord.ButtonComponent)
 		if !ok {
 			t.Fatalf("component %d is %T, want discord.ButtonComponent", i, component)

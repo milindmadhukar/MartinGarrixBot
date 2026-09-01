@@ -40,6 +40,41 @@ jobs:
       - name: Test
         run: go test -race -shuffle=on ./...
 
+      # Only the files this change touches. A repo-wide `gofmt -l .` would drag
+      # untouched files into every diff, which is churn deliberately avoided here.
+      - name: Formatting (changed files only)
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          [ -n "$base" ] || base="$(git rev-parse HEAD~1 2>/dev/null || true)"
+          [ -n "$base" ] || exit 0
+          changed="$(git diff --name-only --diff-filter=d "$base"...HEAD -- '*.go')"
+          [ -n "$changed" ] || exit 0
+          unformatted="$(gofmt -l $changed)"
+          if [ -n "$unformatted" ]; then
+            echo "not gofmt-clean:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      # disgo v0.19 builders use value receivers, so a discarded result is a silent
+      # no-op that both the compiler and `go vet` accept. This is the only automated
+      # check for it. The method list is an explicit whitelist: a generic
+      # `\w+\.Add\w+\(` would false-positive on the project's own notifier.AddItem.
+      - name: No discarded builder results
+        run: |
+          ! grep -rnE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*\.(With(Title|Titlef|Description|Descriptionf|Color|Footer|FooterText|Image|Thumbnail|URL|Timestamp|Fields|Field|Author|Content|Contentf|Embeds|Embed|Components|Ephemeral|Files|Flags|AllowedMentions|MessageReference|MessageReferenceByID)|Add(Field|Fields|Embeds|Embed|Components|ActionRow|Files|File|Flags))\(' --include='*.go' .
+          # Same thing in the multi-line form, where the receiver sits alone on
+          # its line and the method call continues on the next one.
+          ! grep -rnE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*\.[[:space:]]*$' --include='*.go' .
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.13.2
+
   integration:
     name: Database integration tests
     runs-on: ubuntu-latest

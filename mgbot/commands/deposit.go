@@ -60,10 +60,9 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 			return e.Respond(
 				discord.InteractionResponseTypeCreateMessage,
-				discord.NewMessageCreateBuilder().
-					SetEmbeds(utils.FailureEmbed(message, "")).
-					SetEphemeral(true).
-					Build(),
+				discord.NewMessageCreate().
+					WithEmbeds(utils.FailureEmbed(message, "")).
+					WithEphemeral(true),
 			)
 		}
 
@@ -81,11 +80,10 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 		return e.Respond(
 			discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.SuccessEmbed(
+			discord.NewMessageCreate().
+				WithEmbeds(utils.SuccessEmbed(
 					fmt.Sprintf("Successfully deposited %d coins from hand to safe.", amtToDeposit),
-					"")).
-				Build(),
+					"")),
 		)
 	}
 }

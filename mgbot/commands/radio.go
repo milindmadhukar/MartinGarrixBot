@@ -48,10 +48,10 @@ func RadioHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		case "skip":
 			return handleRadioSkip(b, e)
 		default:
-			return e.CreateMessage(discord.NewMessageCreateBuilder().
-				SetContent("Unknown subcommand").
-				SetEphemeral(true).
-				Build())
+			return e.CreateMessage(discord.NewMessageCreate().
+				WithContent("Unknown subcommand").
+				WithEphemeral(true),
+			)
 		}
 	}
 }
@@ -66,38 +66,38 @@ func handleRadioStart(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 
 	// Check if radio is already active
 	if b.RadioManager.IsActive(guildID) {
-		_, err := e.UpdateInteractionResponse(discord.NewMessageUpdateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Radio Already Active").
-				SetDescription("The 24/7 radio is already running in this server.").
-				SetColor(utils.ColorWarning).
-				Build()).
-			Build())
+		_, err := e.UpdateInteractionResponse(discord.NewMessageUpdate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Radio Already Active").
+				WithDescription("The 24/7 radio is already running in this server.").
+				WithColor(utils.ColorWarning),
+			),
+		)
 		return err
 	}
 
 	// Start the radio
 	if err := b.StartRadioInGuild(e.Ctx, guildID); err != nil {
-		_, updateErr := e.UpdateInteractionResponse(discord.NewMessageUpdateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Failed to Start Radio").
-				SetDescription(fmt.Sprintf("Error: %s", err.Error())).
-				SetColor(utils.ColorDanger).
-				Build()).
-			Build())
+		_, updateErr := e.UpdateInteractionResponse(discord.NewMessageUpdate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Failed to Start Radio").
+				WithDescription(fmt.Sprintf("Error: %s", err.Error())).
+				WithColor(utils.ColorDanger),
+			),
+		)
 		if updateErr != nil {
 			return updateErr
 		}
 		return err
 	}
 
-	_, err := e.UpdateInteractionResponse(discord.NewMessageUpdateBuilder().
-		SetEmbeds(discord.NewEmbedBuilder().
-			SetTitle("Radio Started").
-			SetDescription("The 24/7 Martin Garrix radio has been started!").
-			SetColor(utils.ColorSuccess).
-			Build()).
-		Build())
+	_, err := e.UpdateInteractionResponse(discord.NewMessageUpdate().
+		WithEmbeds(discord.NewEmbed().
+			WithTitle("Radio Started").
+			WithDescription("The 24/7 Martin Garrix radio has been started!").
+			WithColor(utils.ColorSuccess),
+		),
+	)
 	return err
 }
 
@@ -111,38 +111,38 @@ func handleRadioStop(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 
 	// Check if radio is active
 	if !b.RadioManager.IsActive(guildID) {
-		_, err := e.UpdateInteractionResponse(discord.NewMessageUpdateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Radio Not Active").
-				SetDescription("The 24/7 radio is not currently running in this server.").
-				SetColor(utils.ColorWarning).
-				Build()).
-			Build())
+		_, err := e.UpdateInteractionResponse(discord.NewMessageUpdate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Radio Not Active").
+				WithDescription("The 24/7 radio is not currently running in this server.").
+				WithColor(utils.ColorWarning),
+			),
+		)
 		return err
 	}
 
 	// Stop the radio
 	if err := b.StopRadioInGuild(e.Ctx, guildID); err != nil {
-		_, updateErr := e.UpdateInteractionResponse(discord.NewMessageUpdateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Failed to Stop Radio").
-				SetDescription(fmt.Sprintf("Error: %s", err.Error())).
-				SetColor(utils.ColorDanger).
-				Build()).
-			Build())
+		_, updateErr := e.UpdateInteractionResponse(discord.NewMessageUpdate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Failed to Stop Radio").
+				WithDescription(fmt.Sprintf("Error: %s", err.Error())).
+				WithColor(utils.ColorDanger),
+			),
+		)
 		if updateErr != nil {
 			return updateErr
 		}
 		return err
 	}
 
-	_, err := e.UpdateInteractionResponse(discord.NewMessageUpdateBuilder().
-		SetEmbeds(discord.NewEmbedBuilder().
-			SetTitle("Radio Stopped").
-			SetDescription("The 24/7 radio has been stopped.").
-			SetColor(utils.ColorSuccess).
-			Build()).
-		Build())
+	_, err := e.UpdateInteractionResponse(discord.NewMessageUpdate().
+		WithEmbeds(discord.NewEmbed().
+			WithTitle("Radio Stopped").
+			WithDescription("The 24/7 radio has been stopped.").
+			WithColor(utils.ColorSuccess),
+		),
+	)
 	return err
 }
 
@@ -151,72 +151,72 @@ func handleRadioNowPlaying(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) er
 
 	// Check if radio is active
 	if !b.RadioManager.IsActive(guildID) {
-		return e.CreateMessage(discord.NewMessageCreateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Radio Not Active").
-				SetDescription("The 24/7 radio is not currently running in this server.").
-				SetColor(utils.ColorWarning).
-				Build()).
-			SetEphemeral(true).
-			Build())
+		return e.CreateMessage(discord.NewMessageCreate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Radio Not Active").
+				WithDescription("The 24/7 radio is not currently running in this server.").
+				WithColor(utils.ColorWarning),
+			).
+			WithEphemeral(true),
+		)
 	}
 
 	// Get current track info
 	trackInfo, exists := b.RadioManager.GetCurrentTrack(guildID)
 	if !exists {
-		return e.CreateMessage(discord.NewMessageCreateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("No Track Playing").
-				SetDescription("No track information available.").
-				SetColor(utils.ColorWarning).
-				Build()).
-			SetEphemeral(true).
-			Build())
+		return e.CreateMessage(discord.NewMessageCreate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("No Track Playing").
+				WithDescription("No track information available.").
+				WithColor(utils.ColorWarning),
+			).
+			WithEphemeral(true),
+		)
 	}
 
 	// Check if we have a song ID to query
 	if trackInfo.SongID == 0 {
 		// Fallback: display basic info without database details
-		return e.CreateMessage(discord.NewMessageCreateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Now Playing").
-				SetDescription(fmt.Sprintf("**%s - %s**", trackInfo.Artist, trackInfo.SongName)).
-				SetColor(utils.ColorSuccess).
-				Build()).
-			Build())
+		return e.CreateMessage(discord.NewMessageCreate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Now Playing").
+				WithDescription(fmt.Sprintf("**%s - %s**", trackInfo.Artist, trackInfo.SongName)).
+				WithColor(utils.ColorSuccess),
+			),
+		)
 	}
 
 	// Get the song from database by ID to fetch links and thumbnail
 	song, err := b.Queries.GetSongByID(e.Ctx, trackInfo.SongID)
 	if err != nil {
 		// Fallback: send basic info without database details
-		return e.CreateMessage(discord.NewMessageCreateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Now Playing").
-				SetDescription(fmt.Sprintf("**%s - %s**", trackInfo.Artist, trackInfo.SongName)).
-				SetColor(utils.ColorSuccess).
-				Build()).
-			Build())
+		return e.CreateMessage(discord.NewMessageCreate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Now Playing").
+				WithDescription(fmt.Sprintf("**%s - %s**", trackInfo.Artist, trackInfo.SongName)).
+				WithColor(utils.ColorSuccess),
+			),
+		)
 	}
 
 	// Build embed with full song info
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Now Playing").
-		SetDescription(fmt.Sprintf("**%s - %s**", song.Artists, song.Name)).
-		SetColor(utils.ColorSuccess)
+	embed := discord.NewEmbed().
+		WithTitle("Now Playing").
+		WithDescription(fmt.Sprintf("**%s - %s**", song.Artists, song.Name)).
+		WithColor(utils.ColorSuccess)
 
 	if song.ThumbnailUrl.Valid {
-		embed.SetImage(song.ThumbnailUrl.String)
+		embed = embed.WithImage(song.ThumbnailUrl.String)
 	}
 
-	messageBuilder := discord.NewMessageCreateBuilder().SetEmbeds(embed.Build())
+	messageBuilder := discord.NewMessageCreate().WithEmbeds(embed)
 
 	// Add buttons if any streaming links are available. Chunked into rows: a song
 	// with all eight links would otherwise exceed Discord's 5-per-row cap and the
 	// whole message would be rejected.
-	messageBuilder.AddContainerComponents(utils.GetSongButtonRows(song)...)
+	messageBuilder = messageBuilder.AddComponents(utils.GetSongButtonRows(song)...)
 
-	return e.CreateMessage(messageBuilder.Build())
+	return e.CreateMessage(messageBuilder)
 }
 
 func handleRadioSkip(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
@@ -225,77 +225,77 @@ func handleRadioSkip(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 
 	// Check if radio is active
 	if !b.RadioManager.IsActive(guildID) {
-		return e.CreateMessage(discord.NewMessageCreateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Radio Not Active").
-				SetDescription("The 24/7 radio is not currently running in this server.").
-				SetColor(utils.ColorWarning).
-				Build()).
-			SetEphemeral(true).
-			Build())
+		return e.CreateMessage(discord.NewMessageCreate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Radio Not Active").
+				WithDescription("The 24/7 radio is not currently running in this server.").
+				WithColor(utils.ColorWarning),
+			).
+			WithEphemeral(true),
+		)
 	}
 
 	// Check if user is in a voice channel (uses cache-first-then-REST utility)
 	voiceState, err := utils.GetVoiceState(b.Client, guildID, userID)
 	if err != nil || voiceState.ChannelID == nil {
-		return e.CreateMessage(discord.NewMessageCreateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Not in Voice Channel").
-				SetDescription("You must be in the radio voice channel to vote for skip.").
-				SetColor(utils.ColorDanger).
-				Build()).
-			SetEphemeral(true).
-			Build())
+		return e.CreateMessage(discord.NewMessageCreate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Not in Voice Channel").
+				WithDescription("You must be in the radio voice channel to vote for skip.").
+				WithColor(utils.ColorDanger),
+			).
+			WithEphemeral(true),
+		)
 	}
 
 	if voiceState.ChannelID == nil {
-		return e.CreateMessage(discord.NewMessageCreateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Not in Voice Channel").
-				SetDescription("You must be in the radio voice channel to vote for skip.").
-				SetColor(utils.ColorDanger).
-				Build()).
-			SetEphemeral(true).
-			Build())
+		return e.CreateMessage(discord.NewMessageCreate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Not in Voice Channel").
+				WithDescription("You must be in the radio voice channel to vote for skip.").
+				WithColor(utils.ColorDanger),
+			).
+			WithEphemeral(true),
+		)
 	}
 
 	// Get the radio voice channel ID
 	player := b.RadioManager.Client.ExistingPlayer(guildID)
-	if player == nil || player.ChannelID() == nil {
-		return e.CreateMessage(discord.NewMessageCreateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Error").
-				SetDescription("Could not find radio channel information.").
-				SetColor(utils.ColorDanger).
-				Build()).
-			SetEphemeral(true).
-			Build())
+	if player == nil || player.Voice.ChannelID == 0 {
+		return e.CreateMessage(discord.NewMessageCreate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Error").
+				WithDescription("Could not find radio channel information.").
+				WithColor(utils.ColorDanger),
+			).
+			WithEphemeral(true),
+		)
 	}
 
 	// Check if user is in the same channel as the bot
-	if *voiceState.ChannelID != *player.ChannelID() {
-		return e.CreateMessage(discord.NewMessageCreateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Wrong Voice Channel").
-				SetDescription("You must be in the same voice channel as the bot to vote for skip.").
-				SetColor(utils.ColorDanger).
-				Build()).
-			SetEphemeral(true).
-			Build())
+	if *voiceState.ChannelID != player.Voice.ChannelID {
+		return e.CreateMessage(discord.NewMessageCreate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Wrong Voice Channel").
+				WithDescription("You must be in the same voice channel as the bot to vote for skip.").
+				WithColor(utils.ColorDanger),
+			).
+			WithEphemeral(true),
+		)
 	}
 
 	// Count members in voice channel (excluding bots)
-	humanCount := utils.CountHumansInVoiceChannel(b.Client, guildID, *player.ChannelID())
+	humanCount := utils.CountHumansInVoiceChannel(b.Client, guildID, player.Voice.ChannelID)
 
 	if humanCount == 0 {
-		return e.CreateMessage(discord.NewMessageCreateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Error").
-				SetDescription("No members found in voice channel.").
-				SetColor(utils.ColorDanger).
-				Build()).
-			SetEphemeral(true).
-			Build())
+		return e.CreateMessage(discord.NewMessageCreate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Error").
+				WithDescription("No members found in voice channel.").
+				WithColor(utils.ColorDanger),
+			).
+			WithEphemeral(true),
+		)
 	}
 
 	// Add the skip vote
@@ -306,13 +306,13 @@ func handleRadioSkip(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 		b.RadioManager.ResetSkipVotes(guildID)
 
 		// Respond immediately
-		if err := e.CreateMessage(discord.NewMessageCreateBuilder().
-			SetEmbeds(discord.NewEmbedBuilder().
-				SetTitle("Song Skipped!").
-				SetDescription(fmt.Sprintf("Vote passed! (%d/%d votes) Skipping to next song...", currentVotes, votesNeeded)).
-				SetColor(utils.ColorSuccess).
-				Build()).
-			Build()); err != nil {
+		if err := e.CreateMessage(discord.NewMessageCreate().
+			WithEmbeds(discord.NewEmbed().
+				WithTitle("Song Skipped!").
+				WithDescription(fmt.Sprintf("Vote passed! (%d/%d votes) Skipping to next song...", currentVotes, votesNeeded)).
+				WithColor(utils.ColorSuccess),
+			),
+		); err != nil {
 			return err
 		}
 
@@ -326,11 +326,11 @@ func handleRadioSkip(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	}
 
 	// Vote recorded but not enough yet
-	return e.CreateMessage(discord.NewMessageCreateBuilder().
-		SetEmbeds(discord.NewEmbedBuilder().
-			SetTitle("Skip Vote Recorded").
-			SetDescription(fmt.Sprintf("Vote recorded! Need %d votes to skip (currently %d/%d).", votesNeeded, currentVotes, votesNeeded)).
-			SetColor(utils.ColorInfo).
-			Build()).
-		Build())
+	return e.CreateMessage(discord.NewMessageCreate().
+		WithEmbeds(discord.NewEmbed().
+			WithTitle("Skip Vote Recorded").
+			WithDescription(fmt.Sprintf("Vote recorded! Need %d votes to skip (currently %d/%d).", votesNeeded, currentVotes, votesNeeded)).
+			WithColor(utils.ColorInfo),
+		),
+	)
 }

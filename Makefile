@@ -11,7 +11,7 @@ make_migration:
 	go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate create -ext sql -dir db/migrations -seq $$MIGRATION_NAME
 
 sqlc:
-	docker run --rm -v $(ROOT_DIR):/src -w /src sqlc/sqlc generate
+	docker run --rm -v $(ROOT_DIR):/src -w /src sqlc/sqlc:1.31.1 generate
 
 psql:
 	docker exec -it postgres-db-1 psql -U postgres -d garrixbot
@@ -100,3 +100,10 @@ check: fmt-check vet test
 
 .PHONY: build dev run kill fmt fmt-check vet test test-integration cover cover-html fuzz live-check check \
 	migrate_up migrate_down make_migration sqlc psql migrate_force
+
+test:
+	go build ./...
+	go vet ./...
+
+lint:
+	golangci-lint run

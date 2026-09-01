@@ -22,7 +22,7 @@ func GetYoutubeVideos(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		slog.Info("Running youtube video fetcher")
 
 		// Create a batch notifier for this cycle
-		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeYoutube)
+		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest, utils.NotificationTypeYoutube)
 
 		var lastYoutubeErr error
 

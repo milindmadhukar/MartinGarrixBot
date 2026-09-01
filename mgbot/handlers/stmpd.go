@@ -148,7 +148,7 @@ func runStmpdCycle(ctx context.Context, b *mgbot.MartinGarrixBot, client *utils.
 	// Built once for the whole cycle. Every tier but the last is a map lookup.
 	index := utils.NewSongIndex(existingSongs)
 
-	notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeSTMPD)
+	notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest, utils.NotificationTypeSTMPD)
 
 	for _, release := range releases {
 		params := newStmpdReleaseParams(release)
@@ -250,11 +250,10 @@ func announceSong(ctx context.Context, b *mgbot.MartinGarrixBot, notifier *utils
 		thumbnail = song.ThumbnailUrl.String
 	}
 
-	embed := discord.NewEmbedBuilder().
-		SetTitle(utils.SongHeading(song.Artists, song.Name, song.MixName.String)).
-		SetImage(thumbnail).
-		SetFooter("Released "+song.ReleaseDate.String, "").
-		Build()
+	embed := discord.NewEmbed().
+		WithTitle(utils.SongHeading(song.Artists, song.Name, song.MixName.String)).
+		WithImage(thumbnail).
+		WithFooter("Released "+song.ReleaseDate.String, "")
 
 	notifier.AddItem(utils.NotificationItem{
 		Embed:      &embed,

@@ -24,18 +24,17 @@ func WhoisHandler(e *handler.CommandEvent) error {
 		member = *e.Member()
 	}
 
-	eb := discord.NewEmbedBuilder().
-		SetTitle("Whois").
-		SetDescription(member.Mention()).
-		SetColor(*member.User.AccentColor).
+	eb := discord.NewEmbed().
+		WithTitle("Whois").
+		WithDescription(member.Mention()).
+		WithColor(*member.User.AccentColor).
 		AddField("Permissions", member.Permissions.String(), false).
 		// TODO: Fetch user from DB Messages sent, status
 		// FIXME: Complete this
 		AddField("Nickname", *member.Nick, false)
 
 	return e.Respond(
-		discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-			SetEmbeds(eb.Build()).
-			Build(),
+		discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+			WithEmbeds(eb),
 	)
 }

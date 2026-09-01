@@ -50,6 +50,7 @@ func SetupHandlers(b *mgbot.MartinGarrixBot) *handler.Mux {
 	rootHandler.Command("/radio", RadioHandler(b))
 
 	rootHandler.Command("/moderation", ModerationHandler(b))
+	rootHandler.Component("/modlogs/{userID}/{action}/{page}", ModlogsPaginationHandler(b))
 
 	rootHandler.Command("/config", ConfigHandler(b))
 

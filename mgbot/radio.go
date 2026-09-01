@@ -245,9 +245,9 @@ func (b *MartinGarrixBot) DisconnectAllRadioChannels(ctx context.Context) {
 		// Get the channel ID from player before disconnecting
 		player := b.RadioManager.Client.ExistingPlayer(guildID)
 		if player != nil {
-			if channelID := player.ChannelID(); channelID != nil {
+			if channelID := player.Voice.ChannelID; channelID != 0 {
 				// Clear voice channel status
-				if err := utils.UpdateVoiceChannelStatus(ctx, b.Client, b.Cfg.Bot.Token, *channelID, ""); err != nil {
+				if err := utils.UpdateVoiceChannelStatus(ctx, b.Client, b.Cfg.Bot.Token, channelID, ""); err != nil {
 					slog.Error("Failed to clear voice channel status", slog.Any("err", err))
 				}
 			}

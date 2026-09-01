@@ -68,9 +68,9 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			for _, record := range records {
 				var discordMember discord.Member
 				var ok bool
-				discordMember, ok = b.Client.Caches().Member(*e.GuildID(), snowflake.ID(record.ID))
+				discordMember, ok = b.Client.Caches.Member(*e.GuildID(), snowflake.ID(record.ID))
 				if !ok {
-					discordMemberPtr, err := b.Client.Rest().GetMember(*e.GuildID(), snowflake.ID(record.ID))
+					discordMemberPtr, err := b.Client.Rest.GetMember(*e.GuildID(), snowflake.ID(record.ID))
 					if err != nil {
 						return err
 					}
@@ -95,9 +95,9 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			for _, record := range records {
 				var discordMember discord.Member
 				var ok bool
-				discordMember, ok = b.Client.Caches().Member(*e.GuildID(), snowflake.ID(record.ID))
+				discordMember, ok = b.Client.Caches.Member(*e.GuildID(), snowflake.ID(record.ID))
 				if !ok {
-					discordMemberPtr, err := b.Client.Rest().GetMember(*e.GuildID(), snowflake.ID(record.ID))
+					discordMemberPtr, err := b.Client.Rest.GetMember(*e.GuildID(), snowflake.ID(record.ID))
 					if err != nil {
 						return err
 					}
@@ -122,9 +122,9 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			for _, record := range records {
 				var discordMember discord.Member
 				var ok bool
-				discordMember, ok = b.Client.Caches().Member(*e.GuildID(), snowflake.ID(record.ID))
+				discordMember, ok = b.Client.Caches.Member(*e.GuildID(), snowflake.ID(record.ID))
 				if !ok {
-					discordMemberPtr, err := b.Client.Rest().GetMember(*e.GuildID(), snowflake.ID(record.ID))
+					discordMemberPtr, err := b.Client.Rest.GetMember(*e.GuildID(), snowflake.ID(record.ID))
 					if err != nil {
 						return err
 					}
@@ -149,9 +149,9 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			for _, record := range records {
 				var discordMember discord.Member
 				var ok bool
-				discordMember, ok = b.Client.Caches().Member(*e.GuildID(), snowflake.ID(record.ID))
+				discordMember, ok = b.Client.Caches.Member(*e.GuildID(), snowflake.ID(record.ID))
 				if !ok {
-					discordMemberPtr, err := b.Client.Rest().GetMember(*e.GuildID(), snowflake.ID(record.ID))
+					discordMemberPtr, err := b.Client.Rest.GetMember(*e.GuildID(), snowflake.ID(record.ID))
 					if err != nil {
 						return err
 					}
@@ -163,7 +163,6 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 					value:  strconv.Itoa(int(record.InHand.Int64)),
 				})
 			}
-
 		}
 
 		var description []string
@@ -173,16 +172,14 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			description = append(description, strconv.Itoa(idx+1)+". "+leaderboardDetail.member.Mention()+" - "+leaderboardDetail.value)
 		}
 
-		embed := discord.NewEmbedBuilder().
-			SetTitle(category + " Leaderboard").
-			SetDescription(strings.Join(description, "\n")).
-			SetColor(utils.ColorSuccess).
-			Build()
+		embed := discord.NewEmbed().
+			WithTitle(category + " Leaderboard").
+			WithDescription(strings.Join(description, "\n")).
+			WithColor(utils.ColorSuccess)
 
 		_, err := e.UpdateInteractionResponse(
-			discord.NewMessageUpdateBuilder().
-				SetEmbeds(embed).
-				Build(),
+			discord.NewMessageUpdate().
+				WithEmbeds(embed),
 		)
 		if err != nil {
 			return err

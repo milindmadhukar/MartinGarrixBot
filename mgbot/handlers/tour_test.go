@@ -285,7 +285,9 @@ func TestSanitizeTicketURL_BringsLongVendorLinksUnderDiscordsLimit(t *testing.T)
 func TestSanitizeTicketURL_UnparseableInputIsReturnedAsIs(t *testing.T) {
 	t.Parallel()
 
-	const raw = "https://tickets.example.com/\x7f\x00path"
+	// Built rather than declared const: staticcheck constant-folds a literal here
+	// and reports the very invalidity this test depends on.
+	raw := "https://tickets.example.com/" + string([]byte{0x7f, 0x00}) + "path"
 
 	if _, err := url.Parse(raw); err == nil {
 		t.Skip("this input is no longer rejected by url.Parse")

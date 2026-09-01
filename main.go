@@ -33,8 +33,14 @@ var (
 )
 
 func main() {
-	Version = os.Getenv("VERSION")
-	Commit = os.Getenv("COMMIT")
+	// Version/Commit are normally stamped in at build time via -ldflags; fall back
+	// to the environment (and then to placeholders) for `go run` and local builds.
+	if Version == "" {
+		Version = os.Getenv("VERSION")
+	}
+	if Commit == "" {
+		Commit = os.Getenv("COMMIT")
+	}
 	if Version == "" {
 		Version = "dev"
 	}
@@ -85,7 +91,9 @@ func main() {
 	case b.Cfg.Bot.YoutubeAPIKey != "":
 		ytOption = option.WithAPIKey(b.Cfg.Bot.YoutubeAPIKey)
 	case b.Cfg.Bot.GoogleServiceFile != "":
-		ytOption = option.WithCredentialsFile(b.Cfg.Bot.GoogleServiceFile)
+		// WithCredentialsFile is deprecated: it accepts any credential type without
+		// validation. The file here is always a service account key, so name that type.
+		ytOption = option.WithAuthCredentialsFile(option.ServiceAccount, b.Cfg.Bot.GoogleServiceFile)
 	default:
 		slog.Error("No YouTube credentials configured: set yt_api_key or google_service_file")
 		os.Exit(-1)

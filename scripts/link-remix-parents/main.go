@@ -230,7 +230,6 @@ func clusterByCredit(rows []db.GetSongsForParentLinkingRow, group []int) [][]int
 // linkCluster files every rendition in a cluster under the cluster's canonical row.
 func linkCluster(ctx context.Context, env *script.Env, rows []db.GetSongsForParentLinkingRow,
 	cluster []int, linked, cleared, unchanged *int) {
-
 	if len(cluster) < 2 {
 		return
 	}

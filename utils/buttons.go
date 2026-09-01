@@ -116,18 +116,18 @@ func GetSongButtons(song db.Song) []discord.InteractiveComponent {
 // It returns nil when the song has no links at all, which is the case callers used
 // to guard by hand with `if song.SpotifyUrl.Valid || ...` -- appending a nil slice
 // of rows is harmless, so that guard is no longer needed.
-func GetSongButtonRows(song db.Song) []discord.ContainerComponent {
+func GetSongButtonRows(song db.Song) []discord.LayoutComponent {
 	return ChunkButtonRows(GetSongButtons(song))
 }
 
 // ChunkButtonRows splits buttons into action rows within Discord's per-row cap, for
 // callers that prepend their own buttons to a song's links.
-func ChunkButtonRows(buttons []discord.InteractiveComponent) []discord.ContainerComponent {
+func ChunkButtonRows(buttons []discord.InteractiveComponent) []discord.LayoutComponent {
 	if len(buttons) == 0 {
 		return nil
 	}
 
-	var rows []discord.ContainerComponent
+	var rows []discord.LayoutComponent
 	for start := 0; start < len(buttons); start += discordButtonsPerRow {
 		end := start + discordButtonsPerRow
 		if end > len(buttons) {
