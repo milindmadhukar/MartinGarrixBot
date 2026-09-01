@@ -57,7 +57,15 @@ type MartinGarrixBot struct {
 func (b *MartinGarrixBot) SetupBot(listeners ...bot.EventListener) error {
 	client, err := disgo.New(b.Cfg.Bot.Token,
 		bot.WithGatewayConfigOpts(gateway.WithIntents(gateway.IntentGuilds, gateway.IntentGuildMessages, gateway.IntentMessageContent, gateway.IntentGuildMembers, gateway.IntentGuildVoiceStates)),
-		bot.WithCacheConfigOpts(cache.WithCaches(cache.FlagGuilds, cache.FlagMessages, cache.FlagVoiceStates, cache.FlagMembers)),
+		// FlagRoles and FlagChannels are what let the dashboard render role and
+		// channel pickers without a REST call per page. IntentGuilds is already
+		// enabled and already delivers both in GUILD_CREATE and keeps them
+		// current via GUILD_ROLE_* / CHANNEL_*, so this costs two more cache
+		// maps and no new intents -- the data was simply being discarded.
+		// They also make disgo's MemberPermissions and
+		// MemberPermissionsInChannel usable, which need FlagRoles and both
+		// flags respectively.
+		bot.WithCacheConfigOpts(cache.WithCaches(cache.FlagGuilds, cache.FlagMessages, cache.FlagVoiceStates, cache.FlagMembers, cache.FlagRoles, cache.FlagChannels)),
 		bot.WithEventListeners(b.Paginator),
 		bot.WithEventListeners(listeners...),
 	)

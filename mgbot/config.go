@@ -28,6 +28,11 @@ type Config struct {
 	Lavalink LavalinkConfig `toml:"lavalink"`
 	DB       DatabaseConfig `toml:"database"`
 	Health   HealthConfig   `toml:"health"`
+	// Internal is read by the bot, Dashboard by the dashboard binary. Both
+	// live in the same file so there is one config format and one
+	// LoadConfig; each process simply ignores the section it does not own.
+	Internal  InternalConfig  `toml:"internal"`
+	Dashboard DashboardConfig `toml:"dashboard"`
 }
 
 type BotConfig struct {
@@ -84,4 +89,49 @@ type DatabaseConfig struct {
 func (d *DatabaseConfig) URI() string {
 	uri := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", d.User, d.Password, d.Host, d.Port, d.Name)
 	return uri
+}
+
+// InternalConfig controls the bot's internal API, which serves live guild data
+// (roles, channels, member counts) to the dashboard from the disgo cache so the
+// bot token never has to leave this process.
+//
+// This is a separate listener from the health server on purpose: /health is
+// deliberately unauthenticated and is hit by the container HEALTHCHECK, and
+// mixing authenticated routes onto that port makes it easy to expose them by
+// accident the day someone publishes 8081 to the host.
+type InternalConfig struct {
+	// Address defaults to ":8082" when empty. Container-internal only; it
+	// must never be published to the host.
+	Address string `toml:"address"`
+	// Secret is presented by the dashboard in the X-Internal-Token header.
+	// The API refuses to start when it is empty rather than serving guild
+	// data to anything that can reach the port.
+	Secret string `toml:"secret"`
+}
+
+// DashboardConfig is read only by the dashboard binary (cmd/dashboard).
+type DashboardConfig struct {
+	// Address defaults to ":8080" when empty.
+	Address string `toml:"address"`
+	// PublicBaseURL is the externally reachable origin, used to decide
+	// whether session cookies get the Secure flag.
+	PublicBaseURL string `toml:"public_base_url"`
+
+	ClientID     string `toml:"client_id"`
+	ClientSecret string `toml:"client_secret"`
+	// RedirectURI has to match a redirect registered on the Discord
+	// application byte for byte or the OAuth exchange fails.
+	RedirectURI string `toml:"redirect_uri"`
+
+	// SessionSecret keys the HMAC over the session cookie. At least 32 bytes.
+	SessionSecret string `toml:"session_secret"`
+
+	// BotAPIURL points at the bot's InternalConfig.Address, and BotAPISecret
+	// must equal InternalConfig.Secret.
+	BotAPIURL    string `toml:"bot_api_url"`
+	BotAPISecret string `toml:"bot_api_secret"`
+
+	// OwnerIDs may administer every guild the bot is in, regardless of their
+	// Discord permissions there.
+	OwnerIDs []snowflake.ID `toml:"owner_ids"`
 }

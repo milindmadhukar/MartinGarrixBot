@@ -113,6 +113,11 @@ func main() {
 		os.Exit(-1)
 	}
 
+	// Started after SetupBot because every handler reads b.Client's caches, and
+	// before OpenGateway so a dashboard that boots first gets served (with empty
+	// caches) rather than refused.
+	b.StartInternalAPI()
+
 	// Setup Beatport client
 	if err = b.SetupBeatport(); err != nil {
 		slog.Warn("Failed to setup Beatport client - beatport features will be disabled", slog.Any("err", err))
