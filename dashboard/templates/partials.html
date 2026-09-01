@@ -1,6 +1,6 @@
 {{define "card"}}
-<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-  <h2 class="mb-3 text-sm font-medium text-slate-300">{{.Title}}</h2>
+<section class="panel p-4">
+  <h2 class="stamp-label mb-3">{{.Title}}</h2>
   {{.Body}}
 </section>
 {{end}}
@@ -14,16 +14,16 @@
   </span>
   <div class="flex gap-2">
     {{if .HasPrev}}
-      <a class="rounded border border-slate-700 px-2.5 py-1 text-slate-300 hover:bg-slate-800"
+      <a class="rounded btn-ghost"
          href="?page={{.PrevPage}}{{.Query}}">Previous</a>
     {{else}}
-      <span class="rounded border border-slate-800 px-2.5 py-1 text-slate-600">Previous</span>
+      <span class="rounded rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-600">Previous</span>
     {{end}}
     {{if .HasNext}}
-      <a class="rounded border border-slate-700 px-2.5 py-1 text-slate-300 hover:bg-slate-800"
+      <a class="rounded btn-ghost"
          href="?page={{.NextPage}}{{.Query}}">Next</a>
     {{else}}
-      <span class="rounded border border-slate-800 px-2.5 py-1 text-slate-600">Next</span>
+      <span class="rounded rounded-full border border-white/10 px-3 py-1.5 text-xs text-slate-600">Next</span>
     {{end}}
   </div>
 </div>
@@ -33,7 +33,7 @@
 {{end}}
 
 {{define "empty"}}
-<div class="rounded-lg border border-dashed border-slate-800 px-4 py-10 text-center text-sm text-slate-500">
+<div class="rounded-lg border border-dashed border-white/15 px-4 py-10 text-center text-sm text-slate-500">
   {{.}}
 </div>
 {{end}}
@@ -44,7 +44,7 @@
   {{if or (eq . "ban") (eq . "tempban") (eq . "softback")}}bg-red-950 text-red-300
   {{else if eq . "kick"}}bg-orange-950 text-orange-300
   {{else if or (eq . "mute") (eq . "tempmute")}}bg-amber-950 text-amber-300
-  {{else if or (eq . "unban") (eq . "unmute")}}bg-emerald-950 text-emerald-300
+  {{else if or (eq . "unban") (eq . "unmute")}}bg-mint-300/15 text-mint-200
   {{else}}bg-slate-800 text-slate-300{{end}}">{{.}}</span>
 {{end}}
 
@@ -52,13 +52,13 @@
      the CSP forbids inline script, and every series on this dashboard is small
      enough that a div with a width does the job. */}}
 {{define "bar"}}
-<div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+<div class="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
   <div class="h-full rounded-full {{.Color}}" style="width: {{.Pct}}%"></div>
 </div>
 {{end}}
 
 {{define "panelError"}}
-<div class="rounded border border-slate-800 bg-slate-900/40 px-4 py-6 text-center text-sm text-slate-500">
+<div class="rounded panel px-4 py-6 text-center text-sm text-slate-500">
   {{.}}
 </div>
 {{end}}
@@ -67,49 +67,37 @@
      moderation performed through the bot's own commands. */}}
 {{define "viaBadge"}}
 {{if .}}
-  <span class="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-400"
+  <span class="rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.2em] text-slate-400"
         title="Performed through Discord and captured from the audit log">Discord</span>
 {{else}}
-  <span class="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-500"
+  <span class="rounded bg-white/10 px-1.5 py-0.5 stamp-muted"
         title="Performed with a bot command">Bot</span>
 {{end}}
 {{end}}
 
-{{/* geoField is the backdrop: a soft mint bloom, a halftone wash and a very
-     large ghosted copy of the mark. All CSS and inline SVG -- no image assets to
-     serve, and nothing for the CSP to block. */}}
+{{/* The sign-in backdrop: a mint bloom behind a halftone wash. No figurative
+     mark of any kind -- the identity here is typographic and geometric only. */}}
 {{define "geoField"}}
 <div class="pointer-events-none absolute inset-0" aria-hidden="true">
-  <div class="drift absolute left-1/2 top-1/2 h-[38rem] w-[38rem] -translate-x-1/2 -translate-y-1/2
+  <div class="drift absolute left-1/2 top-1/2 h-[40rem] w-[40rem] -translate-x-1/2 -translate-y-1/2
               rounded-full bg-mint-500/20 blur-3xl"></div>
   <div class="halftone absolute inset-0 opacity-[0.10]"></div>
-  <div class="absolute left-1/2 top-1/2 w-[46rem] max-w-none -translate-x-1/2 -translate-y-1/2 opacity-[0.06]">
-    {{template "geoSVG" "w-full h-auto"}}
+  <div class="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gradient-to-r
+              from-transparent via-mint-300/20 to-transparent"></div>
+</div>
+{{end}}
+
+{{/* A circular stamp built from type and rules -- the print/stamp voice of the
+     reference artwork, with nothing borrowed from anyone's logo. */}}
+{{define "stampMark"}}
+<div class="relative mx-auto flex h-28 w-28 items-center justify-center sm:h-32 sm:w-32">
+  <div class="absolute inset-0 rounded-full border border-mint-300/30"></div>
+  <div class="absolute inset-[6px] rounded-full border border-dashed border-mint-300/20"></div>
+  <div class="text-center">
+    <div class="text-3xl font-bold leading-none tracking-tighter text-white sm:text-4xl">MG</div>
+    <div class="stamped mt-1.5 text-[8px] text-mint-300">Bot</div>
   </div>
 </div>
-{{end}}
-
-{{define "geoMark"}}
-<div class="mx-auto w-24 text-white sm:w-28">
-  {{template "geoSVG" "w-full h-auto"}}
-</div>
-{{end}}
-
-{{/* An abstract faceted polyhedron drawn from scratch. It borrows the visual
-     language of the reference artwork -- thin white strokes, hard angles, an
-     implied cube -- without reproducing anyone's logo. */}}
-{{define "geoSVG"}}
-<svg viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="2"
-     stroke-linejoin="round" class="{{.}}" aria-hidden="true">
-  <path d="M100 8 190 56v88L100 192 10 144V56z" />
-  <path d="M100 8v184" stroke-width="1.4" />
-  <path d="M10 56l90 48 90-48" stroke-width="1.4" />
-  <path d="M10 144l90-40 90 40" stroke-width="1.4" />
-  <path d="M56 80l30 12-6 30-30-14z" stroke-width="1.6" />
-  <path d="M144 80l-30 12 6 30 30-14z" stroke-width="1.6" />
-  <path d="M74 140h52l-26 24z" stroke-width="1.6" />
-  <path d="M100 104l-14 8m14-8l14 8" stroke-width="1.2" />
-</svg>
 {{end}}
 
 {{define "discordGlyph"}}

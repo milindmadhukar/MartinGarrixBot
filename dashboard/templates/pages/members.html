@@ -1,5 +1,6 @@
 {{define "page"}}
-<h1 class="text-xl font-semibold text-white">Joins &amp; leaves</h1>
+<p class="stamp-label">Records</p>
+<h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">Joins &amp; leaves</h1>
 <p class="mt-1 text-sm text-slate-500">
   Events recorded before this server was tracked separately are attributed to the main server.
 </p>
@@ -11,31 +12,31 @@
       hx-push-url="true"
       hx-trigger="change, submit, keyup changed delay:400ms from:input[type=text]">
 
-  <label class="text-xs text-slate-400">
+  <label class="stamp-muted">
     Event
-    <select name="action" class="mt-1 block w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
+    <select name="action" class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
       <option value="">All</option>
       <option value="join"  {{if eq .Data.Filters.action "join"}}selected{{end}}>Joins</option>
       <option value="leave" {{if eq .Data.Filters.action "leave"}}selected{{end}}>Leaves</option>
     </select>
   </label>
 
-  <label class="text-xs text-slate-400">
+  <label class="stamp-muted">
     Member ID
     <input type="text" inputmode="numeric" name="member" value="{{.Data.Filters.member}}" placeholder="any"
-           class="mt-1 block w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-200 sm:w-40">
+           class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-40">
   </label>
 
-  <label class="text-xs text-slate-400">
+  <label class="stamp-muted">
     From
     <input type="date" name="after" value="{{.Data.Filters.after}}"
-           class="mt-1 block w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
+           class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
   </label>
 
-  <label class="text-xs text-slate-400">
+  <label class="stamp-muted">
     To
     <input type="date" name="before" value="{{.Data.Filters.before}}"
-           class="mt-1 block w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
+           class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
   </label>
 
   <a href="/g/{{.GuildID}}/members" class="col-span-2 pb-1.5 text-xs text-slate-500 hover:text-slate-300 sm:col-span-1">Reset</a>
@@ -49,14 +50,14 @@
   {{if .Data.Rows}}
     <ul class="space-y-2 sm:hidden">
       {{range .Data.Rows}}
-        <li class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+        <li class="flex items-center gap-3 panel p-3">
           <img src="{{.MemberAvatar}}" alt="" class="h-8 w-8 shrink-0 rounded-full">
           <span class="min-w-0 flex-1">
             <span class="block truncate text-sm text-slate-200">{{.MemberName}}</span>
             <span class="block text-xs text-slate-500" title="{{fmtTime .Time}}">{{relTime .Time}}</span>
           </span>
           {{if .IsJoin}}
-            <span class="shrink-0 rounded bg-emerald-950 px-1.5 py-0.5 text-xs font-medium text-emerald-300">joined</span>
+            <span class="shrink-0 rounded bg-mint-300/15 px-1.5 py-0.5 text-xs font-medium text-mint-200">joined</span>
           {{else}}
             <span class="shrink-0 rounded bg-red-950 px-1.5 py-0.5 text-xs font-medium text-red-300">left</span>
           {{end}}
@@ -64,9 +65,9 @@
       {{end}}
     </ul>
 
-    <div class="hidden overflow-x-auto rounded-lg border border-slate-800 sm:block">
+    <div class="hidden panel overflow-x-auto sm:block">
       <table class="w-full text-left text-sm">
-        <thead class="bg-slate-900/60 text-xs uppercase tracking-wide text-slate-500">
+        <thead class="bg-white/[0.03] stamp-muted">
           <tr>
             <th class="px-3 py-2 font-medium">Event</th>
             <th class="px-3 py-2 font-medium">Member</th>
@@ -74,12 +75,12 @@
             <th class="px-3 py-2 font-medium">When</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-800">
+        <tbody class="divide-y divide-white/10">
           {{range .Data.Rows}}
-            <tr class="hover:bg-slate-900/40">
+            <tr class="hover:bg-white/[0.03]">
               <td class="px-3 py-2">
                 {{if .IsJoin}}
-                  <span class="rounded bg-emerald-950 px-1.5 py-0.5 text-xs font-medium text-emerald-300">joined</span>
+                  <span class="rounded bg-mint-300/15 px-1.5 py-0.5 text-xs font-medium text-mint-200">joined</span>
                 {{else}}
                   <span class="rounded bg-red-950 px-1.5 py-0.5 text-xs font-medium text-red-300">left</span>
                 {{end}}
