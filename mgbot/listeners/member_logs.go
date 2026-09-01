@@ -48,7 +48,7 @@ func GuildMemberJoinListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 		}
 
 		// Get guild for member count
-		guild, ok := e.Client().Caches().Guild(e.GuildID)
+		guild, ok := e.Client().Caches.Guild(e.GuildID)
 		memberCount := "Unknown"
 		if ok {
 			memberCount = fmt.Sprintf("#%d", guild.MemberCount)
@@ -57,20 +57,19 @@ func GuildMemberJoinListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 		// Send log message to channel
 		channelID := snowflake.ID(config.Int64)
 		accountCreated := e.Member.User.ID.Time()
-		embed := discord.NewEmbedBuilder().
-			SetTitle("Member Joined").
-			SetColor(0x00FF00). // Green
-			SetDescription(fmt.Sprintf("<@%d> has joined the server", e.Member.User.ID)).
+		embed := discord.NewEmbed().
+			WithTitle("Member Joined").
+			WithColor(0x00FF00). // Green
+			WithDescription(fmt.Sprintf("<@%d> has joined the server", e.Member.User.ID)).
 			AddField("User", e.Member.User.Tag(), true).
 			AddField("User ID", e.Member.User.ID.String(), true).
 			AddField("Account Created", discord.TimestampStyleRelative.FormatTime(accountCreated), true).
-			SetTimestamp(now).
-			SetFooter(fmt.Sprintf("Member %s", memberCount), "").
-			Build()
+			WithTimestamp(now).
+			WithFooter(fmt.Sprintf("Member %s", memberCount), "")
 
-		_, err = b.Client.Rest().CreateMessage(channelID, discord.NewMessageCreateBuilder().
-			SetEmbeds(embed).
-			Build())
+		_, err = b.Client.Rest.CreateMessage(channelID, discord.NewMessageCreate().
+			WithEmbeds(embed),
+		)
 		if err != nil {
 			slog.Error("Failed to send member join log", slog.Any("err", err))
 		}
@@ -120,7 +119,7 @@ func GuildMemberLeaveListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 		}
 
 		// Get guild for member count
-		guild, ok := e.Client().Caches().Guild(e.GuildID)
+		guild, ok := e.Client().Caches.Guild(e.GuildID)
 		memberCount := "Unknown"
 		if ok {
 			memberCount = fmt.Sprintf("#%d", guild.MemberCount)
@@ -136,26 +135,25 @@ func GuildMemberLeaveListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 
 		// Send log message to channel
 		channelID := snowflake.ID(config.Int64)
-		embedBuilder := discord.NewEmbedBuilder().
-			SetTitle("Member Left").
-			SetColor(0xFF0000). // Red
-			SetDescription(fmt.Sprintf("<@%d> has left the server", userID)).
+		embedBuilder := discord.NewEmbed().
+			WithTitle("Member Left").
+			WithColor(0xFF0000). // Red
+			WithDescription(fmt.Sprintf("<@%d> has left the server", userID)).
 			AddField("User", userTag, true).
 			AddField("User ID", userID.String(), true)
 
-		// Add joined date if available
-		if e.Member.User.ID != 0 && !e.Member.JoinedAt.IsZero() {
-			embedBuilder.AddField("Joined", discord.TimestampStyleRelative.FormatTime(e.Member.JoinedAt), true)
+		// Add joined date if available. JoinedAt is a *time.Time in disgo v0.19.
+		if e.Member.User.ID != 0 && e.Member.JoinedAt != nil && !e.Member.JoinedAt.IsZero() {
+			embedBuilder = embedBuilder.AddField("Joined", discord.TimestampStyleRelative.FormatTime(*e.Member.JoinedAt), true)
 		}
 
 		embed := embedBuilder.
-			SetTimestamp(now).
-			SetFooter(fmt.Sprintf("Member %s", memberCount), "").
-			Build()
+			WithTimestamp(now).
+			WithFooter(fmt.Sprintf("Member %s", memberCount), "")
 
-		_, err = b.Client.Rest().CreateMessage(channelID, discord.NewMessageCreateBuilder().
-			SetEmbeds(embed).
-			Build())
+		_, err = b.Client.Rest.CreateMessage(channelID, discord.NewMessageCreate().
+			WithEmbeds(embed),
+		)
 		if err != nil {
 			slog.Error("Failed to send member leave log", slog.Any("err", err))
 		}

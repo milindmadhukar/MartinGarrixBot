@@ -41,14 +41,14 @@ func FormatModlogEntry(log db.Modlog, index int) string {
 
 // CreateModlogEmbed creates an embed for displaying modlogs
 func CreateModlogEmbed(logs []db.Modlog, userID int64, page, totalPages int) discord.Embed {
-	eb := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("Moderation Logs for <@%d>", userID)).
-		SetColor(ColorInfo).
-		SetFooter(fmt.Sprintf("Page %d of %d", page, totalPages), "")
+	eb := discord.NewEmbed().
+		WithTitle(fmt.Sprintf("Moderation Logs for <@%d>", userID)).
+		WithColor(ColorInfo).
+		WithFooter(fmt.Sprintf("Page %d of %d", page, totalPages), "")
 
 	if len(logs) == 0 {
-		eb.SetDescription("No moderation logs found for this user.")
-		return eb.Build()
+		eb = eb.WithDescription("No moderation logs found for this user.")
+		return eb
 	}
 
 	description := ""
@@ -60,8 +60,8 @@ func CreateModlogEmbed(logs []db.Modlog, userID int64, page, totalPages int) dis
 		description += FormatModlogEntry(log, startIndex+i+1)
 	}
 
-	eb.SetDescription(description)
-	return eb.Build()
+	eb = eb.WithDescription(description)
+	return eb
 }
 
 // CalculateTotalPages calculates the total number of pages for pagination
@@ -70,12 +70,12 @@ func CalculateTotalPages(totalItems int, itemsPerPage int) int {
 }
 
 // CreatePaginationButtons creates the navigation buttons for pagination
-func CreatePaginationButtons(currentPage, totalPages int, customID string) []discord.ContainerComponent {
+func CreatePaginationButtons(currentPage, totalPages int, customID string) []discord.LayoutComponent {
 	if totalPages <= 1 {
-		return []discord.ContainerComponent{}
+		return []discord.LayoutComponent{}
 	}
 
-	return []discord.ContainerComponent{
+	return []discord.LayoutComponent{
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀◀", fmt.Sprintf("%s:first:%d", customID, currentPage)).
 				WithDisabled(currentPage == 1),

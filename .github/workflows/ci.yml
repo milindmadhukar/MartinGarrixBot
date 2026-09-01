@@ -37,6 +37,9 @@ jobs:
       - name: No discarded builder results
         run: |
           ! grep -rnE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*\.(With(Title|Titlef|Description|Descriptionf|Color|Footer|FooterText|Image|Thumbnail|URL|Timestamp|Fields|Field|Author|Content|Contentf|Embeds|Embed|Components|Ephemeral|Files|Flags|AllowedMentions|MessageReference|MessageReferenceByID)|Add(Field|Fields|Embeds|Embed|Components|ActionRow|Files|File|Flags))\(' --include='*.go' .
+          # Same thing in the multi-line form, where the receiver sits alone on
+          # its line and the method call continues on the next one.
+          ! grep -rnE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*\.[[:space:]]*$' --include='*.go' .
 
       - uses: golangci/golangci-lint-action@v8
         with:

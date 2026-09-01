@@ -37,7 +37,7 @@ func New(cfg Config, version string, commit string) *MartinGarrixBot {
 
 type MartinGarrixBot struct {
 	Cfg     Config
-	Client  bot.Client
+	Client  *bot.Client
 	Version string
 	Commit  string
 	IsReady bool
@@ -261,7 +261,7 @@ func SetupLogger(cfg LogConfig) {
 
 // SetupLavalink initializes the Lavalink client and connects to the node
 func (b *MartinGarrixBot) SetupLavalink(ctx context.Context) error {
-	b.RadioManager = utils.NewRadioManager(b.Client.ApplicationID())
+	b.RadioManager = utils.NewRadioManager(b.Client.ApplicationID)
 
 	// Set up disconnect callback
 	b.RadioManager.OnLavalinkDisconnect = func() {

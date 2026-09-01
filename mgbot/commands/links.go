@@ -93,27 +93,24 @@ func LinksHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 		if !song.SpotifyUrl.Valid && !song.YoutubeUrl.Valid && !song.AppleMusicUrl.Valid {
 			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-					SetEmbeds(
+				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+					WithEmbeds(
 						utils.FailureEmbed("No streaming links found for this song.", ""),
-					).
-					Build(),
+					),
 			)
 		}
 
-		embed := discord.NewEmbedBuilder().
-			SetTitle(fmt.Sprintf("%s - %s", song.Artists, song.Name)).
-			SetColor(utils.ColorSuccess).
-			SetImage(song.ThumbnailUrl.String).
-			Build()
+		embed := discord.NewEmbed().
+			WithTitle(fmt.Sprintf("%s - %s", song.Artists, song.Name)).
+			WithColor(utils.ColorSuccess).
+			WithImage(song.ThumbnailUrl.String)
 
 		return e.Respond(
-			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-				SetEmbeds(embed).
+			discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+				WithEmbeds(embed).
 				AddActionRow(
 					utils.GetSongButtons(song)...,
-				).
-				Build(),
+				),
 		)
 	}
 }

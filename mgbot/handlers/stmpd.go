@@ -265,7 +265,7 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		}
 
 		// Create a batch notifier for this cycle
-		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeSTMPD)
+		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest, utils.NotificationTypeSTMPD)
 
 		for _, release := range releases {
 			// Convert release year to release_date format
@@ -382,16 +382,15 @@ func GetAllStmpdReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				Source:  "stmpd",
 			})
 
-			announcementEmbed := discord.NewEmbedBuilder().
-				SetTitle(fmt.Sprintf("%s - %s", release.Artists, release.Name)).
-				SetImage(release.Thumbnail).
-				SetFooter(fmt.Sprintf("Release Year: %d", release.ReleaseYear), "").
-				Build()
+			announcementEmbed := discord.NewEmbed().
+				WithTitle(fmt.Sprintf("%s - %s", release.Artists, release.Name)).
+				WithImage(release.Thumbnail).
+				WithFooter(fmt.Sprintf("Release Year: %d", release.ReleaseYear), "")
 
 			// Prepare the components for this song
-			var components []discord.ContainerComponent
+			var components []discord.LayoutComponent
 			if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
-				components = []discord.ContainerComponent{
+				components = []discord.LayoutComponent{
 					discord.NewActionRow(utils.GetSongButtons(song)...),
 				}
 			}

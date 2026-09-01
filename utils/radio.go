@@ -300,7 +300,7 @@ func (rm *RadioManager) StopRadio(ctx context.Context, guildID snowflake.ID) err
 }
 
 // StopRadioAndClearStatus stops the radio and clears the voice channel status
-func (rm *RadioManager) StopRadioAndClearStatus(ctx context.Context, client bot.Client, botToken string, guildID snowflake.ID) error {
+func (rm *RadioManager) StopRadioAndClearStatus(ctx context.Context, client *bot.Client, botToken string, guildID snowflake.ID) error {
 	// Stop the radio
 	if err := rm.StopRadio(ctx, guildID); err != nil {
 		slog.Error("Error stopping radio", slog.Any("err", err))

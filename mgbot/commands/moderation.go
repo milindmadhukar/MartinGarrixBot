@@ -11,7 +11,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
 	"github.com/disgoorg/disgo/rest"
-	"github.com/disgoorg/json"
+	"github.com/disgoorg/omit"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
@@ -177,13 +177,12 @@ var moderation = discord.SlashCommandCreate{
 func ModerationHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
 		// Check if the user has moderator permissions
-		if !utils.HasModeratorPermissions(e.Ctx, b.DB, b.Client.Rest(), *e.GuildID(), e.Member()) {
+		if !utils.HasModeratorPermissions(e.Ctx, b.DB, b.Client.Rest, *e.GuildID(), e.Member()) {
 			return e.Respond(discord.InteractionResponseTypeCreateMessage,
-				discord.NewMessageCreateBuilder().
-					SetEmbeds(utils.FailureEmbed("Permission Denied",
+				discord.NewMessageCreate().
+					WithEmbeds(utils.FailureEmbed("Permission Denied",
 						"You need Administrator permission or the Moderator role to use moderation commands.")).
-					SetEphemeral(true).
-					Build(),
+					WithEphemeral(true),
 			)
 		}
 
@@ -209,10 +208,9 @@ func ModerationHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			return handleLogs(b, e)
 		default:
 			return e.Respond(discord.InteractionResponseTypeCreateMessage,
-				discord.NewMessageCreateBuilder().
-					SetEmbeds(utils.FailureEmbed("Invalid Command", "Unknown subcommand")).
-					SetEphemeral(true).
-					Build(),
+				discord.NewMessageCreate().
+					WithEmbeds(utils.FailureEmbed("Invalid Command", "Unknown subcommand")).
+					WithEphemeral(true),
 			)
 		}
 	}
@@ -236,22 +234,21 @@ func sendModlogToChannel(b *mgbot.MartinGarrixBot, guildID, userID, moderatorID 
 		reasonText = "No reason provided"
 	}
 
-	embed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("Moderation Action: %s", strings.ToUpper(logType))).
+	embed := discord.NewEmbed().
+		WithTitle(fmt.Sprintf("Moderation Action: %s", strings.ToUpper(logType))).
 		AddField("User", fmt.Sprintf("<@%d>", userID), true).
 		AddField("Moderator", fmt.Sprintf("<@%d>", moderatorID), true).
 		AddField("Reason", reasonText, false).
-		SetTimestamp(time.Now()).
-		SetColor(utils.ColorWarning)
+		WithTimestamp(time.Now()).
+		WithColor(utils.ColorWarning)
 
 	if expiresAt != nil {
-		embed.AddField("Expires", fmt.Sprintf("<t:%d:R>", expiresAt.Unix()), false)
+		embed = embed.AddField("Expires", fmt.Sprintf("<t:%d:R>", expiresAt.Unix()), false)
 	}
 
-	_, err = b.Client.Rest().CreateMessage(snowflake.ID(config.ModlogsChannel.Int64),
-		discord.NewMessageCreateBuilder().
-			SetEmbeds(embed.Build()).
-			Build(),
+	_, err = b.Client.Rest.CreateMessage(snowflake.ID(config.ModlogsChannel.Int64),
+		discord.NewMessageCreate().
+			WithEmbeds(embed),
 	)
 	if err != nil {
 		slog.Error("Failed to send modlog to channel", slog.Any("err", err))
@@ -301,13 +298,12 @@ func handleKick(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	moderator := e.User()
 
 	// Kick the user
-	err := b.Client.Rest().RemoveMember(guildID, targetUser.ID, rest.WithReason(reason))
+	err := b.Client.Rest.RemoveMember(guildID, targetUser.ID, rest.WithReason(reason))
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Kick Failed", fmt.Sprintf("Failed to kick user: %s", err.Error()))).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Kick Failed", fmt.Sprintf("Failed to kick user: %s", err.Error()))).
+				WithEphemeral(true),
 		)
 	}
 
@@ -331,10 +327,9 @@ func handleKick(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	sendModlogToChannel(b, guildID, targetUser.ID, moderator.ID, "kick", reason, nil)
 
 	return e.Respond(discord.InteractionResponseTypeCreateMessage,
-		discord.NewMessageCreateBuilder().
-			SetEmbeds(utils.SuccessEmbed("User Kicked", fmt.Sprintf("<@%d> has been kicked", targetUser.ID))).
-			SetEphemeral(true).
-			Build(),
+		discord.NewMessageCreate().
+			WithEmbeds(utils.SuccessEmbed("User Kicked", fmt.Sprintf("<@%d> has been kicked", targetUser.ID))).
+			WithEphemeral(true),
 	)
 }
 
@@ -357,13 +352,12 @@ func handleBan(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 
 	// Ban the user (convert days to duration)
 	deleteMessageDuration := time.Duration(deleteMessageDays) * 24 * time.Hour
-	err := b.Client.Rest().AddBan(guildID, targetUser.ID, deleteMessageDuration, rest.WithReason(reason))
+	err := b.Client.Rest.AddBan(guildID, targetUser.ID, deleteMessageDuration, rest.WithReason(reason))
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Ban Failed", fmt.Sprintf("Failed to ban user: %s", err.Error()))).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Ban Failed", fmt.Sprintf("Failed to ban user: %s", err.Error()))).
+				WithEphemeral(true),
 		)
 	}
 
@@ -387,10 +381,9 @@ func handleBan(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	sendModlogToChannel(b, guildID, targetUser.ID, moderator.ID, "ban", reason, nil)
 
 	return e.Respond(discord.InteractionResponseTypeCreateMessage,
-		discord.NewMessageCreateBuilder().
-			SetEmbeds(utils.SuccessEmbed("User Banned", fmt.Sprintf("<@%d> has been banned", targetUser.ID))).
-			SetEphemeral(true).
-			Build(),
+		discord.NewMessageCreate().
+			WithEmbeds(utils.SuccessEmbed("User Banned", fmt.Sprintf("<@%d> has been banned", targetUser.ID))).
+			WithEphemeral(true),
 	)
 }
 
@@ -416,10 +409,9 @@ func handleTempBan(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	duration, err := parseDuration(durationStr)
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Invalid Duration", err.Error())).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Invalid Duration", err.Error())).
+				WithEphemeral(true),
 		)
 	}
 
@@ -427,13 +419,12 @@ func handleTempBan(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 
 	// Ban the user
 	deleteMessageDuration := time.Duration(deleteMessageDays) * 24 * time.Hour
-	err = b.Client.Rest().AddBan(guildID, targetUser.ID, deleteMessageDuration, rest.WithReason(fmt.Sprintf("Tempban (%s): %s", durationStr, reason)))
+	err = b.Client.Rest.AddBan(guildID, targetUser.ID, deleteMessageDuration, rest.WithReason(fmt.Sprintf("Tempban (%s): %s", durationStr, reason)))
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Ban Failed", fmt.Sprintf("Failed to ban user: %s", err.Error()))).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Ban Failed", fmt.Sprintf("Failed to ban user: %s", err.Error()))).
+				WithEphemeral(true),
 		)
 	}
 
@@ -457,11 +448,10 @@ func handleTempBan(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	sendModlogToChannel(b, guildID, targetUser.ID, moderator.ID, "tempban", reason, &expiresAt)
 
 	return e.Respond(discord.InteractionResponseTypeCreateMessage,
-		discord.NewMessageCreateBuilder().
-			SetEmbeds(utils.SuccessEmbed("User Temporarily Banned",
+		discord.NewMessageCreate().
+			WithEmbeds(utils.SuccessEmbed("User Temporarily Banned",
 				fmt.Sprintf("<@%d> has been banned until <t:%d:F>", targetUser.ID, expiresAt.Unix()))).
-			SetEphemeral(true).
-			Build(),
+			WithEphemeral(true),
 	)
 }
 
@@ -484,18 +474,17 @@ func handleSoftBan(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 
 	// Ban the user
 	deleteMessageDuration := time.Duration(deleteMessageDays) * 24 * time.Hour
-	err := b.Client.Rest().AddBan(guildID, targetUser.ID, deleteMessageDuration, rest.WithReason(fmt.Sprintf("Softban: %s", reason)))
+	err := b.Client.Rest.AddBan(guildID, targetUser.ID, deleteMessageDuration, rest.WithReason(fmt.Sprintf("Softban: %s", reason)))
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Softban Failed", fmt.Sprintf("Failed to ban user: %s", err.Error()))).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Softban Failed", fmt.Sprintf("Failed to ban user: %s", err.Error()))).
+				WithEphemeral(true),
 		)
 	}
 
 	// Immediately unban
-	err = b.Client.Rest().DeleteBan(guildID, targetUser.ID, rest.WithReason("Softban unban"))
+	err = b.Client.Rest.DeleteBan(guildID, targetUser.ID, rest.WithReason("Softban unban"))
 	if err != nil {
 		slog.Error("Failed to unban after softban", slog.Any("err", err))
 		// Continue anyway, the ban was successful
@@ -521,11 +510,10 @@ func handleSoftBan(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	sendModlogToChannel(b, guildID, targetUser.ID, moderator.ID, "softban", reason, nil)
 
 	return e.Respond(discord.InteractionResponseTypeCreateMessage,
-		discord.NewMessageCreateBuilder().
-			SetEmbeds(utils.SuccessEmbed("User Softbanned",
+		discord.NewMessageCreate().
+			WithEmbeds(utils.SuccessEmbed("User Softbanned",
 				fmt.Sprintf("<@%d> has been softbanned (messages deleted)", targetUser.ID))).
-			SetEphemeral(true).
-			Build(),
+			WithEphemeral(true),
 	)
 }
 
@@ -537,13 +525,12 @@ func handleUnban(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	moderator := e.User()
 
 	// Unban the user
-	err := b.Client.Rest().DeleteBan(guildID, targetUser.ID, rest.WithReason(reason))
+	err := b.Client.Rest.DeleteBan(guildID, targetUser.ID, rest.WithReason(reason))
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Unban Failed", fmt.Sprintf("Failed to unban user: %s", err.Error()))).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Unban Failed", fmt.Sprintf("Failed to unban user: %s", err.Error()))).
+				WithEphemeral(true),
 		)
 	}
 
@@ -576,10 +563,9 @@ func handleUnban(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	sendModlogToChannel(b, guildID, targetUser.ID, moderator.ID, "unban", reason, nil)
 
 	return e.Respond(discord.InteractionResponseTypeCreateMessage,
-		discord.NewMessageCreateBuilder().
-			SetEmbeds(utils.SuccessEmbed("User Unbanned", fmt.Sprintf("<@%d> has been unbanned", targetUser.ID))).
-			SetEphemeral(true).
-			Build(),
+		discord.NewMessageCreate().
+			WithEmbeds(utils.SuccessEmbed("User Unbanned", fmt.Sprintf("<@%d> has been unbanned", targetUser.ID))).
+			WithEphemeral(true),
 	)
 }
 
@@ -595,10 +581,9 @@ func handleMute(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	duration, err := parseDuration(durationStr)
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Invalid Duration", err.Error())).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Invalid Duration", err.Error())).
+				WithEphemeral(true),
 		)
 	}
 
@@ -606,29 +591,26 @@ func handleMute(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	maxDuration := 28 * 24 * time.Hour
 	if duration > maxDuration {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Duration Too Long", "Maximum timeout duration is 28 days")).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Duration Too Long", "Maximum timeout duration is 28 days")).
+				WithEphemeral(true),
 		)
 	}
 
 	expiresAt := time.Now().Add(duration)
 
 	// Timeout the user
-	timeoutUntil := json.NewNullable(expiresAt)
-	_, err = b.Client.Rest().UpdateMember(guildID, targetUser.ID,
+	_, err = b.Client.Rest.UpdateMember(guildID, targetUser.ID,
 		discord.MemberUpdate{
-			CommunicationDisabledUntil: &timeoutUntil,
+			CommunicationDisabledUntil: omit.NewPtr(expiresAt),
 		},
 		rest.WithReason(reason),
 	)
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Mute Failed", fmt.Sprintf("Failed to timeout user: %s", err.Error()))).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Mute Failed", fmt.Sprintf("Failed to timeout user: %s", err.Error()))).
+				WithEphemeral(true),
 		)
 	}
 
@@ -652,11 +634,10 @@ func handleMute(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	sendModlogToChannel(b, guildID, targetUser.ID, moderator.ID, "mute", reason, &expiresAt)
 
 	return e.Respond(discord.InteractionResponseTypeCreateMessage,
-		discord.NewMessageCreateBuilder().
-			SetEmbeds(utils.SuccessEmbed("User Muted",
+		discord.NewMessageCreate().
+			WithEmbeds(utils.SuccessEmbed("User Muted",
 				fmt.Sprintf("<@%d> has been muted until <t:%d:F>", targetUser.ID, expiresAt.Unix()))).
-			SetEphemeral(true).
-			Build(),
+			WithEphemeral(true),
 	)
 }
 
@@ -667,19 +648,20 @@ func handleUnmute(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	guildID := *e.GuildID()
 	moderator := e.User()
 
-	// Remove timeout
-	_, err := b.Client.Rest().UpdateMember(guildID, targetUser.ID,
+	// Remove timeout. This must be an explicit JSON null: the field is omitted
+	// when the Omit is left zero, which is what the pre-v0.19 `nil` did here --
+	// it sent an empty PATCH body and never actually cleared the timeout.
+	_, err := b.Client.Rest.UpdateMember(guildID, targetUser.ID,
 		discord.MemberUpdate{
-			CommunicationDisabledUntil: nil,
+			CommunicationDisabledUntil: omit.NewNilPtr[time.Time](),
 		},
 		rest.WithReason(reason),
 	)
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Unmute Failed", fmt.Sprintf("Failed to remove timeout: %s", err.Error()))).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Unmute Failed", fmt.Sprintf("Failed to remove timeout: %s", err.Error()))).
+				WithEphemeral(true),
 		)
 	}
 
@@ -712,10 +694,9 @@ func handleUnmute(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	sendModlogToChannel(b, guildID, targetUser.ID, moderator.ID, "unmute", reason, nil)
 
 	return e.Respond(discord.InteractionResponseTypeCreateMessage,
-		discord.NewMessageCreateBuilder().
-			SetEmbeds(utils.SuccessEmbed("User Unmuted", fmt.Sprintf("<@%d> has been unmuted", targetUser.ID))).
-			SetEphemeral(true).
-			Build(),
+		discord.NewMessageCreate().
+			WithEmbeds(utils.SuccessEmbed("User Unmuted", fmt.Sprintf("<@%d> has been unmuted", targetUser.ID))).
+			WithEphemeral(true),
 	)
 }
 
@@ -731,20 +712,18 @@ func handleLogs(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	})
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Error", "Failed to fetch moderation logs")).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Error", "Failed to fetch moderation logs")).
+				WithEphemeral(true),
 		)
 	}
 
 	if totalCount == 0 {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.SuccessEmbed("No Logs Found",
+			discord.NewMessageCreate().
+				WithEmbeds(utils.SuccessEmbed("No Logs Found",
 					fmt.Sprintf("<@%d> has no moderation logs", targetUser.ID))).
-				SetEphemeral(true).
-				Build(),
+				WithEphemeral(true),
 		)
 	}
 
@@ -757,10 +736,9 @@ func handleLogs(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	})
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Error", "Failed to fetch moderation logs")).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Error", "Failed to fetch moderation logs")).
+				WithEphemeral(true),
 		)
 	}
 
@@ -768,13 +746,13 @@ func handleLogs(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	embed := utils.CreateModlogEmbed(logs, int64(targetUser.ID), 1, totalPages)
 	buttons := utils.CreatePaginationButtons(1, totalPages, fmt.Sprintf("modlogs:%d", targetUser.ID))
 
-	messageBuilder := discord.NewMessageCreateBuilder().
-		SetEmbeds(embed).
-		SetEphemeral(true)
+	messageBuilder := discord.NewMessageCreate().
+		WithEmbeds(embed).
+		WithEphemeral(true)
 
 	if len(buttons) > 0 {
-		messageBuilder.SetContainerComponents(buttons...)
+		messageBuilder = messageBuilder.WithComponents(buttons...)
 	}
 
-	return e.Respond(discord.InteractionResponseTypeCreateMessage, messageBuilder.Build())
+	return e.Respond(discord.InteractionResponseTypeCreateMessage, messageBuilder)
 }

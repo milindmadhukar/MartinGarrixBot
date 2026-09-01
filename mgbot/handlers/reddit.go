@@ -110,7 +110,7 @@ func runRedditCycle(b *mgbot.MartinGarrixBot, endpoint string) error {
 		return err
 	}
 
-	notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeReddit)
+	notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest, utils.NotificationTypeReddit)
 
 	req, err := http.NewRequest("GET", "https://oauth.reddit.com"+endpoint, nil)
 	if err != nil {
@@ -160,14 +160,14 @@ func runRedditCycle(b *mgbot.MartinGarrixBot, endpoint string) error {
 			continue
 		}
 
-		redditPostEmbed := discord.NewEmbedBuilder().
-			SetTitle(html.UnescapeString(utils.CutString(post.Data.Title, 256))).
-			SetURL("https://www.reddit.com"+post.Data.Permalink).
-			SetTimestamp(time.Unix(int64(post.Data.CreatedUtc), 0)).
-			SetDescription(utils.CutString(html.UnescapeString(post.Data.Selftext), 2048)).
-			SetFooter(fmt.Sprintf("Author u/%s on Subreddit %s", post.Data.Author, post.Data.SubredditNamePrefixed), "").
+		redditPostEmbed := discord.NewEmbed().
+			WithTitle(html.UnescapeString(utils.CutString(post.Data.Title, 256))).
+			WithURL("https://www.reddit.com"+post.Data.Permalink).
+			WithTimestamp(time.Unix(int64(post.Data.CreatedUtc), 0)).
+			WithDescription(utils.CutString(html.UnescapeString(post.Data.Selftext), 2048)).
+			WithFooter(fmt.Sprintf("Author u/%s on Subreddit %s", post.Data.Author, post.Data.SubredditNamePrefixed), "").
 			// TODO: Change to reddit orange
-			SetColor(utils.ColorSuccess)
+			WithColor(utils.ColorSuccess)
 
 		if imageRegex.MatchString(post.Data.URL) {
 			redditPostEmbed.Image = &discord.EmbedResource{
@@ -176,7 +176,7 @@ func runRedditCycle(b *mgbot.MartinGarrixBot, endpoint string) error {
 		}
 
 		// Add this post to the batch
-		embed := redditPostEmbed.Build()
+		embed := redditPostEmbed
 		notifier.AddItem(utils.NotificationItem{
 			Embed: &embed,
 		})

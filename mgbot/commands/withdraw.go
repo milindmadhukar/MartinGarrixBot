@@ -40,10 +40,9 @@ func WithdrawHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		if amtOk && amt <= 0 {
 			embed := utils.FailureEmbed("Amount of coins to withdraw should be positive.", "")
 			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-					SetEmbeds(embed).
-					SetEphemeral(true).
-					Build(),
+				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+					WithEmbeds(embed).
+					WithEphemeral(true),
 			)
 		}
 
@@ -53,10 +52,9 @@ func WithdrawHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		if !amtOk && !isAll && !isHalf {
 			embed := utils.FailureEmbed("Please provide amount of coins to withdraw.", "")
 			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-					SetEmbeds(embed).
-					SetEphemeral(true).
-					Build(),
+				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+					WithEmbeds(embed).
+					WithEphemeral(true),
 			)
 		}
 
@@ -79,10 +77,9 @@ func WithdrawHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			if int64(amt) > balanceInfo.GarrixCoins.Int64 {
 				embed = utils.FailureEmbed("You don't have enough coins in safe to withdraw.", "")
 				return e.Respond(
-					discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-						SetEmbeds(embed).
-						SetEphemeral(true).
-						Build(),
+					discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+						WithEmbeds(embed).
+						WithEphemeral(true),
 				)
 			}
 
@@ -106,9 +103,8 @@ func WithdrawHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 		return e.Respond(
 			discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(embed).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(embed),
 		)
 	}
 }

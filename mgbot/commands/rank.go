@@ -35,10 +35,9 @@ func RankHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		if member.User.Bot {
 			embed := utils.FailureEmbed("You cannot check the rank of a bot", "")
 			return e.Respond(
-				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-					SetEmbeds(embed).
-					SetEphemeral(true).
-					Build(),
+				discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+					WithEmbeds(embed).
+					WithEphemeral(true),
 			)
 		}
 
@@ -69,9 +68,8 @@ func RankHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		}
 
 		_, err = e.UpdateInteractionResponse(
-			discord.NewMessageUpdateBuilder().
-				SetFiles(discord.NewFile("rank.png", "Rank", pictureReader)).
-				Build(),
+			discord.NewMessageUpdate().
+				WithFiles(discord.NewFile("rank.png", "Rank", pictureReader)),
 		)
 		if err != nil {
 			return err

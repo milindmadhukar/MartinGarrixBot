@@ -32,7 +32,7 @@ func MessageCreateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 		if strings.HasPrefix(strings.ToLower(e.Message.Content), "mg.") {
 			replyMessageContent := "Prefix commands are deprecated. Please use slash commands instead. Type `/` to see available commands."
 			utils.ReplyToMessageDeleteAfter(b.Client, e.ChannelID, e.Message, replyMessageContent, 10)
-			b.Client.Rest().DeleteMessage(e.ChannelID, e.Message.ID, rest.WithDelay(10))
+			b.Client.Rest.DeleteMessage(e.ChannelID, e.Message.ID, rest.WithDelay(10))
 			return
 		}
 

@@ -47,15 +47,14 @@ func EightBallHandler(e *handler.CommandEvent) error {
 	question := e.SlashCommandInteractionData().String("question")
 
 	// TODO: Update all embed colours
-	eb := discord.NewEmbedBuilder().
-		SetTitle("The Magic 8 Ball \U0001F3B1 replies").
-		SetColor(utils.ColorSuccess).
+	eb := discord.NewEmbed().
+		WithTitle("The Magic 8 Ball \U0001F3B1 replies").
+		WithColor(utils.ColorSuccess).
 		AddField("Question", question, false).
 		AddField("Answer", responses[rand.IntN(len(responses))], false)
 
 	return e.Respond(
-		discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreateBuilder().
-			SetEmbeds(eb.Build()).
-			Build(),
+		discord.InteractionResponseTypeCreateMessage, discord.NewMessageCreate().
+			WithEmbeds(eb),
 	)
 }

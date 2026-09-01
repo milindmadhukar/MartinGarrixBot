@@ -42,20 +42,18 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		if amtOk && amt <= 0 {
 			return e.Respond(
 				discord.InteractionResponseTypeCreateMessage,
-				discord.NewMessageCreateBuilder().
-					SetEmbeds(utils.FailureEmbed("Amount of coins to deposit should be positive.", "")).
-					SetEphemeral(true).
-					Build(),
+				discord.NewMessageCreate().
+					WithEmbeds(utils.FailureEmbed("Amount of coins to deposit should be positive.", "")).
+					WithEphemeral(true),
 			)
 		}
 
 		if !amtOk && !isAll && !isHalf {
 			return e.Respond(
 				discord.InteractionResponseTypeCreateMessage,
-				discord.NewMessageCreateBuilder().
-					SetEmbeds(utils.FailureEmbed("Please provide amount of coins to deposit.", "")).
-					SetEphemeral(true).
-					Build(),
+				discord.NewMessageCreate().
+					WithEmbeds(utils.FailureEmbed("Please provide amount of coins to deposit.", "")).
+					WithEphemeral(true),
 			)
 		}
 
@@ -77,10 +75,9 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			if int64(amt) > balanceInfo.InHand.Int64 {
 				return e.Respond(
 					discord.InteractionResponseTypeCreateMessage,
-					discord.NewMessageCreateBuilder().
-						SetEmbeds(utils.FailureEmbed("You don't have enough coins in hand to deposit.", "")).
-						SetEphemeral(true).
-						Build(),
+					discord.NewMessageCreate().
+						WithEmbeds(utils.FailureEmbed("You don't have enough coins in hand to deposit.", "")).
+						WithEphemeral(true),
 				)
 			}
 			amtToDeposit = int64(amt)
@@ -100,11 +97,10 @@ func DepositHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 		return e.Respond(
 			discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.SuccessEmbed(
+			discord.NewMessageCreate().
+				WithEmbeds(utils.SuccessEmbed(
 					fmt.Sprintf("Successfully deposited %d coins from hand to safe.", amtToDeposit),
-					"")).
-				Build(),
+					"")),
 		)
 	}
 }

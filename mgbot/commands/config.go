@@ -38,11 +38,10 @@ func ConfigHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		// Check if the user has Administrator permission
 		if !e.Member().Permissions.Has(discord.PermissionAdministrator) {
 			return e.Respond(discord.InteractionResponseTypeCreateMessage,
-				discord.NewMessageCreateBuilder().
-					SetEmbeds(utils.FailureEmbed("Permission Denied",
+				discord.NewMessageCreate().
+					WithEmbeds(utils.FailureEmbed("Permission Denied",
 						"Only administrators can configure bot settings.")).
-					SetEphemeral(true).
-					Build(),
+					WithEphemeral(true),
 			)
 		}
 
@@ -56,10 +55,9 @@ func ConfigHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			return handleViewConfig(b, e)
 		default:
 			return e.Respond(discord.InteractionResponseTypeCreateMessage,
-				discord.NewMessageCreateBuilder().
-					SetEmbeds(utils.FailureEmbed("Invalid Command", "Unknown subcommand")).
-					SetEphemeral(true).
-					Build(),
+				discord.NewMessageCreate().
+					WithEmbeds(utils.FailureEmbed("Invalid Command", "Unknown subcommand")).
+					WithEphemeral(true),
 			)
 		}
 	}
@@ -81,26 +79,24 @@ func handleSetModeratorRole(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) e
 
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Configuration Failed",
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Configuration Failed",
 					fmt.Sprintf("Failed to update moderator role: %s", err.Error()))).
-				SetEphemeral(true).
-				Build(),
+				WithEphemeral(true),
 		)
 	}
 
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Moderator Role Updated").
-		SetDescription(fmt.Sprintf("The moderator role has been set to <@&%d>", role.ID)).
+	embed := discord.NewEmbed().
+		WithTitle("Moderator Role Updated").
+		WithDescription(fmt.Sprintf("The moderator role has been set to <@&%d>", role.ID)).
 		AddField("What this means",
 			"Members with this role (or Administrator permission) can now use moderation commands like kick, ban, mute, etc.",
 			false).
-		SetColor(utils.ColorSuccess)
+		WithColor(utils.ColorSuccess)
 
 	return e.Respond(discord.InteractionResponseTypeCreateMessage,
-		discord.NewMessageCreateBuilder().
-			SetEmbeds(embed.Build()).
-			Build(),
+		discord.NewMessageCreate().
+			WithEmbeds(embed),
 	)
 }
 
@@ -111,47 +107,46 @@ func handleViewConfig(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 	config, err := b.Queries.GetGuild(e.Ctx, int64(guildID))
 	if err != nil {
 		return e.Respond(discord.InteractionResponseTypeCreateMessage,
-			discord.NewMessageCreateBuilder().
-				SetEmbeds(utils.FailureEmbed("Error", "Failed to fetch server configuration")).
-				SetEphemeral(true).
-				Build(),
+			discord.NewMessageCreate().
+				WithEmbeds(utils.FailureEmbed("Error", "Failed to fetch server configuration")).
+				WithEphemeral(true),
 		)
 	}
 
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Server Configuration").
-		SetColor(utils.ColorInfo)
+	embed := discord.NewEmbed().
+		WithTitle("Server Configuration").
+		WithColor(utils.ColorInfo)
 
 	// Moderator Role
 	if config.ModeratorRole.Valid {
-		embed.AddField("Moderator Role", fmt.Sprintf("<@&%d>", config.ModeratorRole.Int64), true)
+		embed = embed.AddField("Moderator Role", fmt.Sprintf("<@&%d>", config.ModeratorRole.Int64), true)
 	} else {
-		embed.AddField("Moderator Role", "Not set (using default permissions)", true)
+		embed = embed.AddField("Moderator Role", "Not set (using default permissions)", true)
 	}
 
 	// Modlogs Channel
 	if config.ModlogsChannel.Valid {
-		embed.AddField("Moderation Logs Channel", fmt.Sprintf("<#%d>", config.ModlogsChannel.Int64), true)
+		embed = embed.AddField("Moderation Logs Channel", fmt.Sprintf("<#%d>", config.ModlogsChannel.Int64), true)
 	} else {
-		embed.AddField("Moderation Logs Channel", "Not set", true)
+		embed = embed.AddField("Moderation Logs Channel", "Not set", true)
 	}
 
 	// Bot Channel
 	if config.BotChannel.Valid {
-		embed.AddField("Bot Channel", fmt.Sprintf("<#%d>", config.BotChannel.Int64), true)
+		embed = embed.AddField("Bot Channel", fmt.Sprintf("<#%d>", config.BotChannel.Int64), true)
 	} else {
-		embed.AddField("Bot Channel", "Not set", true)
+		embed = embed.AddField("Bot Channel", "Not set", true)
 	}
 
 	// Radio Voice Channel
 	if config.RadioVoiceChannel.Valid {
-		embed.AddField("Radio Voice Channel", fmt.Sprintf("<#%d>", config.RadioVoiceChannel.Int64), true)
+		embed = embed.AddField("Radio Voice Channel", fmt.Sprintf("<#%d>", config.RadioVoiceChannel.Int64), true)
 	} else {
-		embed.AddField("Radio Voice Channel", "Not set", true)
+		embed = embed.AddField("Radio Voice Channel", "Not set", true)
 	}
 
 	// XP Multiplier
-	embed.AddField("XP Multiplier", fmt.Sprintf("%.1fx", config.XpMultiplier), true)
+	embed = embed.AddField("XP Multiplier", fmt.Sprintf("%.1fx", config.XpMultiplier), true)
 
 	// Notifications section
 	notificationsText := ""
@@ -192,12 +187,11 @@ func handleViewConfig(b *mgbot.MartinGarrixBot, e *handler.CommandEvent) error {
 		notificationsText = "No notification channels configured"
 	}
 
-	embed.AddField("Notification Channels", notificationsText, false)
+	embed = embed.AddField("Notification Channels", notificationsText, false)
 
 	return e.Respond(discord.InteractionResponseTypeCreateMessage,
-		discord.NewMessageCreateBuilder().
-			SetEmbeds(embed.Build()).
-			SetEphemeral(true).
-			Build(),
+		discord.NewMessageCreate().
+			WithEmbeds(embed).
+			WithEphemeral(true),
 	)
 }

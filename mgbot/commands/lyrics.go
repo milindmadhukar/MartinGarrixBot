@@ -97,14 +97,14 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			lyrics = lyrics[:2048]
 		}
 
-		eb := discord.NewEmbedBuilder().
-			SetTitle(fmt.Sprintf("%s - %s", song.Artists, song.Name)).
-			SetDescription(lyrics).
-			SetColor(utils.ColorSuccess).
-			SetThumbnail(song.ThumbnailUrl.String)
+		eb := discord.NewEmbed().
+			WithTitle(fmt.Sprintf("%s - %s", song.Artists, song.Name)).
+			WithDescription(lyrics).
+			WithColor(utils.ColorSuccess).
+			WithThumbnail(song.ThumbnailUrl.String)
 
-		lyricsMessage := discord.NewMessageCreateBuilder().
-			SetEmbeds(eb.Build())
+		lyricsMessage := discord.NewMessageCreate().
+			WithEmbeds(eb)
 
 		if song.SpotifyUrl.Valid || song.YoutubeUrl.Valid || song.AppleMusicUrl.Valid {
 			lyricsMessage = lyricsMessage.AddActionRow(
@@ -114,7 +114,7 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 		return e.Respond(
 			discord.InteractionResponseTypeCreateMessage,
-			lyricsMessage.Build(),
+			lyricsMessage,
 		)
 	}
 }

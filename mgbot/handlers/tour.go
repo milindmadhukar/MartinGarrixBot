@@ -229,7 +229,7 @@ func GetAllTourShows(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 		slog.Info(fmt.Sprintf("Found %d tour shows on website", len(shows)))
 
 		// Create a batch notifier for this cycle
-		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeTour)
+		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest, utils.NotificationTypeTour)
 
 		for _, show := range shows {
 			// Check if show already exists
@@ -290,16 +290,16 @@ func GetAllTourShows(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				description = description[:4093] + "..."
 			}
 
-			embedBuilder := discord.NewEmbedBuilder().
-				SetTitle(show.ShowName).
-				SetDescription(description).
-				SetColor(0xFFA500). // Brighter orange color
-				SetTimestamp(time.Now())
+			embedBuilder := discord.NewEmbed().
+				WithTitle(show.ShowName).
+				WithDescription(description).
+				WithColor(0xFFA500). // Brighter orange color
+				WithTimestamp(time.Now())
 
-			announcementEmbed := embedBuilder.Build()
+			announcementEmbed := embedBuilder
 
 			// Prepare components (ticket button if available)
-			var components []discord.ContainerComponent
+			var components []discord.LayoutComponent
 			if insertedShow.TicketUrl.Valid && insertedShow.TicketUrl.String != "" {
 				ticketURL := insertedShow.TicketUrl.String
 
@@ -314,7 +314,7 @@ func GetAllTourShows(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 						slog.String("show_name", show.ShowName),
 						slog.Int("url_length", len(ticketURL)))
 				} else {
-					components = []discord.ContainerComponent{
+					components = []discord.LayoutComponent{
 						discord.NewActionRow(
 							discord.NewLinkButton("🎟️ Get Tickets", ticketURL),
 						),

@@ -14,7 +14,7 @@ import (
 func VoiceStateUpdateListener(b *mgbot.MartinGarrixBot) bot.EventListener {
 	return bot.NewListenerFunc(func(e *events.GuildVoiceStateUpdate) {
 		// Forward bot's own voice state updates to Lavalink
-		if e.VoiceState.UserID == b.Client.ApplicationID() {
+		if e.VoiceState.UserID == b.Client.ApplicationID {
 			// Check if RadioManager is initialized
 			if b.RadioManager == nil {
 				return

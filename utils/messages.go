@@ -9,22 +9,21 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 )
 
-func ReplyToMessage(client bot.Client, channelID snowflake.ID, message discord.Message, replyMessage string) *discord.Message {
-	messageBuild := discord.NewMessageCreateBuilder().
-		SetContent(replyMessage).
-		SetMessageReferenceByID(message.ID).
-		SetAllowedMentions(&discord.AllowedMentions{
+func ReplyToMessage(client *bot.Client, channelID snowflake.ID, message discord.Message, replyMessage string) *discord.Message {
+	messageBuild := discord.NewMessageCreate().
+		WithContent(replyMessage).
+		WithMessageReferenceByID(message.ID).
+		WithAllowedMentions(&discord.AllowedMentions{
 			RepliedUser: false,
-		}).
-		Build()
+		})
 
-	replyMesssage, _ := client.Rest().CreateMessage(channelID, messageBuild)
+	replyMesssage, _ := client.Rest.CreateMessage(channelID, messageBuild)
 
 	return replyMesssage
 }
 
-func ReplyToMessageDeleteAfter(client bot.Client, channelID snowflake.ID, message discord.Message, replyMessage string, deleteAfter int) *discord.Message {
+func ReplyToMessageDeleteAfter(client *bot.Client, channelID snowflake.ID, message discord.Message, replyMessage string, deleteAfter int) *discord.Message {
 	replyMesssage := ReplyToMessage(client, channelID, message, replyMessage)
-	client.Rest().DeleteMessage(channelID, replyMesssage.ID, rest.WithDelay(time.Second*time.Duration(deleteAfter)))
+	client.Rest.DeleteMessage(channelID, replyMesssage.ID, rest.WithDelay(time.Second*time.Duration(deleteAfter)))
 	return replyMesssage
 }

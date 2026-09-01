@@ -86,7 +86,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 		}
 
 		// Create a batch notifier (only used when NOT in fetchAll mode)
-		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest(), utils.NotificationTypeSTMPD)
+		notifier := utils.NewBatchNotifier(b.Queries, b.Client.Rest, utils.NotificationTypeSTMPD)
 
 		newCount := 0
 		updatedCount := 0
@@ -311,12 +311,12 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 					title = fmt.Sprintf("%s (%s)", title, track.MixName)
 				}
 
-				embedBuilder := discord.NewEmbedBuilder().
-					SetTitle(title).
-					SetColor(0x1DB954) // Green for beatport
+				embedBuilder := discord.NewEmbed().
+					WithTitle(title).
+					WithColor(0x1DB954) // Green for beatport
 
 				if track.ThumbnailURL != "" {
-					embedBuilder.SetImage(track.ThumbnailURL)
+					embedBuilder = embedBuilder.WithImage(track.ThumbnailURL)
 				}
 
 				// Build footer with metadata
@@ -338,13 +338,13 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker, fetchAll
 				}
 
 				if len(footerParts) > 0 {
-					embedBuilder.SetFooter(strings.Join(footerParts, " | "), "")
+					embedBuilder = embedBuilder.WithFooter(strings.Join(footerParts, " | "), "")
 				}
 
-				announcementEmbed := embedBuilder.Build()
+				announcementEmbed := embedBuilder
 
 				// Add beatport link button
-				var components []discord.ContainerComponent
+				var components []discord.LayoutComponent
 				beatportURL := fmt.Sprintf("https://www.beatport.com/track/%d", track.ID)
 				components = append(components, discord.NewActionRow(
 					discord.NewLinkButton("Beatport", beatportURL),
