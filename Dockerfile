@@ -22,7 +22,7 @@ RUN export GOOS=$(echo ${TARGETPLATFORM} | cut -d'/' -f1) \
     && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
        go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o bot . \
     && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
-       go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o dashboard ./cmd/dashboard
+       go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o garrixdashboard ./cmd/dashboard
 
 # --- dashboard image -------------------------------------------------------
 # Deliberately before the bot stage: buildx defaults to the LAST stage, so
@@ -31,19 +31,23 @@ FROM --platform=$TARGETPLATFORM alpine AS dashboard
 
 RUN apk add --no-cache tzdata
 
-WORKDIR /dashboard
+WORKDIR /app
 
+# The binary is built as `garrixdashboard`, not `dashboard`: `go build -o
+# dashboard` would write into the repo's existing dashboard/ SOURCE directory
+# rather than producing a file, and the COPY below would then copy a directory.
+#
 # Nothing else is copied in: templates and static assets are go:embed-ed, and
 # db/migrations is deliberately absent because the dashboard never migrates --
 # the bot owns the schema.
-COPY --from=build /build/dashboard /dashboard/dashboard
+COPY --from=build /build/garrixdashboard /app/dashboard
 
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://127.0.0.1:8080/healthz || exit 1
 
-ENTRYPOINT ["/dashboard/dashboard"]
+ENTRYPOINT ["/app/dashboard"]
 
 CMD ["-config", "/var/lib/config.toml"]
 
