@@ -45,7 +45,6 @@ func LinksAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHand
 					ReleaseDate: song.ReleaseDate,
 				})
 			}
-
 		} else {
 			// BUG: Sometimes goes invalid form body? Even with input, I suspect its the json, also fix the lyrics autocomplete then.
 			songs, err := b.Queries.GetSongsLike(e.Ctx, "%"+e.Data.String("song")+"%")

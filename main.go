@@ -72,7 +72,11 @@ func main() {
 	// rather than refusing connections.
 	b.StartHealthServer()
 
-	service, err := youtube.NewService(context.Background(), option.WithAPIKey(b.Cfg.Bot.YoutubeAPIKey), option.WithCredentialsFile(b.Cfg.Bot.GoogleServiceFile))
+	// WithCredentialsFile is deprecated: it accepts any credential type without
+	// validation. The file here is always a service account key, so name that type.
+	service, err := youtube.NewService(context.Background(),
+		option.WithAPIKey(b.Cfg.Bot.YoutubeAPIKey),
+		option.WithAuthCredentialsFile(option.ServiceAccount, b.Cfg.Bot.GoogleServiceFile))
 	if err != nil {
 		slog.Error("Failed to create youtube service", slog.Any("err", err))
 		os.Exit(-1)

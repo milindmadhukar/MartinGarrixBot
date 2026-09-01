@@ -163,7 +163,6 @@ func LeaderboardHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 					value:  strconv.Itoa(int(record.InHand.Int64)),
 				})
 			}
-
 		}
 
 		var description []string

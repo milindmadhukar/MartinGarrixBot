@@ -26,7 +26,7 @@ func BalanceHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
 		member := e.SlashCommandInteractionData().Member("user")
 		// TODO: Check if it can't resolve a member
-		if member.Member.User.ID == 0 {
+		if member.User.ID == 0 {
 			member = *e.Member()
 		}
 

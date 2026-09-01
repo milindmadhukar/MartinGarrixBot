@@ -38,14 +38,14 @@ func AuthenticateReddit(b *mgbot.MartinGarrixBot) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to make request: %v", err)
+		return fmt.Errorf("failed to make request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read response: %v", err)
+		return fmt.Errorf("failed to read response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -55,7 +55,7 @@ func AuthenticateReddit(b *mgbot.MartinGarrixBot) error {
 	// Parse response
 	var redditToken utils.RedditToken
 	if err := json.Unmarshal(body, &redditToken); err != nil {
-		return fmt.Errorf("failed to parse response: %v", err)
+		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	redditToken.ExpiresAt = time.Now().Add(time.Duration(redditToken.ExpiresIn) * time.Second)
@@ -63,7 +63,6 @@ func AuthenticateReddit(b *mgbot.MartinGarrixBot) error {
 	b.RedditToken = redditToken
 
 	return nil
-
 }
 
 // redditClient bounds every API call. The fetcher loop is the only thing driving

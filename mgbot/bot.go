@@ -116,7 +116,7 @@ func (b *MartinGarrixBot) SetupDB() error {
 		slog.Info("Database migrated to latest migration.")
 		return nil
 	}
-	return errors.New("Could not make a connection to the database.")
+	return errors.New("could not make a connection to the database")
 }
 
 // SetupBeatport initializes the Beatport API client

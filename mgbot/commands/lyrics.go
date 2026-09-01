@@ -44,7 +44,6 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 					ReleaseDate: song.ReleaseDate,
 				})
 			}
-
 		} else {
 			songs, err := b.Queries.GetSongsWithLyricsLike(e.Ctx, "%"+e.Data.String("song")+"%")
 			if err != nil {
@@ -76,7 +75,6 @@ func LyricsAutocompleteHandler(b *mgbot.MartinGarrixBot) handler.AutocompleteHan
 
 func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
-
 		songDataJson := e.SlashCommandInteractionData().String("song")
 		var songData utils.UniqueSong
 		json.Unmarshal([]byte(songDataJson), &songData)

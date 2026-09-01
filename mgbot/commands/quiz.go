@@ -92,10 +92,7 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 		go func() {
 			filterAuthorMessagesFunc := func(messageEvent *events.MessageCreate) bool {
-				if messageEvent.Message.Author.ID == e.Member().User.ID {
-					return true
-				}
-				return false
+				return messageEvent.Message.Author.ID == e.Member().User.ID
 			}
 
 			answerCheckFunc := func(messageEvent *events.MessageCreate) {
@@ -129,14 +126,12 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 						WithColor(utils.ColorSuccess).
 						AddField("Song Name", fmt.Sprintf("%s - %s", song.Artists, song.Name), false).
 						WithThumbnail(song.ThumbnailUrl.String)
-
 				} else {
 					followUpResponseEmbed = discord.NewEmbed().
 						WithTitle("<a:cross:810462920810561556> Your guess is incorrect").
 						WithColor(utils.ColorError).
 						AddField("Song Name", fmt.Sprintf("%s - %s", song.Artists, song.Name), false).
 						WithThumbnail(song.ThumbnailUrl.String)
-
 				}
 
 				followUpMessage := discord.NewMessageCreate().

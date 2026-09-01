@@ -28,7 +28,7 @@ func RankHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
 		member := e.SlashCommandInteractionData().Member("user")
 		// TODO: Check if it can't resolve a member
-		if member.Member.User.ID == 0 {
+		if member.User.ID == 0 {
 			member = *e.Member()
 		}
 
@@ -46,7 +46,7 @@ func RankHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		avatarURL := member.User.AvatarURL(discord.WithFormat(discord.FileFormatPNG), discord.WithSize(256))
 
 		if avatarURL == nil {
-			return errors.New("Failed to get avatar url")
+			return errors.New("failed to get avatar url")
 		}
 
 		user, err := b.Queries.GetUserLevelData(e.Ctx, db.GetUserLevelDataParams{
