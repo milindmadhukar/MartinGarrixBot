@@ -24,7 +24,7 @@ dev_guilds = []
 # the bot token
 token = "your_token_here"
 # youtube api key
-yt_api_key = "yt_api_key_here"
+youtube_api_key = "yt_api_key_here"
 # google service json file path
 google_service_file = "/path/to/servicefile.json"
 # beatport credentials

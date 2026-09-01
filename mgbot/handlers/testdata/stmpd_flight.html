@@ -1,0 +1,40 @@
+<!--
+  Fixture: trimmed capture of https://stmpdrcrds.com/archive
+  Captured: 2026-09-01
+
+  The structure is real: the archive is a Next.js app that streams its React
+  Server Component payload as a series of self.__next_f.push([1,"<chunk>"])
+  calls, where each chunk is a JSON string literal. Concatenating the decoded
+  chunks reproduces the payload, which carries "initialReleases".
+
+  Markup, styles and bundles are stripped, and the release values are edited to
+  cover what the parser has to handle:
+
+    - a release with a version, which becomes "Title (Version)"
+    - a release with no version, which keeps its title
+    - a title containing brackets, which must not end the JSON array early
+    - an artwork URL with sizing params, which is upscaled to 1000x1000
+    - an artwork URL with no query, which is left alone
+    - an empty title, which is skipped
+    - an empty releaseDate, which leaves the year unset
+    - a malformed push() call, which is skipped without losing later chunks
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head><title>STMPD RCRDS Archive</title></head>
+<body>
+<div id="__next"><main>Archive</main></div>
+<script>self.__next_f=self.__next_f||[];self.__next_f.push([0])</script>
+<script>self.__next_f.push([1,"0:\"$L1\"\n"])</script>
+<script>self.__next_f.push([1,"2:[\"$\",\"div\",null,{\"children\":[[\"$\",\"section\",null,{\"initialReleases\":[{\"_id\":\"r1\",\"title\":\"Kangaroo\",\"artists\":\"Julian Jordan\",\"version\":\"Extended Mix\",\"releaseDate\":\"2026-04-17\","])</script>
+<script>self.__next_f.push([1,"\"artworkUrl\":\"https://cdn.sanity.io/images/x/prod/kangaroo.jpg?w=400&h=400&fit=crop\",\"slug\":{\"current\":\"kangaroo\"},\"streamingLinks\":{\"spotify\":\"https://open.spotify.com/track/kanga"])</script>
+<script>self.__next_f.push([1,"roo\",\"appleMusic\":\"https://music.apple.com/kangaroo\",\"youtube\":\"https://youtu.be/kangaroo\"}},{\"_id\":\"r2\",\"title\":\"Us [Reimagined]\",\"artists\":\"Martin Garrix, Matisse & Sadko\",\"versi"])</script>
+<script>self.__next_f.push([1,"on\":\"\",\"releaseDate\":\"2026-03-02\",\"artworkUrl\":\"https://cdn.sanity.io/images/x/prod/us.jpg\",\"slug\":{\"current\":\"us\"},\"streamingLinks\":{\"spotify\":\"https://open.spotify.com/track/us\","])</script>
+<script>self.__next_f.push([1,"\"appleMusic\":\"\",\"youtube\":\"\"}},{\"_id\":\"r3\",\"title\":\"\",\"artists\":\"Unknown\",\"version\":\"Radio Edit\",\"releaseDate\":\"2026-01-01\",\"artworkUrl\":\"https://cdn.sanity.io/images/x/prod/blank."])</script>
+<script>self.__next_f.push([1,"jpg?w=400&h=400\",\"slug\":{\"current\":\"blank\"},\"streamingLinks\":{\"spotify\":\"\",\"appleMusic\":\"\",\"youtube\":\"\"}},{\"_id\":\"r4\",\"title\":\"Won't Let You Go\",\"artists\":\"Mesto\",\"version\":\"\",\"rel"])</script>
+<script>self.__next_f.push([1,"easeDate\":\"\",\"artworkUrl\":\"https://cdn.sanity.io/images/x/prod/wlyg.jpg?w=400&h=400\",\"slug\":{\"current\":\"wont-let-you-go\"},\"streamingLinks\":{\"spotify\":\"https://open.spotify.com/trac"])</script>
+<script>self.__next_f.push([1,"k/wlyg\",\"appleMusic\":\"https://music.apple.com/wlyg\",\"youtube\":\"https://youtu.be/wlyg\"}}],\"total\":4}]]}]\n"])</script>
+<script>self.__next_f.push([1,])</script>
+<script>self.__next_f.push([1,"3:\"done\"\n"])</script>
+</body>
+</html>

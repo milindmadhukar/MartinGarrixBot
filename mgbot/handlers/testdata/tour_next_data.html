@@ -1,0 +1,26 @@
+<!--
+  Fixture: trimmed capture of https://martingarrix.com/tour/
+  Captured: 2026-09-01
+
+  The structure is real: martingarrix.com is a Next.js site that ships its tour
+  data as JSON inside a Next.js data script tag, and the shows come from
+  Prismic, whose rich-text fields are arrays of blocks. Everything else on the
+  page (styles, bundles, the rest of the payload) has been stripped, and the
+  show values have been edited to cover the cases the parser has to handle:
+
+    - an announced show with every field populated
+    - a ticket URL carrying Google Analytics linker parameters
+    - a location with no comma, so the country falls back to TBA
+    - a show with no venue, so the venue falls back to Venue TBA
+    - an unannounced show, which must be skipped
+    - a show with an unparseable date, which must be skipped
+    - a title split across two Prismic blocks, which must be joined
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Tour</title></head>
+<body>
+<div id="__next"><main>Tour dates</main></div>
+<script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"toursData":[{"data":{"announced":true,"date":"2026-07-18","title":[{"text":"Tomorrowland"}],"venue":[{"text":"Main Stage"}],"location":[{"text":"Boom, Belgium"}],"ticket_link":{"url":"https://tickets.example.com/show/1?utm_source=site&_gl=1*abcdef*_ga*MTIzNDU2*_ga_ABCDEFGH*MTY4OTk5&_gcl_au=1.1.123456789.1689&FPAU=1.1.987654321.1689&_fplc=xyz123"}}},{"data":{"announced":true,"date":"2026-08-02","title":[{"text":"Ushuaia"},{"text":"Ibiza Residency"}],"venue":[{"text":"Ushuaïa Ibiza Beach Hotel"}],"location":[{"text":"Ibiza, Spain"}],"ticket_link":{"url":"https://tickets.example.com/show/2"}}},{"data":{"announced":true,"date":"2026-09-11","title":[{"text":"Singapore Grand Prix"}],"venue":[{"text":""}],"location":[{"text":"Singapore"}],"ticket_link":{"url":""}}},{"data":{"announced":false,"date":"2026-10-05","title":[{"text":"Secret Show"}],"venue":[{"text":"Undisclosed"}],"location":[{"text":"Amsterdam, Netherlands"}],"ticket_link":{"url":"https://tickets.example.com/show/4"}}},{"data":{"announced":true,"date":"TBA","title":[{"text":"Broken Date Show"}],"venue":[{"text":"Somewhere"}],"location":[{"text":"Nowhere, Nowhereland"}],"ticket_link":{"url":"https://tickets.example.com/show/5"}}},{"data":{"announced":true,"date":"2026-06-01","title":[{"text":"Ultra Music Festival"}],"venue":[{"text":"Bayfront Park"}],"location":[{"text":"Miami, United States of America"}],"ticket_link":{"url":"https://tickets.example.com/show/6?ref=partner"}}}]}}}</script>
+</body>
+</html>
