@@ -37,9 +37,15 @@ func createButton(config buttonConfig) discord.ButtonComponent {
 	})
 }
 
-// BeatportTrackURL is the public page for a beatport track id.
-func BeatportTrackURL(id int32) string {
-	return fmt.Sprintf("https://www.beatport.com/track/%d", id)
+// BeatportTrackURL is the public page for a beatport track.
+//
+// The route is /track/<slug>/<id>; /track/<id> is not a route Beatport serves, so the
+// id-only form this used to build 404'd for every song in the catalogue. The slug is
+// Beatport's own, stored from the API, because it is slugified from the track's full
+// name including any feature credit -- which this catalogue strips into the artist
+// column and so cannot reconstruct.
+func BeatportTrackURL(slug string, id int32) string {
+	return fmt.Sprintf("https://www.beatport.com/track/%s/%d", slug, id)
 }
 
 // beatportLink resolves the best beatport destination for a song.
@@ -54,8 +60,14 @@ func beatportLink(song db.Song) pgtype.Text {
 	if song.BeatportUrl.Valid && song.BeatportUrl.String != "" {
 		return song.BeatportUrl
 	}
-	if song.BeatportID.Valid {
-		return pgtype.Text{String: BeatportTrackURL(song.BeatportID.Int32), Valid: true}
+	// Without the slug there is no URL to build. Offering a button that leads to a
+	// 404 is worse than offering none, so the row simply shows one fewer button
+	// until the slug backfill reaches it.
+	if song.BeatportID.Valid && song.BeatportSlug.Valid && song.BeatportSlug.String != "" {
+		return pgtype.Text{
+			String: BeatportTrackURL(song.BeatportSlug.String, song.BeatportID.Int32),
+			Valid:  true,
+		}
 	}
 	return pgtype.Text{}
 }

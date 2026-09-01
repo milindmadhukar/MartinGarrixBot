@@ -151,6 +151,10 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 						Int32: int32(track.ID),
 						Valid: true,
 					},
+					BeatportSlug: pgtype.Text{
+						String: track.Slug,
+						Valid:  track.Slug != "",
+					},
 					MixName: pgtype.Text{
 						String: track.MixName,
 						Valid:  track.MixName != "",
@@ -252,6 +256,10 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 						Int32: int32(track.ID),
 						Valid: true,
 					},
+					BeatportSlug: pgtype.Text{
+						String: track.Slug,
+						Valid:  track.Slug != "",
+					},
 					MixName: pgtype.Text{
 						String: track.MixName,
 						Valid:  track.MixName != "",
@@ -310,6 +318,10 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				BeatportID: pgtype.Int4{
 					Int32: int32(track.ID),
 					Valid: true,
+				},
+				BeatportSlug: pgtype.Text{
+					String: track.Slug,
+					Valid:  track.Slug != "",
 				},
 				MixName: pgtype.Text{
 					String: track.MixName,
@@ -432,7 +444,7 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				// rather than read from songs.beatport_url, which holds a RELEASE
 				// URL from the STMPD dataset -- the track link is the more precise
 				// destination for a beatport announcement.
-				beatportURL := utils.BeatportTrackURL(int32(track.ID))
+				beatportURL := utils.BeatportTrackURL(track.Slug, int32(track.ID))
 				buttons := append(
 					[]discord.InteractiveComponent{utils.BeatportButton(beatportURL)},
 					utils.GetSongButtons(song)...,

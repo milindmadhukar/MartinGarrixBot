@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"sort"
 	"strings"
@@ -53,6 +54,24 @@ func main() {
 
 	var linked, cleared, unchanged, instrumental int
 
+	// A row cannot be its own remix. Two rows had been left pointing at themselves by
+	// an earlier version of this pass, and neither was reachable by the grouping below
+	// -- each was the only row with its title, so the group was skipped before any
+	// linking decision was made and the bad pointer survived every later run.
+	for _, r := range rows {
+		if r.ParentSongID.Valid && r.ParentSongID.Int64 == r.ID {
+			n, err := env.Queries.SetSongParent(ctx, db.SetSongParentParams{ID: r.ID})
+			if err != nil {
+				script.Fatal("failed to unlink a self-parented row", err)
+			}
+			if n > 0 {
+				cleared++
+				slog.Info("unlinked a row that was its own parent",
+					slog.Int64("song_id", r.ID), slog.String("name", r.Name))
+			}
+		}
+	}
+
 	prog := script.NewProgress("link remixes", len(byTitle))
 	for _, group := range byTitle {
 		prog.Step()
@@ -60,55 +79,17 @@ func main() {
 			continue
 		}
 
-		parentIdx := chooseParent(rows, group)
-		if parentIdx < 0 {
-			continue
+		// A title on its own is not a song. "Aurora" is a Martin Garrix & Blinders
+		// record and, separately, an Aspyer one; grouping on the title alone put all
+		// three rows together, elected the Aspyer row as the parent, and then linked
+		// nothing because its credits matched neither of the others. The pair that
+		// really was one song stayed split.
+		//
+		// So the title group is first split into clusters that agree on who made the
+		// song, and each cluster gets its own parent.
+		for _, cluster := range clusterByCredit(rows, group) {
+			linkCluster(ctx, env, rows, cluster, &linked, &cleared, &unchanged)
 		}
-		parent := rows[parentIdx]
-
-		for _, i := range group {
-			r := rows[i]
-
-			want := pgtype.Int8{}
-			if i != parentIdx && isChildOf(parent, r) {
-				want = pgtype.Int8{Int64: parent.ID, Valid: true}
-			}
-
-			// Never clear a parent link this run did not have grounds to set: a
-			// row outside any group keeps whatever it has. Only rows inside a
-			// group are re-decided.
-			if !want.Valid && !r.ParentSongID.Valid {
-				continue
-			}
-
-			n, err := env.Queries.SetSongParent(ctx, db.SetSongParentParams{
-				ID: r.ID, ParentSongID: want,
-			})
-			if err != nil {
-				script.Fatal("failed to set parent", err)
-			}
-			switch {
-			case n == 0:
-				unchanged++
-			case want.Valid:
-				linked++
-			default:
-				cleared++
-			}
-		}
-	}
-
-	for _, r := range rows {
-		if !looksInstrumental(r.Name, r.MixName.String) {
-			continue
-		}
-		n, err := env.Queries.SetSongInstrumental(ctx, db.SetSongInstrumentalParams{
-			ID: r.ID, IsInstrumental: true,
-		})
-		if err != nil {
-			script.Fatal("failed to flag instrumental", err)
-		}
-		instrumental += int(n)
 	}
 
 	prog.Done()
@@ -205,4 +186,91 @@ func looksInstrumental(name, mixName string) bool {
 		}
 	}
 	return false
+}
+
+// clusterByCredit splits rows that share a title into groups that are plausibly the
+// same song, by requiring the credits to be compatible rather than merely co-titled.
+//
+// The seed of each cluster is the row with the fewest artists -- the base credit --
+// and a row joins if its artists contain the seed's. That is the same containment the
+// dedupe pass uses: a remix credits the original artist plus the remixer, so the
+// original is always the smaller set.
+func clusterByCredit(rows []db.GetSongsForParentLinkingRow, group []int) [][]int {
+	remaining := append([]int(nil), group...)
+	sort.SliceStable(remaining, func(a, b int) bool {
+		return len(utils.SplitArtists(rows[remaining[a]].Artists)) <
+			len(utils.SplitArtists(rows[remaining[b]].Artists))
+	})
+
+	var clusters [][]int
+	used := make(map[int]bool, len(remaining))
+
+	for _, seed := range remaining {
+		if used[seed] {
+			continue
+		}
+		cluster := []int{seed}
+		used[seed] = true
+
+		for _, other := range remaining {
+			if used[other] {
+				continue
+			}
+			if utils.ArtistsSubsume(rows[other].Artists, rows[seed].Artists) {
+				cluster = append(cluster, other)
+				used[other] = true
+			}
+		}
+		clusters = append(clusters, cluster)
+	}
+
+	return clusters
+}
+
+// linkCluster files every rendition in a cluster under the cluster's canonical row.
+func linkCluster(ctx context.Context, env *script.Env, rows []db.GetSongsForParentLinkingRow,
+	cluster []int, linked, cleared, unchanged *int) {
+
+	if len(cluster) < 2 {
+		return
+	}
+
+	parentIdx := chooseParent(rows, cluster)
+	if parentIdx < 0 {
+		return
+	}
+	parent := rows[parentIdx]
+
+	for _, i := range cluster {
+		r := rows[i]
+
+		want := pgtype.Int8{}
+		if i != parentIdx && isChildOf(parent, r) {
+			want = pgtype.Int8{Int64: parent.ID, Valid: true}
+		}
+
+		// Never clear a link this run had no grounds to set: a row outside any
+		// cluster keeps whatever it has.
+		if !want.Valid && !r.ParentSongID.Valid {
+			continue
+		}
+
+		n, err := env.Queries.SetSongParent(ctx, db.SetSongParentParams{
+			ID: r.ID, ParentSongID: want,
+		})
+		if err != nil {
+			script.Fatal("failed to set parent", err)
+		}
+		switch {
+		case n == 0:
+			*unchanged++
+		case want.Valid:
+			*linked++
+			slog.Info("filed a rendition under its song",
+				slog.Int64("song_id", r.ID), slog.String("name", r.Name),
+				slog.String("mix", r.MixName.String), slog.Int64("parent_id", parent.ID))
+		default:
+			*cleared++
+		}
+	}
 }

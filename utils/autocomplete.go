@@ -1,9 +1,7 @@
 package utils
 
 import (
-	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 )
@@ -34,10 +32,7 @@ func BuildSongChoices(songs []SongChoice) []discord.AutocompleteChoice {
 		// The rendition belongs in the label. Renditions are listed now rather than
 		// hidden, and without it two of them read as the same entry twice -- which is
 		// exactly the confusion that hiding them was meant to avoid.
-		label := fmt.Sprintf("%s - %s", song.Artists, song.Name)
-		if mix := strings.TrimSpace(song.Mix); mix != "" && !isDefaultMix(mix) {
-			label = fmt.Sprintf("%s (%s)", label, mix)
-		}
+		label := SongHeading(song.Artists, song.Name, song.Mix)
 		if len(label) > discordChoiceNameLimit {
 			label = label[:discordChoiceNameLimit-1] + "…"
 		}
@@ -59,14 +54,4 @@ func ParseSongChoice(value string) (int64, bool) {
 		return 0, false
 	}
 	return id, true
-}
-
-// isDefaultMix reports whether a rendition name just means "the standard release", in
-// which case it adds nothing to a label.
-func isDefaultMix(mix string) bool {
-	switch strings.ToLower(strings.TrimSpace(mix)) {
-	case "original mix", "extended mix", "original version", "mix cut", "extended":
-		return true
-	}
-	return false
 }

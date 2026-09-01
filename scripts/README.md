@@ -21,9 +21,12 @@ Every script takes the same flags:
 after any change to the normalization rules in `utils/matchkey.go`.
 
 ```
-rekey-songs  →  backfill-stmpd  →  link-remix-parents
+rekey-songs  →  backfill-stmpd  →  link-remix-parents  →  verify-catalogue
                 import-beatport  ↗
 ```
+
+`verify-catalogue` writes nothing and can be run at any time. Run it last: it names
+the pass that repairs whatever it finds, so a non-empty report is a to-do list.
 
 ## The scripts
 
@@ -150,8 +153,37 @@ stamped as already announced.
 
 - **Requires:** working Beatport credentials in the config, and `rekey-songs`
 - **Idempotent:** yes — existing tracks resolve through the matcher and are skipped
-- **Writes:** inserts rows with beatport metadata
+- **Writes:** inserts rows with beatport metadata; fills `beatport_slug` on rows it
+  already has
 - Run `link-remix-parents` afterwards so the new remix rows are grouped.
+
+It is also how Beatport links get fixed. A track page is `/track/<slug>/<id>` and the
+catalogue only ever stored the id, so every Beatport button led to a 404. The slug
+cannot be derived locally — Beatport slugifies the track's full name including the
+feature credit that this catalogue strips into the artist column, so "X's feat. Icona
+Pop" becomes `xs-feat-icona-pop` where the stored title would give `xs`. This walk has
+the authoritative value in hand and stores it on rows it skips as well as rows it
+inserts.
+
+### `verify-catalogue`
+
+Read-only. Recomputes each row's derived state and reports every row that disagrees
+with what is stored, grouped by invariant, naming the pass that fixes it.
+
+- **Requires:** nothing; safe to run against production at any time
+- **Writes:** nothing — it does not import a query that mutates
+- **Exit:** always 0; read the `checks_failed` and `rows_flagged` summary
+
+Checks: the collection flag against a recomputation, stale `match_key`/`base_key`,
+rows sharing a match key (the same recording twice), rendition trees that are deeper
+than one level or rooted at a release or at a row's own id, renditions left unfiled
+while their song sits in the table, Beatport ids with no slug to build a URL from,
+tracking parameters on streaming links, and songs carrying no link at all.
+
+It exists because the alternative was reading the table by hand. Every defect found
+that way turned out to be a class rather than a row — one wrongly flagged collection
+was hiding twenty-seven songs from search — so the useful unit of work is the
+invariant.
 
 ## Running against production
 

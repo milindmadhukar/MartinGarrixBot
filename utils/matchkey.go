@@ -423,14 +423,34 @@ func IsCollection(name, mixName string, lengthMs int32) bool {
 		return true
 	}
 
-	lower := strings.ToLower(mixName)
-	for _, marker := range continuousMixMarkers {
-		if strings.Contains(lower, marker) {
-			return true
+	for _, field := range [2]string{mixName, name} {
+		lower := strings.ToLower(field)
+		for _, marker := range continuousMixMarkers {
+			if strings.Contains(lower, marker) {
+				return true
+			}
 		}
 	}
 
-	return lengthMs > setLengthMs
+	if lengthMs > setLengthMs {
+		return true
+	}
+
+	// A title that names its own rendition is one track, whatever mix_name says.
+	// On rows the re-keying pass could not normalise -- because mix_name was already
+	// occupied -- mix_name holds the package the track was released on rather than
+	// the track's own variant: "Higher Ground (DubVision Remix)" carries mix
+	// "Remixes". Reading mix_name alone there turns a remix into the remix EP.
+	if _, own := SplitVariant(name, "", ""); own != "" && !IsCollectionName(own) {
+		return false
+	}
+
+	// Otherwise the rendition counts as much as the title. Re-keying moves a trailing
+	// variant out of the name into mix_name, so "Hero (Remixes)" becomes name "Hero"
+	// with mix "Remixes" -- the same release, invisible to a rule reading only the
+	// title. Reading both means the answer does not depend on whether the row has
+	// been through the re-keying pass yet.
+	return IsCollectionName(mixName)
 }
 
 // IsCollectionName reports whether a title names a release rather than a track.
@@ -494,4 +514,43 @@ func SplitTitleFeature(title string) (base, featured string) {
 		stripped = strings.TrimSpace(stripped) + " (" + variant + ")"
 	}
 	return strings.TrimSpace(stripped), strings.TrimSpace(credit)
+}
+
+// stmpdSlugDate matches the date the STMPD catalogue appends to every slug, as in
+// "seth-hills-void-ep-2020-8-10".
+var stmpdSlugDate = regexp.MustCompile(`-\d{4}-\d{1,2}-\d{1,2}$`)
+
+// StmpdSlugNamesRelease reports whether a catalogue slug names a multi-track release
+// that this row is itself named after.
+//
+// The slug is the most reliable signal the catalogue gives: "Void" the single and
+// "Void" the EP are two rows with the same title, the same artist and no rendition to
+// tell them apart, so every title-based rule sees one song stored twice. Their slugs
+// -- seth-hills-void and seth-hills-void-ep -- say plainly which is which.
+//
+// The suffix alone is not enough, for the same reason it is not enough on an Apple
+// URL: "Mind The Grind" is filed under the bombai-ep slug because it is a track on
+// that EP. Only when what remains after stripping the release suffix ends with the
+// row's own title is the row the release rather than something on it.
+func StmpdSlugNamesRelease(name, slug string) bool {
+	if slug == "" || name == "" {
+		return false
+	}
+
+	trimmed := stmpdSlugDate.ReplaceAllString(strings.ToLower(slug), "")
+
+	stem := ""
+	for _, marker := range collectionMarkers {
+		suffix := "-" + strings.ReplaceAll(marker, " ", "-")
+		if strings.HasSuffix(trimmed, suffix) {
+			stem = strings.TrimSuffix(trimmed, suffix)
+			break
+		}
+	}
+	if stem == "" {
+		return false
+	}
+
+	// The stem still carries the artist prefix, so compare on the tail.
+	return strings.HasSuffix(NormalizeToken(strings.ReplaceAll(stem, "-", " ")), NormalizeToken(name))
 }

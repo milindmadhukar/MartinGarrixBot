@@ -42,6 +42,7 @@ type BeatportTokenResponse struct {
 type BeatportTrack struct {
 	ID           int              `json:"id"`
 	Name         string           `json:"name"`
+	Slug         string           `json:"slug"`
 	MixName      string           `json:"mix_name"`
 	ReleaseDate  string           `json:"release_date"`
 	Artists      []BeatportArtist `json:"artists"`
@@ -59,6 +60,7 @@ type BeatportTrack struct {
 type BeatportAPITrack struct {
 	ID          int              `json:"id"`
 	Name        string           `json:"name"`
+	Slug        string           `json:"slug"`
 	MixName     string           `json:"mix_name"`
 	PublishDate string           `json:"publish_date"`
 	Artists     []BeatportArtist `json:"artists"`
@@ -526,6 +528,49 @@ func (bc *BeatportClient) fetchTracks(apiURL string) (*BeatportTracksResponse, e
 	return &tracksResp, nil
 }
 
+// GetTrack fetches a single track by id.
+//
+// The listing endpoints cover the label and the configured artists, which is most of
+// the catalogue but not all of it: rows picked up from other sources carry a track id
+// that never appears in those pages, and without the track's slug no Beatport link
+// can be built for them. Beatport answers 403 "Territory Restricted" for some tracks
+// on this endpoint even though they appear in listings, so the caller must treat a
+// failure as "no slug available" rather than as fatal.
+func (bc *BeatportClient) GetTrack(id int32) (*BeatportTrack, error) {
+	if err := bc.EnsureAuthenticated(); err != nil {
+		return nil, err
+	}
+
+	apiURL := fmt.Sprintf("%s/catalog/tracks/%d/", beatportBaseURL, id)
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", bc.accessToken))
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := bc.apiClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("track %d unavailable: status %d: %s", id, resp.StatusCode, string(body))
+	}
+
+	var apiTrack BeatportAPITrack
+	if err := json.Unmarshal(body, &apiTrack); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	track := ProcessBeatportTrack(apiTrack)
+	return &track, nil
+}
+
 // GetAllLabelTracks fetches all tracks for a label with pagination
 func (bc *BeatportClient) GetAllLabelTracks(labelID string, maxTracks int) ([]BeatportTrack, error) {
 	var allTracks []BeatportTrack
@@ -611,6 +656,7 @@ func ProcessBeatportTrack(apiTrack BeatportAPITrack) BeatportTrack {
 	return BeatportTrack{
 		ID:           apiTrack.ID,
 		Name:         apiTrack.Name,
+		Slug:         apiTrack.Slug,
 		MixName:      apiTrack.MixName,
 		ReleaseDate:  apiTrack.PublishDate,
 		Artists:      apiTrack.Artists,

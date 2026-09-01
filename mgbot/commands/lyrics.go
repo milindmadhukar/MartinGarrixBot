@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"log/slog"
 
 	"github.com/disgoorg/disgo/discord"
@@ -87,7 +86,7 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 		}
 
 		eb := discord.NewEmbedBuilder().
-			SetTitle(fmt.Sprintf("%s - %s", song.Artists, song.Name)).
+			SetTitle(utils.SongHeading(song.Artists, song.Name, song.MixName.String)).
 			SetDescription(lyrics).
 			SetColor(utils.ColorSuccess).
 			SetThumbnail(song.ThumbnailUrl.String)

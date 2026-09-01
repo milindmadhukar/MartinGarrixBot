@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -252,7 +251,7 @@ func announceSong(ctx context.Context, b *mgbot.MartinGarrixBot, notifier *utils
 	}
 
 	embed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("%s - %s", song.Artists, song.Name)).
+		SetTitle(utils.SongHeading(song.Artists, song.Name, song.MixName.String)).
 		SetImage(thumbnail).
 		SetFooter("Released "+song.ReleaseDate.String, "").
 		Build()

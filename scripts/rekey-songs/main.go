@@ -25,7 +25,7 @@ func main() {
 		script.Fatal("failed to load songs", err)
 	}
 
-	var changed, unchanged, flagged, renamed, defeatured int
+	var changed, unchanged, flagged, unflagged, renamed, defeatured int
 	prog := script.NewProgress("rekey songs", len(rows))
 	for _, row := range rows {
 		prog.Step()
@@ -95,20 +95,34 @@ func main() {
 		// 2016: The Elixir Of Life" was filed as a song -- its mix name and its
 		// 29-minute running time are what give it away.
 		isRelease := utils.IsCollection(row.Name, row.MixName.String, row.LengthMs.Int32) ||
-			utils.AppleURLNamesThisRelease(row.Name, row.AppleMusicUrl.String)
+			utils.AppleURLNamesThisRelease(row.Name, row.AppleMusicUrl.String) ||
+			utils.StmpdSlugNamesRelease(row.Name, row.StmpdSlug.String)
 
-		if !row.IsCollection && isRelease {
+		// The flag is recomputed, not merely raised. It used to be one-way, which
+		// meant a row the first title-only migration got wrong stayed wrong forever:
+		// "Hero" was marked a release and so was filtered out of search, out of the
+		// radio, and out of contention as the parent of its own remixes -- leaving
+		// the Space Ducks remix standing in for the song. Deciding both directions
+		// here makes the flag a function of the row rather than of its history.
+		if row.IsCollection != isRelease {
 			n, err := env.Queries.SetSongCollection(ctx, db.SetSongCollectionParams{
-				ID: row.ID, IsCollection: true,
+				ID: row.ID, IsCollection: isRelease,
 			})
 			if err != nil {
-				script.Fatal("failed to flag a collection", err)
+				script.Fatal("failed to set the collection flag", err)
 			}
 			if n > 0 {
-				flagged++
-				slog.Info("flagged as a release, not a track",
-					slog.Int64("song_id", row.ID), slog.String("name", row.Name),
-					slog.String("mix", row.MixName.String))
+				if isRelease {
+					flagged++
+					slog.Info("flagged as a release, not a track",
+						slog.Int64("song_id", row.ID), slog.String("name", row.Name),
+						slog.String("mix", row.MixName.String))
+				} else {
+					unflagged++
+					slog.Info("restored as a track, not a release",
+						slog.Int64("song_id", row.ID), slog.String("name", row.Name),
+						slog.String("mix", row.MixName.String))
+				}
 			}
 		}
 
@@ -134,6 +148,7 @@ func main() {
 		slog.Int("written", changed),
 		slog.Int("already_current", unchanged),
 		slog.Int("newly_flagged_as_collections", flagged),
+		slog.Int("restored_as_tracks", unflagged),
 		slog.Int("renditions_moved_out_of_name", renamed),
 		slog.Int("redundant_credits_dropped", defeatured))
 }

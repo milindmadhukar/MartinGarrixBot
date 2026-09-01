@@ -98,6 +98,7 @@ type Song struct {
 	ParentSongID      pgtype.Int8        `json:"parentSongId"`
 	IsInstrumental    bool               `json:"isInstrumental"`
 	IsCollection      bool               `json:"isCollection"`
+	BeatportSlug      pgtype.Text        `json:"beatportSlug"`
 }
 
 type Tag struct {

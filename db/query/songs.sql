@@ -161,8 +161,8 @@ WHERE id = sqlc.arg(id)
 -- name: InsertBeatportSong :one
 INSERT INTO songs (
     name, artists, release_date, thumbnail_url, beatport_id, mix_name,
-    release_name, genre, sub_genre, bpm, musical_key, length_ms, source
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'beatport')
+    release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_slug, source
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'beatport')
 RETURNING *;
 
 -- name: DoesSongExist :one
@@ -183,6 +183,7 @@ UPDATE songs SET
     artists       = sqlc.arg(artists),
     thumbnail_url = COALESCE(sqlc.narg(thumbnail_url), thumbnail_url),
     beatport_id   = sqlc.narg(beatport_id),
+    beatport_slug = COALESCE(sqlc.narg(beatport_slug), beatport_slug),
     mix_name      = sqlc.narg(mix_name),
     release_date  = sqlc.arg(release_date),
     release_name  = sqlc.narg(release_name),
@@ -198,6 +199,7 @@ WHERE id = sqlc.arg(id)
     OR artists       IS DISTINCT FROM sqlc.arg(artists)
     OR thumbnail_url IS DISTINCT FROM COALESCE(sqlc.narg(thumbnail_url), thumbnail_url)
     OR beatport_id   IS DISTINCT FROM sqlc.narg(beatport_id)
+    OR beatport_slug IS DISTINCT FROM COALESCE(sqlc.narg(beatport_slug), beatport_slug)
     OR mix_name      IS DISTINCT FROM sqlc.narg(mix_name)
     OR release_date  IS DISTINCT FROM sqlc.arg(release_date)
     OR release_name  IS DISTINCT FROM sqlc.narg(release_name)
@@ -250,7 +252,7 @@ UPDATE songs SET match_key = $2, base_key = $3
 WHERE id = $1 AND (match_key IS DISTINCT FROM $2 OR base_key IS DISTINCT FROM $3);
 
 -- name: GetSongsForKeying :many
-SELECT id, name, artists, mix_name, length_ms, is_collection, apple_music_url FROM songs ORDER BY id;
+SELECT id, name, artists, mix_name, length_ms, is_collection, apple_music_url, stmpd_slug FROM songs ORDER BY id;
 
 -- name: GetRandomSongForRadio :one
 -- Canonical rows only, so the rotation does not play six versions of one track, and
@@ -491,4 +493,23 @@ WHERE id = sqlc.arg(id)
 -- subsets of the same artists.
 SELECT id, name, artists, mix_name, release_date, source, stmpd_slug, beatport_id,
        spotify_url, apple_music_url, youtube_url, lyrics, parent_song_id, is_collection
+FROM songs ORDER BY id;
+
+-- name: SetBeatportSlug :execrows
+-- Fills the slug that turns a stored beatport_id into a URL that resolves.
+UPDATE songs SET beatport_slug = $2
+WHERE id = $1 AND beatport_slug IS DISTINCT FROM $2;
+
+-- name: GetSongsMissingBeatportSlug :many
+-- Rows carrying a Beatport track id whose page URL cannot be built yet.
+SELECT id, name, artists, mix_name, beatport_id FROM songs
+WHERE beatport_id IS NOT NULL AND beatport_slug IS NULL ORDER BY id;
+
+-- name: GetSongsForAudit :many
+-- Everything the invariant checker needs to recompute a row's derived state and
+-- compare it against what is stored.
+SELECT id, name, artists, mix_name, length_ms, is_collection, parent_song_id,
+       match_key, base_key, release_date, apple_music_url, spotify_url, youtube_url, stmpd_slug,
+       beatport_id, beatport_slug, beatport_url, deezer_url, tidal_url,
+       amazon_music_url, youtube_music_url, source
 FROM songs ORDER BY id;
