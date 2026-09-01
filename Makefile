@@ -57,7 +57,12 @@ cover-html: cover
 fuzz:
 	go test -run=^$$ -fuzz=Fuzz -fuzztime=30s ./mgbot/handlers/
 
+# Hits the real tour and STMPD pages to check they still serve the shape the
+# parsers expect. Not part of `test` or CI; run it when a fetcher goes quiet.
+live-check:
+	go test -tags livefetch -count=1 -v ./mgbot/handlers/
+
 check: fmt-check vet test
 
-.PHONY: build dev run kill fmt fmt-check vet test test-integration cover cover-html fuzz check \
+.PHONY: build dev run kill fmt fmt-check vet test test-integration cover cover-html fuzz live-check check \
 	migrate_up migrate_down make_migration sqlc psql migrate_force
