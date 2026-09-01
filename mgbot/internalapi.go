@@ -29,6 +29,11 @@ type internalGuild struct {
 	Icon        string `json:"icon,omitempty"`
 	OwnerID     string `json:"owner_id,omitempty"`
 	MemberCount int    `json:"member_count"`
+	// CanViewAuditLog reports whether the BOT holds View Audit Log here.
+	// Without it Discord never sends GUILD_AUDIT_LOG_ENTRY_CREATE, so
+	// moderation done through Discord's UI is invisible and the dashboard's
+	// moderation page would otherwise look empty for no stated reason.
+	CanViewAuditLog bool `json:"can_view_audit_log"`
 }
 
 type internalRole struct {
@@ -52,6 +57,10 @@ type internalUser struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
 	Avatar      string `json:"avatar,omitempty"`
+	// Member is false for someone who has since left the guild. They still
+	// resolve to a name and avatar via /users/{id}; the flag is only so the UI
+	// can say "former member" rather than implying they are still here.
+	Member bool `json:"member"`
 }
 
 type resolveRequest struct {
@@ -62,6 +71,21 @@ type resolveRequest struct {
 // maxResolveIDs bounds a single resolve request. Every uncached ID costs one
 // REST call, so an unbounded list is a way to make the bot rate-limit itself.
 const maxResolveIDs = 100
+
+const (
+	// resolveTTL is how long a successful lookup is trusted. Display names and
+	// avatars change rarely, and a stale one for a few minutes is harmless.
+	resolveTTL = 15 * time.Minute
+	// resolveMissTTL is shorter so somebody who rejoins shows up quickly.
+	resolveMissTTL = 5 * time.Minute
+)
+
+// resolvedUser memoises one lookup, including the negative result.
+type resolvedUser struct {
+	user    internalUser
+	found   bool
+	expires time.Time
+}
 
 // StartInternalAPI serves live guild data to the dashboard on its own listener.
 //
@@ -144,12 +168,29 @@ func (b *MartinGarrixBot) handleInternalGuild(w http.ResponseWriter, r *http.Req
 	}
 
 	writeInternalJSON(w, internalGuild{
-		ID:          g.ID.String(),
-		Name:        g.Name,
-		Icon:        derefString(g.Icon),
-		OwnerID:     g.OwnerID.String(),
-		MemberCount: g.MemberCount,
+		ID:              g.ID.String(),
+		Name:            g.Name,
+		Icon:            derefString(g.Icon),
+		OwnerID:         g.OwnerID.String(),
+		MemberCount:     g.MemberCount,
+		CanViewAuditLog: b.canViewAuditLog(guildID),
 	})
+}
+
+// canViewAuditLog reports whether the bot itself can read this guild's audit
+// log, which is what gates delivery of GUILD_AUDIT_LOG_ENTRY_CREATE.
+//
+// Computed from the member cache, which is only accurate because FlagRoles is
+// enabled -- MemberPermissions needs the role objects to resolve anything.
+func (b *MartinGarrixBot) canViewAuditLog(guildID snowflake.ID) bool {
+	self, ok := b.Client.Caches.Member(guildID, b.Client.ApplicationID)
+	if !ok {
+		// Unknown rather than false, but the caller only uses this to decide
+		// whether to warn, and warning on a cache miss would cry wolf.
+		return true
+	}
+	perms := b.Client.Caches.MemberPermissions(self)
+	return perms.Has(discord.PermissionAdministrator) || perms.Has(discord.PermissionViewAuditLog)
 }
 
 func (b *MartinGarrixBot) handleInternalRoles(w http.ResponseWriter, r *http.Request) {
@@ -222,9 +263,15 @@ func (b *MartinGarrixBot) handleInternalChannels(w http.ResponseWriter, r *http.
 }
 
 // handleInternalResolve turns the raw snowflakes stored in modlogs and
-// join_leave_logs into names the dashboard can render. Unresolvable IDs are
-// simply absent from the response — a member who has left the guild is the
-// normal case here, not an error.
+// join_leave_logs into names the dashboard can render.
+//
+// Most rows in a join/leave log belong to people who have since left, and
+// GET /guilds/{guild}/members/{user} 404s for them. Resolving only current
+// members therefore left those pages a wall of bare snowflakes, so this falls
+// through to GET /users/{id}, which resolves any account that still exists.
+//
+// An ID that resolves nowhere (deleted account) is simply absent from the
+// response; the dashboard renders the raw ID for it.
 func (b *MartinGarrixBot) handleInternalResolve(w http.ResponseWriter, r *http.Request) {
 	var req resolveRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
@@ -252,27 +299,83 @@ func (b *MartinGarrixBot) handleInternalResolve(w http.ResponseWriter, r *http.R
 			continue
 		}
 
-		member, err := utils.GetMember(b.Client, guildID, userID)
-		if err != nil || member == nil {
-			continue
+		if resolved, ok := b.resolveUser(guildID, userID); ok {
+			out[raw] = resolved
 		}
+	}
 
+	writeInternalJSON(w, out)
+}
+
+// resolveUser looks a user up cache-first, then as a guild member, then as a
+// plain user, memoising the outcome.
+//
+// The cache matters because paging through a moderation log asks about the same
+// handful of moderators on every page, and each miss is a REST call. Negative
+// results are cached too, on a shorter TTL: without that, a log full of deleted
+// accounts would re-request every one of them on every page load.
+func (b *MartinGarrixBot) resolveUser(guildID, userID snowflake.ID) (internalUser, bool) {
+	key := guildID.String() + ":" + userID.String()
+
+	b.resolveMu.Lock()
+	if entry, ok := b.resolveCache[key]; ok && time.Now().Before(entry.expires) {
+		b.resolveMu.Unlock()
+		return entry.user, entry.found
+	}
+	b.resolveMu.Unlock()
+
+	user, found := b.lookupUser(guildID, userID)
+
+	ttl := resolveTTL
+	if !found {
+		ttl = resolveMissTTL
+	}
+	b.resolveMu.Lock()
+	if b.resolveCache == nil {
+		b.resolveCache = make(map[string]resolvedUser)
+	}
+	b.resolveCache[key] = resolvedUser{user: user, found: found, expires: time.Now().Add(ttl)}
+	b.resolveMu.Unlock()
+
+	return user, found
+}
+
+func (b *MartinGarrixBot) lookupUser(guildID, userID snowflake.ID) (internalUser, bool) {
+	// Current member: gives us the nickname and the per-guild avatar, which is
+	// what people expect to see.
+	if member, err := utils.GetMember(b.Client, guildID, userID); err == nil && member != nil {
 		display := member.User.Username
 		if member.Nick != nil && *member.Nick != "" {
 			display = *member.Nick
 		} else if member.User.GlobalName != nil && *member.User.GlobalName != "" {
 			display = *member.User.GlobalName
 		}
-
-		out[raw] = internalUser{
+		return internalUser{
 			ID:          userID.String(),
 			Username:    member.User.Username,
 			DisplayName: display,
 			Avatar:      derefString(member.User.Avatar),
-		}
+			Member:      true,
+		}, true
 	}
 
-	writeInternalJSON(w, out)
+	// Former member. /users/{id} works for any account regardless of whether it
+	// shares a guild with the bot, which is the whole point of this fallback.
+	user, err := b.Client.Rest.GetUser(userID)
+	if err != nil || user == nil {
+		return internalUser{}, false
+	}
+
+	display := user.Username
+	if user.GlobalName != nil && *user.GlobalName != "" {
+		display = *user.GlobalName
+	}
+	return internalUser{
+		ID:          userID.String(),
+		Username:    user.Username,
+		DisplayName: display,
+		Avatar:      derefString(user.Avatar),
+	}, true
 }
 
 func newInternalRole(role discord.Role) internalRole {

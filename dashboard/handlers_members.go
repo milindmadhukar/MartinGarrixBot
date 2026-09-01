@@ -12,6 +12,7 @@ type memberLogRow struct {
 	db.JoinLeaveLog
 	MemberName   string
 	MemberAvatar string
+	MemberLeft   bool
 	IsJoin       bool
 }
 
@@ -76,6 +77,7 @@ func (s *Server) handleMemberLogs(w http.ResponseWriter, r *http.Request) {
 		if u, ok := names[memberID]; ok {
 			entry.MemberName = u.DisplayName
 			entry.MemberAvatar = avatarURL(memberID, u.Avatar)
+			entry.MemberLeft = !u.Member
 		}
 		rendered = append(rendered, entry)
 	}

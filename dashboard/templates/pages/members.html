@@ -88,6 +88,7 @@
                 <span class="flex items-center gap-2">
                   <img src="{{.MemberAvatar}}" alt="" class="h-5 w-5 rounded-full">
                   <span class="text-slate-200">{{.MemberName}}</span>
+                  {{if .MemberLeft}}<span class="text-xs text-slate-600">(left)</span>{{end}}
                 </span>
                 <span class="text-xs text-slate-600">{{.MemberID}}</span>
               </td>

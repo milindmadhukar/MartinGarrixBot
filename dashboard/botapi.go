@@ -42,6 +42,11 @@ type BotGuild struct {
 	Icon        string `json:"icon,omitempty"`
 	OwnerID     string `json:"owner_id,omitempty"`
 	MemberCount int    `json:"member_count"`
+	// CanViewAuditLog is only populated on the single-guild endpoint. False
+	// means Discord will never tell the bot about moderation performed through
+	// its own UI, which the moderation page explains rather than just showing
+	// an empty table.
+	CanViewAuditLog bool `json:"can_view_audit_log"`
 }
 
 type BotRole struct {
@@ -65,6 +70,9 @@ type BotUser struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
 	Avatar      string `json:"avatar,omitempty"`
+	// Member is false for someone who has left the guild. They still resolve to
+	// a name and avatar; the flag only lets the UI mark them as a former member.
+	Member bool `json:"member"`
 }
 
 // Discord channel type numbers the dashboard cares about.
@@ -141,9 +149,30 @@ func (b *BotAPI) ResolveUsers(ctx context.Context, guildID snowflake.ID, ids []s
 		return out
 	}
 
+	// Serve what is already known and ask only for the rest. Paging through a
+	// moderation log asks about the same handful of moderators on every page,
+	// and the same members recur across pages of a join/leave log.
+	var missing []string
+	b.mu.Lock()
+	now := time.Now()
+	for _, id := range ids {
+		if entry, ok := b.cache[userCacheKey(guildID, id)]; ok && now.Before(entry.expires) {
+			if user, ok := entry.value.(BotUser); ok {
+				out[id] = user
+				continue
+			}
+		}
+		missing = append(missing, id)
+	}
+	b.mu.Unlock()
+
+	if len(missing) == 0 {
+		return out
+	}
+
 	body, err := json.Marshal(map[string]any{
 		"guild_id": guildID.String(),
-		"user_ids": ids,
+		"user_ids": missing,
 	})
 	if err != nil {
 		return out
@@ -165,10 +194,27 @@ func (b *BotAPI) ResolveUsers(ctx context.Context, guildID snowflake.ID, ids []s
 	if resp.StatusCode != http.StatusOK {
 		return out
 	}
-	// A decode failure leaves out empty, which renders as raw IDs. That is the
-	// intended degradation, so the error is dropped rather than propagated.
-	_ = json.NewDecoder(resp.Body).Decode(&out)
+	// A decode failure leaves the fetched set empty, which renders as raw IDs.
+	// That is the intended degradation, so the error is dropped rather than
+	// propagated.
+	fetched := make(map[string]BotUser, len(missing))
+	_ = json.NewDecoder(resp.Body).Decode(&fetched)
+
+	b.mu.Lock()
+	expires := time.Now().Add(b.ttl)
+	for id, user := range fetched {
+		out[id] = user
+		b.cache[userCacheKey(guildID, id)] = cacheEntry{value: user, expires: expires}
+	}
+	b.mu.Unlock()
+
+	// Unresolved IDs are deliberately not cached as misses here: the bot already
+	// caches its own negative lookups, so a second round trip is the cheap half.
 	return out
+}
+
+func userCacheKey(guildID snowflake.ID, userID string) string {
+	return "user:" + guildID.String() + ":" + userID
 }
 
 func (b *BotAPI) get(ctx context.Context, path string, into any) error {

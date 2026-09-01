@@ -62,3 +62,58 @@
   {{.}}
 </div>
 {{end}}
+
+{{/* viaBadge distinguishes moderation captured from Discord's audit log from
+     moderation performed through the bot's own commands. */}}
+{{define "viaBadge"}}
+{{if .}}
+  <span class="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-400"
+        title="Performed through Discord and captured from the audit log">Discord</span>
+{{else}}
+  <span class="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-500"
+        title="Performed with a bot command">Bot</span>
+{{end}}
+{{end}}
+
+{{/* geoField is the backdrop: a soft mint bloom, a halftone wash and a very
+     large ghosted copy of the mark. All CSS and inline SVG -- no image assets to
+     serve, and nothing for the CSP to block. */}}
+{{define "geoField"}}
+<div class="pointer-events-none absolute inset-0" aria-hidden="true">
+  <div class="drift absolute left-1/2 top-1/2 h-[38rem] w-[38rem] -translate-x-1/2 -translate-y-1/2
+              rounded-full bg-mint-500/20 blur-3xl"></div>
+  <div class="halftone absolute inset-0 opacity-[0.10]"></div>
+  <div class="absolute left-1/2 top-1/2 w-[46rem] max-w-none -translate-x-1/2 -translate-y-1/2 opacity-[0.06]">
+    {{template "geoSVG" "w-full h-auto"}}
+  </div>
+</div>
+{{end}}
+
+{{define "geoMark"}}
+<div class="mx-auto w-24 text-white sm:w-28">
+  {{template "geoSVG" "w-full h-auto"}}
+</div>
+{{end}}
+
+{{/* An abstract faceted polyhedron drawn from scratch. It borrows the visual
+     language of the reference artwork -- thin white strokes, hard angles, an
+     implied cube -- without reproducing anyone's logo. */}}
+{{define "geoSVG"}}
+<svg viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="2"
+     stroke-linejoin="round" class="{{.}}" aria-hidden="true">
+  <path d="M100 8 190 56v88L100 192 10 144V56z" />
+  <path d="M100 8v184" stroke-width="1.4" />
+  <path d="M10 56l90 48 90-48" stroke-width="1.4" />
+  <path d="M10 144l90-40 90 40" stroke-width="1.4" />
+  <path d="M56 80l30 12-6 30-30-14z" stroke-width="1.6" />
+  <path d="M144 80l-30 12 6 30 30-14z" stroke-width="1.6" />
+  <path d="M74 140h52l-26 24z" stroke-width="1.6" />
+  <path d="M100 104l-14 8m14-8l14 8" stroke-width="1.2" />
+</svg>
+{{end}}
+
+{{define "discordGlyph"}}
+<svg viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4 opacity-90" aria-hidden="true">
+  <path d="M20.3 4.9A19.8 19.8 0 0 0 15.4 3.4l-.24.44a18.3 18.3 0 0 1 4.2 1.6c-2-1-4.1-1.5-6.3-1.5s-4.3.5-6.3 1.5a18.3 18.3 0 0 1 4.2-1.6L10.7 3.4A19.8 19.8 0 0 0 5.8 4.9C2.7 9.5 1.9 14 2.3 18.4a19.9 19.9 0 0 0 6 3l.72-1.2a13 13 0 0 1-2-1l.42-.33a14.2 14.2 0 0 0 12.2 0l.42.33a13 13 0 0 1-2 1l.72 1.2a19.9 19.9 0 0 0 6-3c.5-5.1-.8-9.6-3.4-13.5zM8.9 15.7c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4zm6.2 0c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4z" />
+</svg>
+{{end}}

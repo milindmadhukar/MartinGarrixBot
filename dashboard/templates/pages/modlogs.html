@@ -1,6 +1,15 @@
 {{define "page"}}
 <h1 class="text-xl font-semibold text-white">Moderation log</h1>
 
+{{if .Data.AuditWarning}}
+  <div class="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
+    The bot does not have <strong>View Audit Log</strong> in this server, so kicks,
+    bans and timeouts performed through Discord itself are not recorded here —
+    only actions taken with the bot's own commands are. Grant the bot's role that
+    permission in Server Settings → Roles to capture the rest.
+  </div>
+{{end}}
+
 {{/* Filters are ordinary query params on the fragment route, so every view is
      linkable, back-button-correct and renders identically server-side. */}}
 <form class="mt-4 grid grid-cols-2 items-end gap-3 sm:flex sm:flex-wrap"
@@ -63,6 +72,7 @@
         <li class="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
           <div class="flex items-center gap-2">
             {{template "logTypeBadge" .LogType}}
+            {{template "viaBadge" .ViaDiscord}}
             <span class="ml-auto text-xs text-slate-500">#{{.ID}}</span>
           </div>
           <div class="mt-2 flex items-center gap-2">
@@ -89,6 +99,7 @@
           <tr>
             <th class="px-3 py-2 font-medium">Case</th>
             <th class="px-3 py-2 font-medium">Action</th>
+            <th class="hidden px-3 py-2 font-medium lg:table-cell">Via</th>
             <th class="px-3 py-2 font-medium">Member</th>
             <th class="px-3 py-2 font-medium">Moderator</th>
             <th class="px-3 py-2 font-medium">Reason</th>
@@ -101,10 +112,12 @@
             <tr class="hover:bg-slate-900/40">
               <td class="px-3 py-2 text-slate-500">#{{.ID}}</td>
               <td class="px-3 py-2">{{template "logTypeBadge" .LogType}}</td>
+              <td class="hidden px-3 py-2 lg:table-cell">{{template "viaBadge" .ViaDiscord}}</td>
               <td class="px-3 py-2">
                 <span class="flex items-center gap-2">
                   <img src="{{.UserAvatar}}" alt="" class="h-5 w-5 rounded-full">
                   <span class="text-slate-200">{{.UserName}}</span>
+                  {{if .UserLeft}}<span class="text-xs text-slate-600">(left)</span>{{end}}
                 </span>
                 <span class="text-xs text-slate-600">{{.UserID}}</span>
               </td>
