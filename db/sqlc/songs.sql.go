@@ -769,14 +769,16 @@ func (q *Queries) GetSongMixes(ctx context.Context, parentSongID pgtype.Int8) ([
 }
 
 const getSongsForKeying = `-- name: GetSongsForKeying :many
-SELECT id, name, artists, mix_name FROM songs ORDER BY id
+SELECT id, name, artists, mix_name, length_ms, is_collection FROM songs ORDER BY id
 `
 
 type GetSongsForKeyingRow struct {
-	ID      int64       `json:"id"`
-	Name    string      `json:"name"`
-	Artists string      `json:"artists"`
-	MixName pgtype.Text `json:"mixName"`
+	ID           int64       `json:"id"`
+	Name         string      `json:"name"`
+	Artists      string      `json:"artists"`
+	MixName      pgtype.Text `json:"mixName"`
+	LengthMs     pgtype.Int4 `json:"lengthMs"`
+	IsCollection bool        `json:"isCollection"`
 }
 
 func (q *Queries) GetSongsForKeying(ctx context.Context) ([]GetSongsForKeyingRow, error) {
@@ -793,6 +795,8 @@ func (q *Queries) GetSongsForKeying(ctx context.Context) ([]GetSongsForKeyingRow
 			&i.Name,
 			&i.Artists,
 			&i.MixName,
+			&i.LengthMs,
+			&i.IsCollection,
 		); err != nil {
 			return nil, err
 		}
@@ -1060,6 +1064,47 @@ func (q *Queries) GetSongsNeverAnnounced(ctx context.Context) ([]GetSongsNeverAn
 			&i.Name,
 			&i.Artists,
 			&i.ReleaseDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSongsToCheckForCollection = `-- name: GetSongsToCheckForCollection :many
+SELECT id, name, artists, apple_music_url
+FROM songs
+WHERE NOT is_collection AND apple_music_url IS NOT NULL
+  AND apple_music_url NOT LIKE '%/playlist/%'
+ORDER BY id
+`
+
+type GetSongsToCheckForCollectionRow struct {
+	ID            int64       `json:"id"`
+	Name          string      `json:"name"`
+	Artists       string      `json:"artists"`
+	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
+}
+
+// Rows not yet known to be releases, that carry an Apple link we can ask about.
+func (q *Queries) GetSongsToCheckForCollection(ctx context.Context) ([]GetSongsToCheckForCollectionRow, error) {
+	rows, err := q.db.Query(ctx, getSongsToCheckForCollection)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSongsToCheckForCollectionRow
+	for rows.Next() {
+		var i GetSongsToCheckForCollectionRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Artists,
+			&i.AppleMusicUrl,
 		); err != nil {
 			return nil, err
 		}

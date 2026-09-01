@@ -36,6 +36,25 @@ const itunesRateLimit = 3 * time.Second
 // of the collection, which for a compilation is not the song's own release.
 var appleIDPattern = regexp.MustCompile(`/(?:id)?(\d{6,})(?:\?|$|/)`)
 
+// AppleAlbumIDFromURL returns the id of the release an Apple URL points at, ignoring
+// any track within it. Asking about the release is what tells an EP from a single.
+func AppleAlbumIDFromURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+
+	path := rawURL
+	if i := strings.IndexByte(path, '?'); i >= 0 {
+		path = path[:i]
+	}
+	path = strings.TrimRight(path, "/") + "/"
+
+	if m := appleIDPattern.FindStringSubmatch(path); len(m) > 1 {
+		return m[1]
+	}
+	return ""
+}
+
 // AppleIDFromURL returns the best id to look up for an Apple Music URL.
 func AppleIDFromURL(rawURL string) string {
 	if rawURL == "" {
@@ -79,6 +98,31 @@ type ItunesResult struct {
 	CollectionName string `json:"collectionName"`
 	ReleaseDate    string `json:"releaseDate"`
 	ArtworkURL100  string `json:"artworkUrl100"`
+	CollectionType string `json:"collectionType"`
+	TrackCount     int    `json:"trackCount"`
+}
+
+// collectionSuffixes are how Apple labels the kind of release in its title.
+var collectionSuffixes = []string{" - EP", " - Album", " - Single"}
+
+// CollectionTitle strips Apple's "- EP" / "- Single" label, leaving the release name
+// as it would be written elsewhere.
+func (r ItunesResult) CollectionTitle() string {
+	name := r.CollectionName
+	for _, suffix := range collectionSuffixes {
+		name = strings.TrimSuffix(name, suffix)
+	}
+	return strings.TrimSpace(name)
+}
+
+// IsMultiTrackRelease reports whether Apple describes this entry as a release holding
+// several tracks, rather than a single.
+//
+// The count alone is not enough: a track on an eight-track album would qualify. The
+// caller has to check that the row is named after the release itself.
+func (r ItunesResult) IsMultiTrackRelease() bool {
+	return r.TrackCount >= 4 || strings.HasSuffix(r.CollectionName, " - EP") ||
+		strings.HasSuffix(r.CollectionName, " - Album")
 }
 
 // artworkSize is what the thumbnail is rewritten to. Apple returns a 100px URL and

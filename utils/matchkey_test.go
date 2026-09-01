@@ -268,3 +268,35 @@ func TestIsCollectionName(t *testing.T) {
 		}
 	}
 }
+
+func TestArtistDisambiguationSuffixIsNotPartOfTheName(t *testing.T) {
+	// Beatport appends a country tag when two acts share a name. Keeping it made
+	// "Brooks" and "Brooks (NL)" two different artists, so "Boomerang" had two rows
+	// that could never match each other.
+	if ArtistSetKey("GRX, Brooks (NL)") != ArtistSetKey("Brooks, GRX") {
+		t.Errorf("disambiguated name did not normalize: %q vs %q",
+			ArtistSetKey("GRX, Brooks (NL)"), ArtistSetKey("Brooks, GRX"))
+	}
+	if ArtistSetKey("Carola (BR)") != ArtistSetKey("Carola") {
+		t.Error("two-letter country tag should be stripped")
+	}
+	// A parenthetical that is not a country tag must survive.
+	if ArtistSetKey("Matisse & Sadko") == ArtistSetKey("Matisse") {
+		t.Error("stripping went too far")
+	}
+}
+
+func TestIsCollectionCatchesSetsAndLongRecordings(t *testing.T) {
+	// A DJ set whose title says nothing about being one.
+	if !IsCollection("Tomorrowland 2016: The Elixir Of Life", "Continuous Mix 5", 1758191) {
+		t.Error("a 29-minute continuous mix is a set, not a track")
+	}
+	// Length alone is enough.
+	if !IsCollection("Some Long Thing", "", 20*60*1000) {
+		t.Error("a 20-minute recording is not a track")
+	}
+	// An ordinary song is not caught by either rule.
+	if IsCollection("Animals", "Original Mix", 302000) {
+		t.Error("a five-minute original mix is a track")
+	}
+}

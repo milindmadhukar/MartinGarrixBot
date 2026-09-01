@@ -245,7 +245,7 @@ UPDATE songs SET match_key = $2, base_key = $3
 WHERE id = $1 AND (match_key IS DISTINCT FROM $2 OR base_key IS DISTINCT FROM $3);
 
 -- name: GetSongsForKeying :many
-SELECT id, name, artists, mix_name FROM songs ORDER BY id;
+SELECT id, name, artists, mix_name, length_ms, is_collection FROM songs ORDER BY id;
 
 -- name: GetRandomSongForRadio :one
 -- Canonical rows only, so the rotation does not play six versions of one track, and
@@ -446,3 +446,11 @@ ORDER BY (apple_music_url IS NULL), id;
 -- name: SetSongArtwork :execrows
 UPDATE songs SET thumbnail_url = sqlc.narg(thumbnail_url)
 WHERE id = sqlc.arg(id) AND coalesce(thumbnail_url, '') = '';
+
+-- name: GetSongsToCheckForCollection :many
+-- Rows not yet known to be releases, that carry an Apple link we can ask about.
+SELECT id, name, artists, apple_music_url
+FROM songs
+WHERE NOT is_collection AND apple_music_url IS NOT NULL
+  AND apple_music_url NOT LIKE '%/playlist/%'
+ORDER BY id;

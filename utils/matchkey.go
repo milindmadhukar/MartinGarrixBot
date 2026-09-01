@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 	"unicode"
@@ -61,6 +62,12 @@ func NormalizeToken(s string) string {
 	return b.String()
 }
 
+// disambiguationSuffix matches the country tag beatport appends when two acts share
+// a name: "Brooks (NL)", "Carola (BR)", "Jonah (US)". It is not part of the name, and
+// keeping it split "Brooks" and "Brooks (NL)" into two different artists -- which in
+// turn gave "Boomerang" two rows that never matched each other.
+var disambiguationSuffix = regexp.MustCompile(`\s*\([A-Za-z]{2,3}\)\s*$`)
+
 // SplitArtists breaks a credit string into its individual artists.
 func SplitArtists(s string) []string {
 	// Lowercase only for separator detection; the separators are matched
@@ -72,6 +79,7 @@ func SplitArtists(s string) []string {
 
 	var out []string
 	for _, part := range strings.Split(work, "\x00") {
+		part = disambiguationSuffix.ReplaceAllString(strings.TrimSpace(part), "")
 		if n := NormalizeToken(part); n != "" {
 			out = append(out, n)
 		}
@@ -383,6 +391,32 @@ func RenditionsAgree(a, b string) bool {
 // an album, a remix package, a mixtape. The word-boundary check matters -- "EP" must
 // not fire on "Deep", "LP" must not fire on "Help".
 var collectionMarkers = []string{"ep", "album", "lp", "remixes", "mixtape", "festival edits"}
+
+// continuousMixMarkers name a recording that is a DJ set rather than a track. A
+// 29-minute "Tomorrowland 2016: The Elixir Of Life (Continuous Mix 5)" is a set, and
+// nothing in its title says so.
+var continuousMixMarkers = []string{"continuous mix", "dj mix", "mixed by", "live set", "mix cut"}
+
+// setLengthMs is the running time past which a recording is a set, not a song. The
+// longest genuine track in the catalogue is comfortably under a quarter of an hour.
+const setLengthMs = 15 * 60 * 1000
+
+// IsCollection reports whether a row is a release or a DJ set rather than a track,
+// using everything the row knows rather than its title alone.
+func IsCollection(name, mixName string, lengthMs int32) bool {
+	if IsCollectionName(name) {
+		return true
+	}
+
+	lower := strings.ToLower(mixName)
+	for _, marker := range continuousMixMarkers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+
+	return lengthMs > setLengthMs
+}
 
 // IsCollectionName reports whether a title names a release rather than a track.
 //

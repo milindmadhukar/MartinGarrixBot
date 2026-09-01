@@ -25,7 +25,7 @@ func main() {
 		script.Fatal("failed to load songs", err)
 	}
 
-	var changed, unchanged int
+	var changed, unchanged, flagged int
 	prog := script.NewProgress("rekey songs", len(rows))
 	for _, row := range rows {
 		prog.Step()
@@ -39,6 +39,28 @@ func main() {
 				slog.String("base_key", baseKey))
 			changed++
 			continue
+		}
+
+		// Collections are re-evaluated here too. The migration that first populated
+		// the flag could only look at the title, so a DJ set called "Tomorrowland
+		// 2016: The Elixir Of Life" was filed as a song -- its mix name and its
+		// 29-minute running time are what give it away.
+		if !row.IsCollection && utils.IsCollection(row.Name, row.MixName.String, row.LengthMs.Int32) {
+			if env.DryRun {
+				slog.Info("would flag as a collection",
+					slog.Int64("song_id", row.ID), slog.String("name", row.Name),
+					slog.String("mix", row.MixName.String))
+				flagged++
+			} else if n, err := env.Queries.SetSongCollection(ctx, db.SetSongCollectionParams{
+				ID: row.ID, IsCollection: true,
+			}); err != nil {
+				script.Fatal("failed to flag a collection", err)
+			} else if n > 0 {
+				flagged++
+				slog.Info("flagged as a collection",
+					slog.Int64("song_id", row.ID), slog.String("name", row.Name),
+					slog.String("mix", row.MixName.String))
+			}
 		}
 
 		n, err := env.Queries.SetSongKeys(ctx, db.SetSongKeysParams{
@@ -61,5 +83,6 @@ func main() {
 	slog.Info("Rekey complete",
 		slog.Int("total", len(rows)),
 		slog.Int("written", changed),
-		slog.Int("already_current", unchanged))
+		slog.Int("already_current", unchanged),
+		slog.Int("newly_flagged_as_collections", flagged))
 }

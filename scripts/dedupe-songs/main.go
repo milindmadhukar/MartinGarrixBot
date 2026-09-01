@@ -53,8 +53,8 @@ func dateOf(d pgtype.Text) string {
 }
 
 func main() {
-	maxGap := flag.Int("max-date-gap", 120,
-		"maximum days between two rows' release dates for them to be merged automatically")
+	maxGap := flag.Int("report-date-gap", 400,
+		"log a warning when merged rows' release dates differ by more than this many days")
 	reportPath := flag.String("report-suspects", "",
 		"write likely duplicates that are NOT safe to merge automatically to this CSV, and exit")
 
@@ -109,13 +109,21 @@ func main() {
 			continue
 		}
 
-		if gap, ok := dateGap(group); !ok || gap > *maxGap {
-			deferred++
-			slog.Warn("left alone: release dates disagree by too much to merge blind",
-				slog.String("match_key", key),
-				slog.Int("gap_days", gap),
+		// The date used to gate this, and it was the wrong authority. Three rows for
+		// "Together" -- identical artists, identical rendition, identical match_key --
+		// went untouched because one of them was dated nine months out, and the same
+		// happened to "Bouncybob". A match_key already encodes the artist set, the
+		// base title and the rendition; two rows sharing one are the same recording,
+		// and a date that disagrees is usually a compilation listing rather than
+		// evidence of a second release.
+		//
+		// The slug guard above is the authority that matters: where the catalogue
+		// says these are separate releases, they are left alone regardless of dates.
+
+		if gap, ok := dateGap(group); ok && gap > *maxGap {
+			slog.Warn("merging rows whose release dates differ widely",
+				slog.String("match_key", key), slog.Int("gap_days", gap),
 				slog.Any("rows", describe(group)))
-			continue
 		}
 
 		winner := pickWinner(group)

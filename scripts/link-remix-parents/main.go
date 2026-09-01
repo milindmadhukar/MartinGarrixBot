@@ -188,12 +188,12 @@ func chooseParent(rows []db.GetSongsForParentLinkingRow, group []int) int {
 		return -1
 	}
 
-	// A group whose best candidate is itself a named rendition has no original in
-	// the table. Inventing a parent from among the remixes would be arbitrary, so
-	// leave the whole group flat.
-	if storedVariant(rows[best]) != "" {
-		return -1
-	}
+	// A group whose best candidate is itself a rendition has no original in the
+	// table -- "Crash Land" exists only as a Sacha Robotti remix and a Rootkit remix.
+	// Leaving it flat means the song appears twice in autocomplete under the same
+	// name, which is the thing this pass exists to stop. Elect the best of them as
+	// the entry for the song: the sort above has already preferred the row with the
+	// catalogue's slug, the lyrics and the links, which is the one a listener means.
 	return best
 }
 
