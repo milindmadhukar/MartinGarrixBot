@@ -1,61 +1,82 @@
 # STMPD Bot
 
-A multipurpose Discord bot built for the STMPD RCRDS community.
+A multipurpose Discord bot for the STMPD RCRDS community, written in Go with
+[disgo](https://github.com/disgoorg/disgo).
 
-![STMPD Bot](https://cdn.discordapp.com/avatars/799613778052382720/28de7ee4e8cc26956e4bf45ecb730b79.webp?size=256 "STMPD Bot")
-CLI Flags:
-- `--config-path=your-config-path`: Path to the config file.
-- `--sync-commands=true`: Synchronize commands with the discord.
+![STMPD Bot](https://cdn.discordapp.com/avatars/799613778052382720/62742119975050bb40ab9b3ef9c0b322.png?size=256 "STMPD Bot")
 
-## Usage
+## Features
 
-1. Click on the `Use this template` button to create a new repository from this template.
-2. Clone the repository to your local machine.
-3. Open the project in your favorite IDE.
-4. Copy the `config.example.toml` file to `config.toml` and fill in the required fields.
-5. Run the bot using `go run .`
+Music and catalogue search, release and news notifications, a 24/7 radio,
+activity levels, a STMPD Coins economy, moderation with audit logging, and a web
+dashboard for per-guild configuration. See [FEATURES.md](FEATURES.md) for the
+full list.
+
+## Running it
+
+Requires Go 1.25+, PostgreSQL, and a [Lavalink](https://lavalink.dev) node for
+audio.
+
+```sh
+cp config.example.toml config.toml   # then fill in the required fields
+go run . --sync-commands
+```
+
+Database migrations run automatically at startup.
+
+### Flags
+
+Bot (`.`):
+
+- `-config` — path to the config file (default `config.toml`)
+- `-sync-commands` — register slash commands with Discord
+- `-clear-commands` — remove registered slash commands
+
+Dashboard (`./cmd/dashboard`):
+
+- `-config` — path to the config file (default `config.toml`)
+- `-dev` — re-parse templates from disk per request
+
+## Dashboard
+
+The dashboard is a separate binary sharing the same config file. It gates access
+behind Discord OAuth and is served at `bot.milind.dev` in production.
+
+```sh
+make tailwind     # rebuild dashboard/static/app.css (committed, go:embed-ed)
+make dashboard    # run locally with -dev
+```
 
 ## Configuration
 
-The configuration file is in TOML format. The format is as follows:
+TOML, documented inline in [config.example.toml](config.example.toml). It covers
+logging, the bot token and API keys, the database, Lavalink, notification
+sources (Beatport, Reddit, YouTube), and the dashboard's OAuth credentials.
 
-```toml
-[log]
-# valid levels are "debug", "info", "warn", "error"
-level = "info"
-# valid formats are "text" and "json"
-format = "text"
-# whether to add the log source to the log message
-add_source = true
-# log file name
-file = "stmpdbot.log"
-# max size in megabytes before log rotation
-max_size = 500
-# max age in days before log rotation
-max_age = 30
-# max number of log files to keep
-max_backups = 3
+## Development
 
-
-[bot]
-# add guild ids the commands should sync to, leave empty to sync globally
-dev_guilds = []
-# the bot token
-token = "your_token_here"
-# youtube api key
-yt_api_key = "yt_api_key_here"
-# google service json file path
-google_service_file = "/path/to/servicefile.json"
-
-[database]
-# db host
-host = "localhost"
-# db user
-user= "postgres"
-# db password
-password = "password"
-# db name
-name = "garrixbot"
-# db port
-port = 5432
+```sh
+make sqlc              # regenerate db/sqlc from db/query (Docker)
+make make_migration    # scaffold a migration pair in db/migrations
+make migrate_up        # apply migrations locally
+make lint              # golangci-lint
+go test ./...          # unit tests
+make test-integration  # integration tests; needs STMPD_TEST_DATABASE_URL
 ```
+
+Maintenance and backfill jobs live in [scripts/](scripts/README.md) as separate
+binaries rather than flags on the bot.
+
+## Deployment
+
+Pushes to `main` publish two images to GHCR, which the host picks up
+automatically:
+
+- `ghcr.io/milindmadhukar/stmpdbot:main`
+- `ghcr.io/milindmadhukar/stmpdbot-dashboard:main`
+
+`docker-compose.yml` runs the bot, the dashboard, and Lavalink behind Traefik.
+
+## License
+
+[Apache 2.0](LICENSE)
