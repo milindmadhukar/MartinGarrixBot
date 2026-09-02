@@ -76,11 +76,7 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			return err
 		}
 
-		lyrics := song.Lyrics.String
-
-		if len(lyrics) > 2048 {
-			lyrics = lyrics[:2048]
-		}
+		lyrics := truncateLyrics(song.Lyrics.String)
 
 		eb := discord.NewEmbed().
 			WithTitle(utils.SongHeading(song.Artists, song.Name, song.MixName.String)).
@@ -100,4 +96,25 @@ func LyricsHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			lyricsMessage,
 		)
 	}
+}
+
+// embedDescriptionLimit is Discord's cap on an embed description, in characters.
+// Exceeding it rejects the whole message rather than trimming it.
+const embedDescriptionLimit = 2048
+
+// truncateLyrics fits lyrics into an embed description.
+//
+// The cut is by rune, not by byte. Discord counts characters, so a byte slice both
+// trims more than it needs to and can land in the middle of a multi-byte rune -- which
+// renders as a replacement character at the end of every long non-ASCII song. That was
+// survivable while lyrics were 79 rows entered by hand; it is not now that the LRCLIB
+// backfill fills hundreds, a few of them past the limit.
+func truncateLyrics(lyrics string) string {
+	runes := []rune(lyrics)
+	if len(runes) <= embedDescriptionLimit {
+		return lyrics
+	}
+	// The ellipsis is worth a character of the budget: a song that simply stops
+	// mid-line reads as missing data rather than as trimmed.
+	return string(runes[:embedDescriptionLimit-1]) + "…"
 }
