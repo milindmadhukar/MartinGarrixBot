@@ -229,6 +229,13 @@ func splitTrailingVariant(title string) (rest, variant string) {
 
 // lastGroup returns the index range of the final (...) or [...] group in s.
 func lastGroup(s string) (open, close int) {
+	// An empty string has no group, and the check below cannot say so: LastIndexByte
+	// returns -1, len(s)-1 is also -1, so the "does it end with the closing bracket"
+	// test passes and s[:c] slices to -1 and panics.
+	if s == "" {
+		return -1, -1
+	}
+
 	for _, pair := range [][2]byte{{'(', ')'}, {'[', ']'}} {
 		c := strings.LastIndexByte(s, pair[1])
 		if c != len(s)-1 {
