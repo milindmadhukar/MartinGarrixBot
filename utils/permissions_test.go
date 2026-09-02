@@ -5,7 +5,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/snowflake/v2"
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 // In Discord the @everyone role shares its ID with the guild, which is how

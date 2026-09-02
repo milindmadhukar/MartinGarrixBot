@@ -13,7 +13,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/oauth2"
 	"github.com/disgoorg/snowflake/v2"
-	"github.com/milindmadhukar/MartinGarrixBot/dashboard/session"
+	"github.com/milindmadhukar/STMPDBot/dashboard/session"
 )
 
 // The OAuth handshake is the only place the dashboard talks to Discord
@@ -141,6 +141,23 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// No eligible guild means no session at all.
+	//
+	// This is the only gate on the dashboard now that Authelia no longer fronts
+	// it, so "signed in but with nothing to administer" is not a state worth
+	// having: it would hand a session cookie to anyone with a Discord account.
+	// Owners are exempt by definition -- applyEligibility gives them every guild
+	// the bot is in.
+	if len(sess.Eligible) == 0 {
+		slog.Warn("Dashboard login refused: no administered guilds",
+			slog.String("user_id", user.ID.String()),
+			slog.String("username", user.Username),
+			slog.Int("administered_elsewhere", len(sess.Missing)))
+
+		s.renderNoAccess(w, r, sess.Missing)
+		return
+	}
+
 	if err := s.sessions.Write(w, sess); err != nil {
 		s.serverError(w, r, err)
 		return
@@ -222,6 +239,33 @@ func (s *Server) applyEligibility(r *http.Request, sess *session.Session, userGu
 // guild, already accounting for role inheritance -- it must not be recomputed.
 func administers(g discord.OAuth2Guild) bool {
 	return g.Owner || g.Permissions.Has(discord.PermissionAdministrator)
+}
+
+// renderNoAccess explains a refused login without issuing a session.
+//
+// Someone who administers servers the bot has not been added to still gets the
+// invite link -- that is the one action that would make them eligible, and
+// offering it grants nothing.
+func (s *Server) renderNoAccess(w http.ResponseWriter, r *http.Request, missing []session.MissingGuild) {
+	invitable := make([]guildChoice, 0, len(missing))
+	for _, m := range missing {
+		invitable = append(invitable, guildChoice{
+			ID:        m.ID.String(),
+			Name:      m.Name,
+			Invitable: true,
+			InviteURL: inviteURL(s.opts.ClientID, m.ID),
+		})
+	}
+
+	p := s.newPage(r, "No access")
+	p.Bare = true
+	p.Data = map[string]any{
+		"Invitable": invitable,
+		"InviteURL": generalInviteURL(s.opts.ClientID),
+	}
+
+	w.WriteHeader(http.StatusForbidden)
+	s.render(w, r, "noaccess", "", p)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

@@ -11,8 +11,8 @@ import (
 	"github.com/disgoorg/disgo/oauth2"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/milindmadhukar/MartinGarrixBot/dashboard/session"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	"github.com/milindmadhukar/STMPDBot/dashboard/session"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 //go:embed templates
@@ -94,6 +94,9 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("GET /g/{guildID}/members", s.guildScoped(s.handleMemberLogs))
 	mux.Handle("GET /g/{guildID}/members/table", s.guildScoped(s.handleMemberLogs))
 	mux.Handle("GET /g/{guildID}/settings", s.guildScoped(s.handleSettings))
+	// requireCSRF composes INSIDE guildScoped: it reads the session that
+	// authed installs on the request context.
+	mux.Handle("POST /g/{guildID}/settings", s.guildScoped(s.requireCSRF(s.handleSettingsSave)))
 
 	return chain(mux,
 		s.recoverer,
@@ -144,7 +147,9 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.sessions.Read(r); err != nil {
-		s.render(w, r, "landing", "", s.newPage(r, "Sign in"))
+		p := s.newPage(r, "Sign in")
+		p.Bare = true
+		s.render(w, r, "landing", "", p)
 		return
 	}
 	http.Redirect(w, r, "/guilds", http.StatusSeeOther)

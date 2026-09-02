@@ -1,12 +1,15 @@
 {{define "page"}}
 <div class="flex flex-wrap items-baseline justify-between gap-3">
-  <h1 class="text-xl font-semibold text-white">Overview</h1>
+  <div>
+    <p class="stamp-label">Server</p>
+    <h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">Overview</h1>
+  </div>
   <nav class="flex gap-1 text-sm">
     {{$g := .GuildID}}{{$w := .Data.WindowDays}}
-    <a href="/g/{{$g}}?days=7"   class="rounded px-2 py-1 {{if eq $w 7}}bg-slate-800 text-white{{else}}text-slate-400 hover:text-slate-200{{end}}">7d</a>
-    <a href="/g/{{$g}}?days=30"  class="rounded px-2 py-1 {{if eq $w 30}}bg-slate-800 text-white{{else}}text-slate-400 hover:text-slate-200{{end}}">30d</a>
-    <a href="/g/{{$g}}?days=90"  class="rounded px-2 py-1 {{if eq $w 90}}bg-slate-800 text-white{{else}}text-slate-400 hover:text-slate-200{{end}}">90d</a>
-    <a href="/g/{{$g}}?days=365" class="rounded px-2 py-1 {{if eq $w 365}}bg-slate-800 text-white{{else}}text-slate-400 hover:text-slate-200{{end}}">1y</a>
+    <a href="/g/{{$g}}?days=7"   class="rounded-full px-2.5 py-1 {{if eq $w 7}}bg-mint-300/15 text-mint-100{{else}}text-slate-400 hover:text-slate-200{{end}}">7d</a>
+    <a href="/g/{{$g}}?days=30"  class="rounded-full px-2.5 py-1 {{if eq $w 30}}bg-mint-300/15 text-mint-100{{else}}text-slate-400 hover:text-slate-200{{end}}">30d</a>
+    <a href="/g/{{$g}}?days=90"  class="rounded-full px-2.5 py-1 {{if eq $w 90}}bg-mint-300/15 text-mint-100{{else}}text-slate-400 hover:text-slate-200{{end}}">90d</a>
+    <a href="/g/{{$g}}?days=365" class="rounded-full px-2.5 py-1 {{if eq $w 365}}bg-mint-300/15 text-mint-100{{else}}text-slate-400 hover:text-slate-200{{end}}">1y</a>
   </nav>
 </div>
 
@@ -18,7 +21,7 @@
     <div hx-get="/g/{{$.GuildID}}/panels/{{.}}?days={{$.Data.WindowDays}}"
          hx-trigger="load"
          hx-swap="outerHTML">
-      <div class="h-28 animate-pulse rounded-lg border border-slate-800 bg-slate-900/30"></div>
+      <div class="h-28 animate-pulse rounded-lg border border-white/10 bg-white/[0.02]"></div>
     </div>
   {{end}}
 </div>
@@ -42,21 +45,21 @@
 {{end}}
 
 {{define "stat"}}
-<div class="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-3">
+<div class="panel px-3 py-3">
   <div class="text-xs text-slate-500">{{.Label}}</div>
   <div class="mt-1 text-lg font-semibold text-slate-100 sm:text-xl">{{.Value}}</div>
 </div>
 {{end}}
 
 {{define "panel-growth"}}
-<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
+<section class="panel p-3 sm:p-4">
   <div class="flex items-baseline justify-between">
-    <h2 class="text-sm font-medium text-slate-300">Member growth</h2>
+    <h2 class="stamp-label">Member growth</h2>
     {{if .Data.Totals}}
       <span class="text-xs text-slate-500">
-        <span class="text-emerald-400">+{{comma .Data.Totals.Joins}}</span> /
+        <span class="text-mint-300">+{{comma .Data.Totals.Joins}}</span> /
         <span class="text-red-400">-{{comma .Data.Totals.Leaves}}</span> ·
-        net <span class="{{if lt .Data.Net 0}}text-red-400{{else}}text-emerald-400{{end}}">{{comma .Data.Net}}</span>
+        net <span class="{{if lt .Data.Net 0}}text-red-400{{else}}text-mint-300{{end}}">{{comma .Data.Net}}</span>
       </span>
     {{end}}
   </div>
@@ -71,8 +74,8 @@
       {{range .Data.Series}}
         <div class="group relative flex h-full flex-1 flex-col justify-end gap-px"
              title="{{fmtDate .Day}} · +{{.Joins}} / -{{.Leaves}}">
-          <div class="w-full rounded-t-sm bg-emerald-500/70" style="height: {{pct .Joins $max}}%"></div>
-          <div class="w-full rounded-b-sm bg-red-500/60" style="height: {{pct .Leaves $max}}%"></div>
+          <div class="w-full rounded-t-sm bg-mint-300" style="height: {{pct .Joins $max}}%"></div>
+          <div class="w-full rounded-b-sm bg-red-400/60" style="height: {{pct .Leaves $max}}%"></div>
         </div>
       {{end}}
     </div>
@@ -87,14 +90,14 @@
 {{end}}
 
 {{define "panel-messages"}}
-<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
-  <h2 class="text-sm font-medium text-slate-300">Message activity</h2>
+<section class="panel p-3 sm:p-4">
+  <h2 class="stamp-label">Message activity</h2>
   {{if .Data.Error}}{{template "panelError" .Data.Error}}
   {{else if .Data.Series}}
     <div class="mt-4 flex h-24 items-end gap-px sm:h-32">
       {{$max := .Data.Max}}
       {{range .Data.Series}}
-        <div class="flex-1 rounded-t-sm bg-indigo-500/70"
+        <div class="flex-1 rounded-t-sm bg-mint-300/80"
              style="height: {{pct .Messages $max}}%"
              title="{{fmtDate .Day}} · {{comma .Messages}} messages from {{comma .ActiveAuthors}} members"></div>
       {{end}}
@@ -111,8 +114,8 @@
 {{end}}
 
 {{define "panel-heatmap"}}
-<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
-  <h2 class="text-sm font-medium text-slate-300">When the server is busy</h2>
+<section class="panel p-3 sm:p-4">
+  <h2 class="stamp-label">When the server is busy</h2>
   {{if .Data.Error}}{{template "panelError" .Data.Error}}
   {{else if .Data.Peak}}
     <div class="mt-4 overflow-x-auto">
@@ -123,7 +126,7 @@
             {{index (list "Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat") $dow}}
           </span>
           {{range $row}}
-            <span class="h-3.5 flex-1 rounded-sm bg-indigo-400"
+            <span class="h-3.5 flex-1 rounded-sm bg-mint-300"
                   style="opacity: {{if .Intensity}}{{.Intensity}}{{else}}4{{end}}%"
                   title="{{.Hour}}:00 · {{comma .Messages}} messages"></span>
           {{end}}
@@ -145,8 +148,8 @@
 {{end}}
 
 {{define "panel-channels"}}
-<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
-  <h2 class="text-sm font-medium text-slate-300">Busiest channels</h2>
+<section class="panel p-3 sm:p-4">
+  <h2 class="stamp-label">Busiest channels</h2>
   {{if .Data.Error}}{{template "panelError" .Data.Error}}
   {{else if .Data.Channels}}
     <ul class="mt-3 space-y-2">
@@ -157,7 +160,7 @@
             <span class="text-slate-300">{{.Name}}</span>
             <span class="text-slate-500">{{comma .Messages}}</span>
           </div>
-          {{template "bar" dict "Pct" (pct .Messages $top) "Color" "bg-indigo-500/70"}}
+          {{template "bar" dict "Pct" (pct .Messages $top) "Color" "bg-mint-300/80"}}
         </li>
       {{end}}
     </ul>
@@ -168,16 +171,16 @@
 {{end}}
 
 {{define "panel-members"}}
-<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
+<section class="panel p-3 sm:p-4">
   <div class="flex items-baseline justify-between">
-    <h2 class="text-sm font-medium text-slate-300">Top members</h2>
+    <h2 class="stamp-label">Top members</h2>
     <nav class="flex gap-1 text-xs">
       {{$g := .GuildID}}{{$w := .Data.WindowDays}}{{$s := .Data.Sort}}
       {{range $tab := list (dict "Key" "xp" "Label" "XP") (dict "Key" "coins" "Label" "Coins") (dict "Key" "messages" "Label" "Messages")}}
         <a hx-get="/g/{{$g}}/panels/members?days={{$w}}&amp;sort={{$tab.Key}}"
            hx-target="closest section" hx-swap="outerHTML"
            href="/g/{{$g}}?days={{$w}}"
-           class="cursor-pointer rounded px-2 py-0.5 {{if eq $s $tab.Key}}bg-slate-800 text-white{{else}}text-slate-400 hover:text-slate-200{{end}}">{{$tab.Label}}</a>
+           class="cursor-pointer rounded px-2 py-0.5 {{if eq $s $tab.Key}}bg-mint-300/15 text-mint-100{{else}}text-slate-400 hover:text-slate-200{{end}}">{{$tab.Label}}</a>
       {{end}}
     </nav>
   </div>
@@ -205,13 +208,13 @@
 {{end}}
 
 {{define "panel-moderation"}}
-<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
-  <h2 class="text-sm font-medium text-slate-300">Moderation</h2>
+<section class="panel p-3 sm:p-4">
+  <h2 class="stamp-label">Moderation</h2>
   {{if .Data.Error}}{{template "panelError" .Data.Error}}
   {{else if .Data.ByType}}
     <div class="mt-3 grid gap-6 lg:grid-cols-2">
       <div>
-        <h3 class="text-xs uppercase tracking-wide text-slate-600">By action</h3>
+        <h3 class="stamp-muted">By action</h3>
         <ul class="mt-2 space-y-2">
           {{$max := .Data.MaxType}}
           {{range .Data.ByType}}
@@ -220,14 +223,14 @@
                 <span>{{template "logTypeBadge" .LogType}}</span>
                 <span class="text-slate-500">{{comma .Count}}</span>
               </div>
-              {{template "bar" dict "Pct" (pct .Count $max) "Color" "bg-amber-500/70"}}
+              {{template "bar" dict "Pct" (pct .Count $max) "Color" "bg-mint-300/50"}}
             </li>
           {{end}}
         </ul>
       </div>
 
       <div>
-        <h3 class="text-xs uppercase tracking-wide text-slate-600">Most active moderators</h3>
+        <h3 class="stamp-muted">Most active moderators</h3>
         {{if .Data.Moderators}}
           <ul class="mt-2 space-y-1.5">
             {{range .Data.Moderators}}
@@ -252,11 +255,11 @@
 {{end}}
 
 {{define "panel-punishments"}}
-<section class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 sm:p-4">
-  <h2 class="text-sm font-medium text-slate-300">Active punishments</h2>
+<section class="panel p-3 sm:p-4">
+  <h2 class="stamp-label">Active punishments</h2>
   {{if .Data.Error}}{{template "panelError" .Data.Error}}
   {{else if .Data.Punishments}}
-    <ul class="mt-3 divide-y divide-slate-800">
+    <ul class="mt-3 divide-y divide-white/10">
       {{range .Data.Punishments}}
         <li class="flex items-center gap-3 py-2 text-sm">
           {{template "logTypeBadge" .LogType}}

@@ -39,6 +39,8 @@ type Guild struct {
 	AnniversaryNotificationsRole    pgtype.Int8 `json:"anniversaryNotificationsRole"`
 	AnniversaryHour                 int32       `json:"anniversaryHour"`
 	AnniversaryTimezone             string      `json:"anniversaryTimezone"`
+	VoiceLogsChannel                pgtype.Int8 `json:"voiceLogsChannel"`
+	MemberLogsChannel               pgtype.Int8 `json:"memberLogsChannel"`
 }
 
 type JoinLeaveLog struct {
@@ -69,6 +71,7 @@ type Modlog struct {
 	GuildID     int64            `json:"guildId"`
 	ExpiresAt   pgtype.Timestamp `json:"expiresAt"`
 	Active      pgtype.Bool      `json:"active"`
+	AuditLogID  pgtype.Int8      `json:"auditLogId"`
 }
 
 type RedditPost struct {
@@ -154,7 +157,7 @@ type User struct {
 	MessagesSent pgtype.Int4      `json:"messagesSent"`
 	TotalXp      pgtype.Int4      `json:"totalXp"`
 	LastXpAdded  pgtype.Timestamp `json:"lastXpAdded"`
-	GarrixCoins  pgtype.Int8      `json:"garrixCoins"`
+	StmpdCoins   pgtype.Int8      `json:"stmpdCoins"`
 	InHand       pgtype.Int8      `json:"inHand"`
 	GuildID      int64            `json:"guildId"`
 }

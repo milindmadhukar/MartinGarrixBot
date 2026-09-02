@@ -1,4 +1,4 @@
-This is a Martin Garrix / STMPD RCRDS Community based puropse-built discord bot written in Golang with the help of Disgo package.
+This is a purpose-built Discord bot for the STMPD RCRDS community, written in Golang with the help of the Disgo package.
 Imporant commands handling migrations, sqlc generation are in the Makefile
 
 Listeners will always go in the listeners/ folder

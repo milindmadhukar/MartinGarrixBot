@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/snowflake/v2"
-	"github.com/milindmadhukar/MartinGarrixBot/dashboard/session"
+	"github.com/milindmadhukar/STMPDBot/dashboard/session"
 )
 
 // TestAdministers pins the permission rule. Getting this wrong in either
@@ -86,13 +87,13 @@ func botAPIStub(t *testing.T, guilds []BotGuild) *BotAPI {
 
 func TestApplyEligibility(t *testing.T) {
 	botGuilds := []BotGuild{
-		{ID: "100", Name: "Garrix"},
+		{ID: "100", Name: "STMPD RCRDS"},
 		{ID: "200", Name: "STMPD"},
 	}
 
 	userGuilds := []discord.OAuth2Guild{
 		// Administered and the bot is present: eligible.
-		{ID: 100, Name: "Garrix", Permissions: discord.PermissionAdministrator},
+		{ID: 100, Name: "STMPD RCRDS", Permissions: discord.PermissionAdministrator},
 		// Administered but the bot is absent: invitable, not eligible.
 		{ID: 300, Name: "Somewhere else", Owner: true},
 		// Bot is present but the user is only a member: neither.
@@ -313,4 +314,56 @@ func TestHtmxUnauthorizedUsesHXRedirect(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d; htmx only acts on HX-Redirect with a 2xx", w.Code)
 	}
+}
+
+// TestNoAccessPageRenders covers the refusal path that now replaces Authelia as
+// the outer gate. A refused login must render a real page and, critically, must
+// not have issued a session cookie on the way.
+func TestNoAccessPageRenders(t *testing.T) {
+	opts := testOptions(t)
+	opts.SessionSecret = "0123456789abcdef0123456789abcdef"
+	opts.SessionTTL = time.Hour
+	opts.ClientID = "799613778052382720"
+
+	renderer, err := newRenderer(opts, false)
+	if err != nil {
+		t.Fatalf("newRenderer: %v", err)
+	}
+	s := &Server{
+		opts:     opts,
+		renderer: renderer,
+		sessions: session.NewCodec(opts.SessionSecret, opts.SessionTTL, false),
+	}
+
+	t.Run("with invitable guilds", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.renderNoAccess(w, httptest.NewRequest(http.MethodGet, "/auth/callback", nil),
+			[]session.MissingGuild{{ID: 123, Name: "Somewhere"}})
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403", w.Code)
+		}
+		body := w.Body.String()
+		if !strings.Contains(body, "Somewhere") {
+			t.Error("the administered-but-bot-absent guild was not offered an invite")
+		}
+		if len(w.Result().Cookies()) != 0 {
+			t.Fatal("a refused login must not set any cookie")
+		}
+	})
+
+	t.Run("with nothing at all", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		s.renderNoAccess(w, httptest.NewRequest(http.MethodGet, "/auth/callback", nil), nil)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("status = %d, want 403", w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "Add the bot to a server") {
+			t.Error("expected the generic invite fallback")
+		}
+		if len(w.Result().Cookies()) != 0 {
+			t.Fatal("a refused login must not set any cookie")
+		}
+	})
 }

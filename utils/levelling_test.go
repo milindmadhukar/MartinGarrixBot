@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 // maxSafeLevel bounds every property below. GetTotalXp accumulates into an

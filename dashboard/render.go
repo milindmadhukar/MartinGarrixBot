@@ -2,6 +2,8 @@ package dashboard
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -27,6 +29,7 @@ type renderer struct {
 // and the shared partials, so a page can override any block the layout defines.
 var pageFiles = []string{
 	"landing",
+	"noaccess",
 	"guilds",
 	"overview",
 	"modlogs",
@@ -128,6 +131,10 @@ type pageData struct {
 	GuildName string
 	GuildIcon string
 
+	// Bare drops the header and footer. The sign-in and refused-access screens
+	// own the whole viewport and have no navigation to carry.
+	Bare bool
+
 	// Degraded is set when the bot's internal API could not be reached, so the
 	// layout can explain why names are missing instead of the page just looking
 	// broken.
@@ -215,6 +222,9 @@ func (r *renderer) funcs() template.FuncMap {
 			return parsed.Time().In(r.opts.Location).Format("2006-01-02")
 		},
 		"avatarURL": avatarURL,
+		// asset appends a content hash so a redeploy cannot be shadowed by a
+		// cached copy of the previous build. See assetVersion.
+		"asset": assetURL,
 		// comma takes any so templates can pass the int, int32 and int64 that
 		// the generated row structs mix freely.
 		"comma": commaAny,
@@ -326,4 +336,44 @@ func humanDuration(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%dmo ago", int(d.Hours()/24/30))
 	}
+}
+
+// assetVersions maps each embedded static file to a short hash of its contents.
+//
+// Static assets are served with a long max-age and Cloudflare extends that
+// further, so a stable filename means a CSS change stays invisible for hours
+// after a deploy -- the page renders with the previous build's stylesheet, which
+// on a redesign means unstyled or, worse, white text on a white background.
+// Hashing the bytes into the URL makes a changed asset a different URL, so no
+// cache anywhere can serve the old one for the new HTML.
+var assetVersions = buildAssetVersions()
+
+func buildAssetVersions() map[string]string {
+	out := map[string]string{}
+
+	entries, err := staticFS.ReadDir("static")
+	if err != nil {
+		return out
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		data, err := staticFS.ReadFile("static/" + entry.Name())
+		if err != nil {
+			continue
+		}
+		sum := sha256.Sum256(data)
+		out["/static/"+entry.Name()] = hex.EncodeToString(sum[:])[:10]
+	}
+	return out
+}
+
+// assetURL returns the path with its content hash attached. An unknown path is
+// returned unchanged rather than failing the render.
+func assetURL(path string) string {
+	if version, ok := assetVersions[path]; ok {
+		return path + "?v=" + version
+	}
+	return path
 }

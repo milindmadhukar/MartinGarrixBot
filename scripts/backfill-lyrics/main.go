@@ -18,7 +18,7 @@
 // Idempotent: a row that has words is never asked about again, and one LRCLIB has
 // nothing for is retired after four misses on a widening schedule.
 //
-// Requires migrations through 000020, and rekey-songs -- LRCLIB is queried with
+// Requires migrations through 000022, and rekey-songs -- LRCLIB is queried with
 // songs.normalized_name, because it indexes titles and not credit strings.
 package main
 
@@ -26,8 +26,8 @@ import (
 	"errors"
 	"log/slog"
 
-	"github.com/milindmadhukar/MartinGarrixBot/scripts/internal/script"
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	"github.com/milindmadhukar/STMPDBot/scripts/internal/script"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 // sweepLimit bounds one run. Comfortably above the whole backlog, so it is a runaway

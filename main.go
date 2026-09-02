@@ -19,10 +19,10 @@ import (
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/handler"
 	"github.com/disgoorg/snowflake/v2"
-	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
-	"github.com/milindmadhukar/MartinGarrixBot/mgbot/commands"
-	"github.com/milindmadhukar/MartinGarrixBot/mgbot/handlers"
-	"github.com/milindmadhukar/MartinGarrixBot/mgbot/listeners"
+	"github.com/milindmadhukar/STMPDBot/stmpdbot"
+	"github.com/milindmadhukar/STMPDBot/stmpdbot/commands"
+	"github.com/milindmadhukar/STMPDBot/stmpdbot/handlers"
+	"github.com/milindmadhukar/STMPDBot/stmpdbot/listeners"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
 )
@@ -53,17 +53,17 @@ func main() {
 	shouldClearCommands := flag.Bool("clear-commands", false, "Whether to clear commands from discord")
 	flag.Parse()
 
-	cfg, err := mgbot.LoadConfig(*path)
+	cfg, err := stmpdbot.LoadConfig(*path)
 	if err != nil {
 		slog.Error("Failed to read config", slog.Any("err", err))
 		os.Exit(-1)
 	}
 
-	mgbot.SetupLogger(cfg.Log)
-	slog.Info("Starting Martin Garrix Bot..", slog.String("version", Version), slog.String("commit", Commit))
+	stmpdbot.SetupLogger(cfg.Log)
+	slog.Info("Starting STMPD Bot..", slog.String("version", Version), slog.String("commit", Commit))
 	slog.Info("Syncing commands", slog.Bool("sync", *shouldSyncCommands))
 
-	b := mgbot.New(*cfg, Version, Commit)
+	b := stmpdbot.New(*cfg, Version, Commit)
 
 	// TODO: Disable app commands in DMs
 	h := commands.SetupHandlers(b)
@@ -116,6 +116,15 @@ func main() {
 		listeners.GuildMemberLeaveListener(b),
 		listeners.MessageDeleteListener(b),
 		listeners.MessageUpdateListener(b),
+		// Records kicks, bans and timeouts performed through Discord's own UI
+		// into the same modlogs table as the /moderation commands.
+		listeners.GuildAuditLogListener(b),
+		// Voice and profile changes relay to their configured channels and are
+		// never persisted, so they add no tables and no retention problem.
+		listeners.VoiceLogJoinListener(b),
+		listeners.VoiceLogLeaveListener(b),
+		listeners.VoiceLogMoveListener(b),
+		listeners.GuildMemberProfileListener(b),
 	); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
 		os.Exit(-1)

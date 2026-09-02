@@ -1,4 +1,4 @@
-module github.com/milindmadhukar/MartinGarrixBot
+module github.com/milindmadhukar/STMPDBot
 
 go 1.25.0
 

@@ -2,13 +2,14 @@ package dashboard
 
 import (
 	"context"
+	"crypto/hmac"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"time"
 
 	"github.com/disgoorg/snowflake/v2"
-	"github.com/milindmadhukar/MartinGarrixBot/dashboard/session"
+	"github.com/milindmadhukar/STMPDBot/dashboard/session"
 )
 
 type ctxKey int
@@ -80,13 +81,21 @@ func (s *Server) requestLogger(next http.Handler) http.Handler {
 }
 
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
-	// htmx is the only script and it is served from this origin, so no
-	// 'unsafe-inline' is needed. That is why chart data is passed through data-
-	// attributes and JSON script blocks rather than inline JavaScript.
+	// script-src stays strict: htmx is the only script and it is served from
+	// this origin, so no inline JavaScript is ever needed.
+	//
+	// style-src MUST keep 'unsafe-inline'. Under CSP2+ that keyword governs
+	// inline style ATTRIBUTES as well as <style> blocks, and every chart on this
+	// dashboard sizes itself with one -- bar widths, column heights, heatmap
+	// opacity. Without it the browser silently drops all three: bars render
+	// full-width, columns render zero-height, and every heatmap cell comes out
+	// identical. That shipped once already, and curl cannot catch it because
+	// curl does not enforce CSP. See TestCSPAllowsInlineStyles.
+	//
 	// cdn.discordapp.com is required for avatars and guild icons.
 	const csp = "default-src 'self'; " +
 		"img-src 'self' https://cdn.discordapp.com data:; " +
-		"style-src 'self'; script-src 'self'; " +
+		"style-src 'self' 'unsafe-inline'; script-src 'self'; " +
 		"form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +173,10 @@ func (s *Server) requireCSRF(next http.HandlerFunc) http.HandlerFunc {
 		if token == "" {
 			token = r.FormValue("csrf_token")
 		}
-		if token == "" || token != sess.CSRF {
+		// Constant time: a plain != leaks the length of the matching prefix to
+		// anything that can time the response, which is enough to recover the
+		// token a character at a time.
+		if token == "" || !hmac.Equal([]byte(token), []byte(sess.CSRF)) {
 			s.renderError(w, r, http.StatusForbidden, "Session expired",
 				"Please reload the page and try again.")
 			return

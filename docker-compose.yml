@@ -1,7 +1,7 @@
 services:
   lavalink:
     image: ghcr.io/lavalink-devs/lavalink:4-alpine
-    container_name: martingarrix-lavalink
+    container_name: stmpd-lavalink
     labels:
       # Pinned to the 4.x line: WUD reports, never applies.
       - "wud.trigger.exclude=docker.local"
@@ -27,16 +27,16 @@ services:
       # the only record of a YouTube breakage is whatever the bot happens to log, which
       # is how the 2026-08-18 TV-client outage went undiagnosed for ten days.
       # The container runs as uid 322, so the host dir must be writable by it:
-      #   docker exec -u 0 martingarrix-lavalink chown 322:65533 /opt/Lavalink/logs
+      #   docker exec -u 0 stmpd-lavalink chown 322:65533 /opt/Lavalink/logs
       - ./lavalink/logs/:/opt/Lavalink/logs/
       - /usr/lib/x86_64-linux-gnu/libudev.so.1:/usr/lib/x86_64-linux-gnu/libudev.so.1:ro
     networks:
-      - garrixbot
+      - stmpdbot
     expose:
       - 2333
   bot:
-    image: ghcr.io/milindmadhukar/martingarrixbot:main
-    container_name: martingarrixbot
+    image: ghcr.io/milindmadhukar/stmpdbot:main
+    container_name: stmpdbot
     labels:
       # Rolling tag (:main): not semver, so digest watching is what makes it
       # visible to WUD at all. With no trigger.exclude, docker.local auto-applies
@@ -44,8 +44,8 @@ services:
       - "wud.watch.digest=true"
     volumes:
       - ./config.docker.toml:/var/lib/config.toml
-      - ./mgbot-google-service.json:/etc/secrets/mgbot-google-service.json
-      - ./garrixbot.log:/bot/garrixbot.log
+      - ./stmpd-google-service.json:/etc/secrets/stmpd-google-service.json
+      - ./stmpdbot.log:/bot/stmpdbot.log
     command: -config=/var/lib/config.toml --sync-commands=true
     # The host clock is UTC and stays that way; every service on it declares its own
     # display timezone, which is how frappe, traefik, authelia and wud are set up.
@@ -53,18 +53,18 @@ services:
       - TZ=Asia/Kolkata
     restart: unless-stopped
     networks:
-      - garrixbot
+      - stmpdbot
       - db
     depends_on:
       - lavalink
     expose:
       # Internal control plane for the dashboard. expose, not ports: it is
-      # reachable on the garrixbot network only and must never be published.
+      # reachable on the stmpdbot network only and must never be published.
       - 8082
 
   dashboard:
-    image: ghcr.io/milindmadhukar/martingarrixbot-dashboard:main
-    container_name: martingarrixbot-dashboard
+    image: ghcr.io/milindmadhukar/stmpdbot-dashboard:main
+    container_name: stmpdbot-dashboard
     volumes:
       # The same file the bot reads. The database credentials and the
       # internal-API shared secret therefore exist exactly once; the dashboard
@@ -75,7 +75,7 @@ services:
       - TZ=Asia/Kolkata
     restart: unless-stopped
     networks:
-      - garrixbot      # reaches the bot's internal API
+      - stmpdbot           # reaches the bot's internal API
       - db             # reaches postgres
       - reverse_proxy  # reached by traefik
     depends_on:
@@ -86,24 +86,27 @@ services:
       - 8080
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.garrixdashboard.rule=Host(`bot.milind.dev`)"
-      - "traefik.http.routers.garrixdashboard.entrypoints=websecure"
-      - "traefik.http.routers.garrixdashboard.tls=true"
-      - "traefik.http.routers.garrixdashboard.tls.certresolver=milindresolver"
-      # Authelia in front of the dashboard's own Discord login. The two are not
-      # redundant: Authelia decides who may reach the box at all, the Discord
-      # login decides which guilds they may see once here. authelia's
-      # access_control already covers *.milind.dev with two_factor, so this
-      # host needs no rule of its own.
-      - "traefik.http.routers.garrixdashboard.middlewares=authelia@docker"
-      - "traefik.http.services.garrixdashboard.loadbalancer.server.port=8080"
+      - "traefik.http.routers.stmpddashboard.rule=Host(`bot.milind.dev`)"
+      - "traefik.http.routers.stmpddashboard.entrypoints=websecure"
+      - "traefik.http.routers.stmpddashboard.tls=true"
+      - "traefik.http.routers.stmpddashboard.tls.certresolver=milindresolver"
+      # No authelia middleware here, unlike the other services on this host.
+      # Discord OAuth is the gate: the callback refuses to issue a session to
+      # anyone who does not administer a server the bot is in, so an Authelia
+      # login in front of it only blocked the very admins it exists for -- they
+      # would need an account on this box as well as the Discord permission.
+      #
+      # That makes the eligibility check in oauth.go security-critical rather
+      # than cosmetic. It fails closed: if the bot cannot be reached to say
+      # which guilds it is in, no session is issued at all.
+      - "traefik.http.services.stmpddashboard.loadbalancer.server.port=8080"
       # Same rolling-tag digest watch as the bot, so a push to main redeploys
       # both halves the same way.
       - "wud.watch.digest=true"
 
 networks:
-  garrixbot:
-    name: garrixbot
+  stmpdbot:
+    name: stmpdbot
   db:
     external: true
   reverse_proxy:

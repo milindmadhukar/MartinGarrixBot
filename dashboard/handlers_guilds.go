@@ -18,9 +18,26 @@ type guildChoice struct {
 	InviteURL string
 }
 
-// botInvitePermissions is what the bot needs to do its job: manage roles, kick,
-// ban, moderate members, read and send messages, and connect to voice for radio.
-const botInvitePermissions = "1101927878150"
+// botInvitePermissions is what the bot needs to do its job.
+//
+// The previous value (1101927878150) was missing four permissions the bot
+// actually depends on, all of which fail silently rather than loudly:
+//
+//   - VIEW_AUDIT_LOG (0x80) gates delivery of GUILD_AUDIT_LOG_ENTRY_CREATE
+//     entirely. Without it the bot never sees moderation done through Discord's
+//     own UI, and the moderation log just reads zero.
+//   - MODERATE_MEMBERS (0x400000000) is what /moderation mute needs: it applies
+//     a native Discord timeout via CommunicationDisabledUntil.
+//   - CONNECT and SPEAK (0x100000, 0x200000) are what the radio needs to join a
+//     voice channel at all.
+//
+// Also added: MANAGE_MESSAGES (the bot deletes legacy `mg.` prefix messages),
+// EMBED_LINKS and ATTACH_FILES (embeds and rank cards).
+//
+// This only affects NEW invites. A guild that added the bot earlier keeps
+// whatever it granted then, which is why the moderation page checks the bot's
+// live permissions and says so when View Audit Log is missing.
+const botInvitePermissions = "1119110950534"
 
 func (s *Server) handleGuildList(w http.ResponseWriter, r *http.Request) {
 	sess, _ := sessionFrom(r.Context())
@@ -74,6 +91,15 @@ func (s *Server) handleGuildList(w http.ResponseWriter, r *http.Request) {
 		"Owner":     sess.Owner,
 	}
 	s.render(w, r, "guilds", "", p)
+}
+
+// generalInviteURL is the invite with no guild preselected, for the refused
+// login page where there may be no particular server to point at.
+func generalInviteURL(clientID string) string {
+	return "https://discord.com/oauth2/authorize" +
+		"?client_id=" + clientID +
+		"&scope=bot%20applications.commands" +
+		"&permissions=" + botInvitePermissions
 }
 
 func inviteURL(clientID string, guildID snowflake.ID) string {

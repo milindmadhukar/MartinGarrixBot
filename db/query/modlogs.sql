@@ -68,3 +68,16 @@ WHERE user_id = $1
   AND active = true 
   AND expires_at > NOW()
 LIMIT 1;
+
+-- name: CreateModlogFromAudit :exec
+-- Insert a moderation action observed through Discord's audit log.
+--
+-- ON CONFLICT DO NOTHING against the partial unique index on audit_log_id:
+-- Discord can redeliver a gateway event, and replaying one must not create a
+-- second identical case.
+INSERT INTO modlogs (
+    user_id, moderator_id, guild_id, log_type, reason, expires_at, active, audit_log_id
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8
+)
+ON CONFLICT (audit_log_id) WHERE audit_log_id IS NOT NULL DO NOTHING;

@@ -52,7 +52,7 @@ credits those people, and the rows this exists for are exactly the ones where it
 not — "Sun Is Never Going Down (feat. Dawn Golden)" is credited to Martin Garrix
 alone.
 
-- **Requires:** migrations `000011_add_match_keys` and `000019_normalized_song_name`
+- **Requires:** migrations `000011_add_match_keys` and `000021_normalized_song_name`
 - **Idempotent:** yes — rows whose values already match are not written
 - **Writes:** `match_key`, `base_key`, `normalized_name`, `is_collection`, and
   occasionally `name`/`mix_name`
@@ -212,7 +212,7 @@ do not exist.
 Filling a canonical row fans the words out to its renditions via `CopyLyricsToRemixes`,
 so a song's twelve remixes are not twelve separate lookups for the same answer.
 
-- **Requires:** migration `000020_lrclib_lyrics`, and `rekey-songs` (see Order above)
+- **Requires:** migration `000022_lrclib_lyrics`, and `rekey-songs` (see Order above)
 - **Idempotent:** yes — a row with words is never asked about again, and one LRCLIB has
   nothing for is retired after four misses on a widening schedule (7 days, 28, 112, 448)
 - **Writes:** `lyrics` (only where NULL — hand-entered words are never overwritten),
@@ -242,9 +242,32 @@ that way turned out to be a class rather than a row — one wrongly flagged coll
 was hiding twenty-seven songs from search — so the useful unit of work is the
 invariant.
 
+### `backfill-modlogs`
+
+Imports historical moderation from Discord's audit log into `modlogs`, so the
+dashboard's moderation page is not empty on the day the audit-log listener ships.
+
+- **Requires:** the bot's role has **View Audit Log** in the guild; `-guild=<id>`
+- **Writes:** `modlogs` rows carrying `audit_log_id`
+- **Exit:** 0 on success; the summary reports `inserted` and `entries_seen`
+
+```
+go run ./scripts/backfill-modlogs -config=config.toml -guild=690950056202731521 -dry-run
+go run ./scripts/backfill-modlogs -config=config.toml -guild=690950056202731521
+```
+
+Discord retains roughly 45 days of audit history, so this is a one-shot catch-up
+rather than a full archive; everything after it is captured live by the listener.
+Safe to re-run — rows are keyed on the audit entry ID and inserted with
+`ON CONFLICT DO NOTHING`, so a second pass over the same window writes nothing.
+
+Entries whose executor is the bot itself are skipped: the `/moderation` command
+that performed them already wrote a row naming the human moderator, and importing
+the audit entry too would double-count the action and attribute it to the bot.
+
 ## Running against production
 
-The bot on `limitless` runs from `~/MartinGarrixBot` against the shared
+The bot on `limitless` runs from `~/STMPDBot` against the shared
 `postgres-db-1` container. The scripts are not in the deployed image (the Dockerfile
 builds only the bot binary), and there is no Go toolchain on the server — so run them
 from a local checkout. Postgres is published on the host's Tailscale address, so no
@@ -255,7 +278,7 @@ tunnel is needed:
 [database]
 host = "100.74.136.119"
 user = "postgres"
-password = "<the password from ~/MartinGarrixBot/config.docker.toml>"
+password = "<the password from ~/STMPDBot/config.docker.toml>"
 name = "garrixbot"
 port = 5432
 ```

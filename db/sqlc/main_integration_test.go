@@ -5,7 +5,7 @@ package db_test
 // Integration harness. Build-tagged so `go test ./...` stays hermetic and fast;
 // run these with `make test-integration`, or:
 //
-//	MGBOT_TEST_DATABASE_URL=postgres://postgres:password@localhost:5432/garrixbot_test?sslmode=disable \
+//	STMPD_TEST_DATABASE_URL=postgres://postgres:password@localhost:5432/stmpdbot_test?sslmode=disable \
 //	  go test -tags integration -count=1 ./db/...
 //
 // The schema comes from the real migrations in db/migrations, so these exercise
@@ -25,14 +25,14 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 // testPool is shared by every test in the package; each one cleans up the rows
 // it creates rather than the whole database, so they can run in parallel.
 var testPool *pgxpool.Pool
 
-const databaseURLEnv = "MGBOT_TEST_DATABASE_URL"
+const databaseURLEnv = "STMPD_TEST_DATABASE_URL"
 
 func TestMain(m *testing.M) {
 	databaseURL := os.Getenv(databaseURLEnv)

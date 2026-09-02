@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 // lrclibServer stands in for the API, and asserts the one thing the documentation

@@ -1,4 +1,4 @@
-// Command dashboard serves the web dashboard for MartinGarrixBot.
+// Command dashboard serves the web dashboard for STMPDBot.
 //
 // It is a separate binary from the bot but lives in the same repository so both
 // compile against one copy of the db package and can never drift on schema. It
@@ -23,8 +23,8 @@ import (
 	_ "time/tzdata"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/milindmadhukar/MartinGarrixBot/dashboard"
-	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
+	"github.com/milindmadhukar/STMPDBot/dashboard"
+	"github.com/milindmadhukar/STMPDBot/stmpdbot"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 	dev := flag.Bool("dev", false, "re-parse templates from disk on every request")
 	flag.Parse()
 
-	cfg, err := mgbot.LoadConfig(*configPath)
+	cfg, err := stmpdbot.LoadConfig(*configPath)
 	if err != nil {
 		slog.Error("Failed to read config", slog.Any("err", err))
 		os.Exit(1)
@@ -40,7 +40,7 @@ func main() {
 
 	// Shares the bot's logger setup, which also sets time.Local from
 	// [log].timezone -- so dashboard timestamps and bot log timestamps agree.
-	mgbot.SetupLogger(cfg.Log)
+	stmpdbot.SetupLogger(cfg.Log)
 
 	opts, err := dashboard.NewOptions(cfg)
 	if err != nil {

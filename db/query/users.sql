@@ -7,9 +7,9 @@ VALUES ($1, $2)
 RETURNING *;
 
 -- name: GetCoinsLeaderboard :many
-SELECT id, garrix_coins, in_hand FROM users
+SELECT id, stmpd_coins, in_hand FROM users
 WHERE guild_id = $1
-ORDER BY garrix_coins + in_hand DESC OFFSET $2 LIMIT 10;
+ORDER BY stmpd_coins + in_hand DESC OFFSET $2 LIMIT 10;
 
 -- name: GetLevelsLeaderboard :many
 SELECT id, total_xp FROM users

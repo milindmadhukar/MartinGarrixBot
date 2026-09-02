@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/disgoorg/snowflake/v2"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 // panelTimeout bounds one metric panel.

@@ -33,17 +33,17 @@ var (
 
 const (
 	// CookieName is used when Secure is off (plain-HTTP local development).
-	CookieName = "mgb_session"
+	CookieName = "stmpd_session"
 	// SecureCookieName carries the __Host- prefix, which browsers only accept
 	// on a Secure cookie with Path=/ and no Domain. That combination makes the
 	// cookie unsettable by any sibling subdomain.
-	SecureCookieName = "__Host-mgb_session"
+	SecureCookieName = "__Host-stmpd_session"
 
-	StateCookieName       = "mgb_oauth_state"
-	SecureStateCookieName = "__Host-mgb_oauth_state"
+	StateCookieName       = "stmpd_oauth_state"
+	SecureStateCookieName = "__Host-stmpd_oauth_state"
 
-	CSRFCookieName       = "mgb_csrf"
-	SecureCSRFCookieName = "__Host-mgb_csrf"
+	CSRFCookieName       = "stmpd_csrf"
+	SecureCSRFCookieName = "__Host-stmpd_csrf"
 
 	// stateTTL bounds how long a login may sit half-finished.
 	stateTTL = 10 * time.Minute

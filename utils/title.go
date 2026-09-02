@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 // A stored songs.name is not the answer to "what is this song called". It carries

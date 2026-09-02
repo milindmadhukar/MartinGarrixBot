@@ -27,7 +27,7 @@ func (q *Queries) AddCoins(ctx context.Context, arg AddCoinsParams) error {
 }
 
 const depositAmount = `-- name: DepositAmount :exec
-UPDATE users SET in_hand = in_hand - $3, garrix_coins = garrix_coins + $3 WHERE id = $1 AND guild_id = $2
+UPDATE users SET in_hand = in_hand - $3, stmpd_coins = stmpd_coins + $3 WHERE id = $1 AND guild_id = $2
 `
 
 type DepositAmountParams struct {
@@ -42,7 +42,7 @@ func (q *Queries) DepositAmount(ctx context.Context, arg DepositAmountParams) er
 }
 
 const getBalance = `-- name: GetBalance :one
-SELECT garrix_coins, in_hand FROM users WHERE id = $1 AND guild_id = $2
+SELECT stmpd_coins, in_hand FROM users WHERE id = $1 AND guild_id = $2
 `
 
 type GetBalanceParams struct {
@@ -51,14 +51,14 @@ type GetBalanceParams struct {
 }
 
 type GetBalanceRow struct {
-	GarrixCoins pgtype.Int8 `json:"garrixCoins"`
-	InHand      pgtype.Int8 `json:"inHand"`
+	StmpdCoins pgtype.Int8 `json:"stmpdCoins"`
+	InHand     pgtype.Int8 `json:"inHand"`
 }
 
 func (q *Queries) GetBalance(ctx context.Context, arg GetBalanceParams) (GetBalanceRow, error) {
 	row := q.db.QueryRow(ctx, getBalance, arg.ID, arg.GuildID)
 	var i GetBalanceRow
-	err := row.Scan(&i.GarrixCoins, &i.InHand)
+	err := row.Scan(&i.StmpdCoins, &i.InHand)
 	return i, err
 }
 
@@ -93,7 +93,7 @@ func (q *Queries) GiveCoins(ctx context.Context, arg GiveCoinsParams) error {
 }
 
 const withdrawAmount = `-- name: WithdrawAmount :exec
-UPDATE users SET in_hand = in_hand + $3, garrix_coins = garrix_coins - $3 WHERE id = $1 AND guild_id = $2
+UPDATE users SET in_hand = in_hand + $3, stmpd_coins = stmpd_coins - $3 WHERE id = $1 AND guild_id = $2
 `
 
 type WithdrawAmountParams struct {

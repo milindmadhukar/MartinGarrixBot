@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 const (
@@ -21,8 +21,12 @@ type modlogRow struct {
 	db.Modlog
 	UserName      string
 	UserAvatar    string
+	UserLeft      bool
 	ModeratorName string
 	Expired       bool
+	// ViaDiscord marks a row captured from the audit log, i.e. moderation
+	// performed through Discord's own UI rather than a bot command.
+	ViaDiscord bool
 }
 
 // pagination is the shared paging state for every table view.
@@ -119,10 +123,12 @@ func (s *Server) handleModlogs(w http.ResponseWriter, r *http.Request) {
 			ModeratorName: modID,
 			UserAvatar:    avatarURL(userID, ""),
 			Expired:       row.ExpiresAt.Valid && row.ExpiresAt.Time.Before(now),
+			ViaDiscord:    row.AuditLogID.Valid,
 		}
 		if u, ok := names[userID]; ok {
 			entry.UserName = u.DisplayName
 			entry.UserAvatar = avatarURL(userID, u.Avatar)
+			entry.UserLeft = !u.Member
 		}
 		if m, ok := names[modID]; ok {
 			entry.ModeratorName = m.DisplayName
@@ -136,13 +142,22 @@ func (s *Server) handleModlogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A guild whose staff moderate through Discord rather than the bot sees an
+	// empty page unless the bot can read the audit log. Saying so beats leaving
+	// them to guess why nothing is recorded.
+	auditWarning := false
+	if guild, gErr := s.bots.Guild(ctx, guildID); gErr == nil && !guild.CanViewAuditLog {
+		auditWarning = true
+	}
+
 	p := s.newPage(r, "Moderation log")
 	p.Nav = "modlogs"
 	s.withGuild(r, p, guildID)
 	p.Data = map[string]any{
-		"Rows":       rendered,
-		"Types":      types,
-		"Pagination": newPagination(page, pageSize, total, filterQuery(query)),
+		"Rows":         rendered,
+		"Types":        types,
+		"AuditWarning": auditWarning,
+		"Pagination":   newPagination(page, pageSize, total, filterQuery(query)),
 		"Filters": map[string]string{
 			"type":      query.Get("type"),
 			"user":      query.Get("user"),

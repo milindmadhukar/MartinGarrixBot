@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 // memberLogRow is one join/leave event with the member's name resolved.
@@ -12,6 +12,7 @@ type memberLogRow struct {
 	db.JoinLeaveLog
 	MemberName   string
 	MemberAvatar string
+	MemberLeft   bool
 	IsJoin       bool
 }
 
@@ -76,6 +77,7 @@ func (s *Server) handleMemberLogs(w http.ResponseWriter, r *http.Request) {
 		if u, ok := names[memberID]; ok {
 			entry.MemberName = u.DisplayName
 			entry.MemberAvatar = avatarURL(memberID, u.Avatar)
+			entry.MemberLeft = !u.Member
 		}
 		rendered = append(rendered, entry)
 	}

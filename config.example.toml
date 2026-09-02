@@ -6,7 +6,7 @@ format = "text"
 # whether to add the log source to the log message
 add_source = true
 # log file name
-file = "garrixbot.log"
+file = "stmpdbot.log"
 # max size in megabytes before log rotation
 max_size = 500
 # max age in days before log rotation

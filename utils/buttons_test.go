@@ -6,8 +6,8 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 // link is a non-null URL column value. Named for what it holds rather than for its

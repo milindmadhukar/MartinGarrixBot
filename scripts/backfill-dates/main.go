@@ -19,9 +19,9 @@ import (
 	"log/slog"
 	"strings"
 
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
-	"github.com/milindmadhukar/MartinGarrixBot/scripts/internal/script"
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
+	"github.com/milindmadhukar/STMPDBot/scripts/internal/script"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 func main() {

@@ -13,13 +13,13 @@ import (
 	"math"
 	"testing"
 
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
-// dedupeThreshold mirrors similarityThreshold in mgbot/handlers/beatport.go.
+// dedupeThreshold mirrors similarityThreshold in stmpdbot/handlers/beatport.go.
 const dedupeThreshold = 0.85
 
-// quizThreshold mirrors the literal passed by mgbot/commands/quiz.go.
+// quizThreshold mirrors the literal passed by stmpdbot/commands/quiz.go.
 const quizThreshold = 0.6
 
 func TestSimilarityScore_ExactAndEmpty(t *testing.T) {
