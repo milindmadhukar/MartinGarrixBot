@@ -65,7 +65,7 @@ func main() {
 			// Being rate limited is not something to push through. LRCLIB's
 			// documentation says continuing may earn a ban, and the schedule this
 			// writes means a second run picks up exactly where this one stopped.
-			var limited utils.ErrLrclibRateLimited
+			var limited utils.LrclibRateLimitedError
 			if errors.As(err, &limited) {
 				slog.Error("LRCLIB rate limited us; stopping. Run again later.",
 					slog.Duration("retry_after", limited.RetryAfter))

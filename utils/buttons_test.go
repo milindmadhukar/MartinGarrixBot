@@ -21,10 +21,19 @@ func TestSongLinkSignature(t *testing.T) {
 
 	base := db.Song{Name: "Breach", SpotifyUrl: link("https://open.spotify.com/track/abc")}
 
-	t.Run("stable across calls", func(t *testing.T) {
+	// Two rows carrying the same links must fingerprint the same, however they were
+	// built. The signature is what decides whether a message gets edited, so any
+	// instability in it would edit every announcement on every cycle.
+	t.Run("depends only on the links", func(t *testing.T) {
 		t.Parallel()
-		if utils.SongLinkSignature(base) != utils.SongLinkSignature(base) {
-			t.Error("the same row produced two different signatures")
+
+		other := db.Song{
+			Name:       "A different title entirely",
+			Artists:    "Someone Else",
+			SpotifyUrl: link("https://open.spotify.com/track/abc"),
+		}
+		if utils.SongLinkSignature(other) != utils.SongLinkSignature(base) {
+			t.Error("two rows with identical links produced different signatures")
 		}
 	})
 

@@ -73,7 +73,7 @@ func runLyricsCycle(ctx context.Context, b *stmpdbot.STMPDBot, client *utils.Lrc
 			// A rate limit ends the batch rather than spending the rest of it
 			// collecting 429s. LRCLIB's documentation says continuing through one may
 			// earn a ban, and the next tick is only hours away.
-			var limited utils.ErrLrclibRateLimited
+			var limited utils.LrclibRateLimitedError
 			if errors.As(err, &limited) {
 				slog.Warn("LRCLIB rate limited us, ending the batch",
 					slog.Duration("retry_after", limited.RetryAfter))

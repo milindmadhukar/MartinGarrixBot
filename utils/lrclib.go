@@ -37,17 +37,17 @@ const lrclibRateLimit = 500 * time.Millisecond
 // something about the network and retiring a song over it would be wrong.
 var ErrLrclibNotFound = errors.New("lrclib: track not found")
 
-// ErrLrclibRateLimited carries the server's own Retry-After.
+// LrclibRateLimitedError carries the server's own Retry-After.
 //
 // The documentation is explicit that a client must honour it and that ignoring it may
 // earn a ban, so this is surfaced as its own type rather than folded into a generic
 // error: the caller has to be able to stop the batch rather than spend the rest of it
 // collecting 429s.
-type ErrLrclibRateLimited struct {
+type LrclibRateLimitedError struct {
 	RetryAfter time.Duration
 }
 
-func (e ErrLrclibRateLimited) Error() string {
+func (e LrclibRateLimitedError) Error() string {
 	return fmt.Sprintf("lrclib: rate limited, retry after %s", e.RetryAfter)
 }
 
@@ -225,7 +225,7 @@ func (c *LrclibClient) attempt(ctx context.Context, path string, q url.Values, o
 	case resp.StatusCode == http.StatusTooManyRequests:
 		wait := parseRetryAfter(resp.Header.Get("Retry-After"))
 		c.until = time.Now().Add(wait)
-		return ErrLrclibRateLimited{RetryAfter: wait}
+		return LrclibRateLimitedError{RetryAfter: wait}
 	case resp.StatusCode == http.StatusServiceUnavailable:
 		return errLrclibOverloaded
 	case resp.StatusCode != http.StatusOK:
