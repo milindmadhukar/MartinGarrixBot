@@ -103,10 +103,6 @@ check: fmt-check vet test
 .PHONY: build dev run kill fmt fmt-check vet test test-integration cover cover-html fuzz live-check check \
 	migrate_up migrate_down make_migration sqlc psql migrate_force
 
-test:
-	go build ./...
-	go vet ./...
-
 lint:
 	golangci-lint run
 
