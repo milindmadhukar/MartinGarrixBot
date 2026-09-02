@@ -25,7 +25,7 @@ import (
 //   - a redesign breaks a payload scrape. It does not break a dataset query.
 const (
 	// stmpdUserAgent identifies the bot to both stmpdrcrds.com and the Sanity CDN.
-	stmpdUserAgent = "MartinGarrixBot (+https://github.com/milindmadhukar/MartinGarrixBot)"
+	stmpdUserAgent = "STMPDBot (+https://github.com/milindmadhukar/STMPDBot)"
 
 	sanityProjectID = "s5uw0tsi"
 	sanityDataset   = "production"

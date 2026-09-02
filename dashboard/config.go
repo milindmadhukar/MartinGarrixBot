@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
+	"github.com/milindmadhukar/STMPDBot/stmpdbot"
 )
 
 // ErrBotAPIUnavailable marks every failure to reach the bot's internal API.
@@ -27,7 +27,7 @@ const (
 	minSessionSecretLen = 32
 )
 
-// Options is the validated, defaulted form of mgbot.DashboardConfig.
+// Options is the validated, defaulted form of stmpdbot.DashboardConfig.
 type Options struct {
 	Address       string
 	PublicBaseURL string
@@ -56,7 +56,7 @@ type Options struct {
 
 // NewOptions validates the dashboard configuration, reporting every problem at
 // once rather than one per run.
-func NewOptions(cfg *mgbot.Config) (*Options, error) {
+func NewOptions(cfg *stmpdbot.Config) (*Options, error) {
 	d := cfg.Dashboard
 
 	var problems []string

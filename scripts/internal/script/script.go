@@ -20,8 +20,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
-	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
+	"github.com/milindmadhukar/STMPDBot/stmpdbot"
 )
 
 // Env is everything a maintenance script needs: a database handle and whether it is
@@ -36,7 +36,7 @@ import (
 type Env struct {
 	Pool    *pgxpool.Pool
 	Queries *db.Queries
-	Config  *mgbot.Config
+	Config  *stmpdbot.Config
 	DryRun  bool
 }
 
@@ -51,7 +51,7 @@ func Setup(name string) (*Env, context.Context, func()) {
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
-	cfg, err := mgbot.LoadConfig(*configPath)
+	cfg, err := stmpdbot.LoadConfig(*configPath)
 	if err != nil {
 		fatal("failed to load config", err)
 	}

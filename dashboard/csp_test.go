@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 // The charts on this dashboard are CSS: a bar is a div with an inline width, a

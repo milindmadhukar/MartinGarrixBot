@@ -13,7 +13,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/oauth2"
 	"github.com/disgoorg/snowflake/v2"
-	"github.com/milindmadhukar/MartinGarrixBot/dashboard/session"
+	"github.com/milindmadhukar/STMPDBot/dashboard/session"
 )
 
 // The OAuth handshake is the only place the dashboard talks to Discord

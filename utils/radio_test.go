@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/disgoorg/snowflake/v2"
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 // newTestRadioManager builds a manager the way production does. Always go

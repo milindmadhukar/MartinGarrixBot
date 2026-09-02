@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 var userSuffix atomic.Int64
@@ -40,7 +40,7 @@ func testUser(t *testing.T, q *db.Queries, guildID, inHand, safe int64) int64 {
 	})
 
 	if _, err := testPool.Exec(ctx,
-		"UPDATE users SET in_hand = $3, garrix_coins = $4 WHERE id = $1 AND guild_id = $2",
+		"UPDATE users SET in_hand = $3, stmpd_coins = $4 WHERE id = $1 AND guild_id = $2",
 		id, guildID, inHand, safe); err != nil {
 		t.Fatalf("failed to set the starting balance: %v", err)
 	}
@@ -59,7 +59,7 @@ func balance(t *testing.T, q *db.Queries, id, guildID int64) (inHand, safe int64
 	if err != nil {
 		t.Fatalf("GetBalance failed: %v", err)
 	}
-	return got.InHand.Int64, got.GarrixCoins.Int64
+	return got.InHand.Int64, got.StmpdCoins.Int64
 }
 
 func TestGetBalance(t *testing.T) {

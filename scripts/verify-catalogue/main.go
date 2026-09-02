@@ -15,9 +15,9 @@ import (
 	"sort"
 	"strings"
 
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
-	"github.com/milindmadhukar/MartinGarrixBot/scripts/internal/script"
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
+	"github.com/milindmadhukar/STMPDBot/scripts/internal/script"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 // samplesPerCheck bounds the output. A check that fires on 300 rows is a broken rule,

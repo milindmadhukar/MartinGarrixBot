@@ -12,7 +12,7 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 // settingKind decides which lookup resolves a setting's ID to a name, and which

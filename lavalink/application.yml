@@ -41,7 +41,7 @@ plugins:
     # and repoint this if that ever becomes a constraint.
     remoteCipher:
       url: "https://cipher.kikkia.dev/"
-      userAgent: "martingarrixbot"
+      userAgent: "stmpdbot"
 
 lavalink:
   plugins:

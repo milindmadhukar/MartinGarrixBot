@@ -1,7 +1,7 @@
 .idea/
 config.toml
 *.log
-mgbot-google-service.json
+stmpd-google-service.json
 config.docker.toml
 .env
 /tmp
@@ -9,7 +9,6 @@ config.docker.toml
 # Lavalink downloads the plugin version declared in application.yml itself. A committed
 # jar only risks a fresh deploy running a stale version alongside the declared one.
 /lavalink/plugins/*.jar
-/martin-garrix-bot
 config.prod.toml
 
 # Timestamped config backups, e.g. from a token rotation. These hold the
@@ -29,7 +28,7 @@ config.*.bak-*
 
 # Agent scratch worktrees; these are separate git repos and must not be committed.
 .claude/
-/garrixbot
+/stmpd-bot
 coverage.out
 coverage.html
 
@@ -40,4 +39,4 @@ coverage.html
 /bin/
 
 # Dashboard binary from `go build ./cmd/dashboard`.
-/garrixdashboard
+/stmpddashboard

@@ -11,7 +11,7 @@ import (
 	"github.com/disgoorg/disgo/rest"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/jackc/pgx/v5"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 // NotificationType represents the type of notification

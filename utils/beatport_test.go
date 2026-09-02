@@ -3,7 +3,7 @@ package utils_test
 import (
 	"testing"
 
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 func TestIsSquareImageURL(t *testing.T) {

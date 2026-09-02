@@ -141,7 +141,7 @@ type User struct {
 	MessagesSent pgtype.Int4      `json:"messagesSent"`
 	TotalXp      pgtype.Int4      `json:"totalXp"`
 	LastXpAdded  pgtype.Timestamp `json:"lastXpAdded"`
-	GarrixCoins  pgtype.Int8      `json:"garrixCoins"`
+	StmpdCoins   pgtype.Int8      `json:"stmpdCoins"`
 	InHand       pgtype.Int8      `json:"inHand"`
 	GuildID      int64            `json:"guildId"`
 }

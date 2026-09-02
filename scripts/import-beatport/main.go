@@ -14,10 +14,10 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
-	"github.com/milindmadhukar/MartinGarrixBot/mgbot"
-	"github.com/milindmadhukar/MartinGarrixBot/scripts/internal/script"
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
+	"github.com/milindmadhukar/STMPDBot/stmpdbot"
+	"github.com/milindmadhukar/STMPDBot/scripts/internal/script"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 func main() {
@@ -169,7 +169,7 @@ func main() {
 	slog.Info("Run link-remix-parents next so the new remix rows are grouped")
 }
 
-func fetchAll(client *utils.BeatportClient, cfg *mgbot.Config) map[int]utils.BeatportTrack {
+func fetchAll(client *utils.BeatportClient, cfg *stmpdbot.Config) map[int]utils.BeatportTrack {
 	tracks := map[int]utils.BeatportTrack{}
 
 	if cfg.Bot.BeatportLabelID != "" {

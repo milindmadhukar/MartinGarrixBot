@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/milindmadhukar/MartinGarrixBot/utils"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 func TestNeedsRefresh(t *testing.T) {

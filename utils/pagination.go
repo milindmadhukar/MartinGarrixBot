@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/disgoorg/disgo/discord"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 const ModlogsPerPage = 5

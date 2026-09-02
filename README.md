@@ -1,8 +1,8 @@
- Martin Garrix Bot!
+# STMPD Bot
 
-A multipurpose bot created exclusively for Garrixers.
+A multipurpose Discord bot built for the STMPD RCRDS community.
 
-![Martin Garrix Bot](https://cdn.discordapp.com/avatars/799613778052382720/28de7ee4e8cc26956e4bf45ecb730b79.webp?size=256 "Martin Garrix Bot")
+![STMPD Bot](https://cdn.discordapp.com/avatars/799613778052382720/28de7ee4e8cc26956e4bf45ecb730b79.webp?size=256 "STMPD Bot")
 CLI Flags:
 - `--config-path=your-config-path`: Path to the config file.
 - `--sync-commands=true`: Synchronize commands with the discord.
@@ -28,7 +28,7 @@ format = "text"
 # whether to add the log source to the log message
 add_source = true
 # log file name
-file = "garrixbot.log"
+file = "stmpdbot.log"
 # max size in megabytes before log rotation
 max_size = 500
 # max age in days before log rotation

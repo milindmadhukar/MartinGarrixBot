@@ -7,7 +7,7 @@ import (
 
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 const testGuild = snowflake.ID(690950056202731521)

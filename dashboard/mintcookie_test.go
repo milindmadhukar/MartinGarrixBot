@@ -6,26 +6,26 @@ import (
 	"time"
 
 	"github.com/disgoorg/snowflake/v2"
-	"github.com/milindmadhukar/MartinGarrixBot/dashboard/session"
+	"github.com/milindmadhukar/STMPDBot/dashboard/session"
 )
 
 // TestMintSmokeCookie is a manual helper, not a real test: it prints a signed
 // session cookie so the authenticated pages can be exercised with curl against
-// a local instance. It is skipped unless MGB_MINT_COOKIE is set.
+// a local instance. It is skipped unless STMPD_MINT_COOKIE is set.
 //
-//	MGB_MINT_COOKIE=1 MGB_MINT_SECRET=... MGB_MINT_GUILD=... go test ./dashboard -run MintSmokeCookie -v
+//	STMPD_MINT_COOKIE=1 STMPD_MINT_SECRET=... STMPD_MINT_GUILD=... go test ./dashboard -run MintSmokeCookie -v
 func TestMintSmokeCookie(t *testing.T) {
-	if os.Getenv("MGB_MINT_COOKIE") == "" {
-		t.Skip("set MGB_MINT_COOKIE to mint a development session cookie")
+	if os.Getenv("STMPD_MINT_COOKIE") == "" {
+		t.Skip("set STMPD_MINT_COOKIE to mint a development session cookie")
 	}
 
-	secret := os.Getenv("MGB_MINT_SECRET")
+	secret := os.Getenv("STMPD_MINT_SECRET")
 	if secret == "" {
-		t.Fatal("MGB_MINT_SECRET is required")
+		t.Fatal("STMPD_MINT_SECRET is required")
 	}
-	guild, err := snowflake.Parse(os.Getenv("MGB_MINT_GUILD"))
+	guild, err := snowflake.Parse(os.Getenv("STMPD_MINT_GUILD"))
 	if err != nil {
-		t.Fatalf("MGB_MINT_GUILD: %v", err)
+		t.Fatalf("STMPD_MINT_GUILD: %v", err)
 	}
 
 	c := session.NewCodec(secret, time.Hour, false)

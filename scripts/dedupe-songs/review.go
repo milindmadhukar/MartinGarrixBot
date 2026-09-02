@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
-	"github.com/milindmadhukar/MartinGarrixBot/scripts/internal/script"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
+	"github.com/milindmadhukar/STMPDBot/scripts/internal/script"
 )
 
 // reportSuspects writes the duplicate groups that an exact match_key cannot catch.

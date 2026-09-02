@@ -22,7 +22,7 @@ RUN export GOOS=$(echo ${TARGETPLATFORM} | cut -d'/' -f1) \
     && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
        go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o bot . \
     && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
-       go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o garrixdashboard ./cmd/dashboard
+       go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o stmpddashboard ./cmd/dashboard
 
 # --- dashboard image -------------------------------------------------------
 # Deliberately before the bot stage: buildx defaults to the LAST stage, so
@@ -33,14 +33,14 @@ RUN apk add --no-cache tzdata
 
 WORKDIR /app
 
-# The binary is built as `garrixdashboard`, not `dashboard`: `go build -o
+# The binary is built as `stmpddashboard`, not `dashboard`: `go build -o
 # dashboard` would write into the repo's existing dashboard/ SOURCE directory
 # rather than producing a file, and the COPY below would then copy a directory.
 #
 # Nothing else is copied in: templates and static assets are go:embed-ed, and
 # db/migrations is deliberately absent because the dashboard never migrates --
 # the bot owns the schema.
-COPY --from=build /build/garrixdashboard /app/dashboard
+COPY --from=build /build/stmpddashboard /app/dashboard
 
 EXPOSE 8080
 
@@ -61,7 +61,7 @@ RUN apk add --no-cache tzdata
 
 WORKDIR /bot
 
-COPY --from=build /build/bot /bot/mgbot
+COPY --from=build /build/bot /bot/stmpdbot
 COPY --from=build /build/db/migrations/ /bot/db/migrations/
 COPY --from=build /build/assets/ /bot/assets/
 
@@ -73,6 +73,6 @@ EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://127.0.0.1:8081/health || exit 1
 
-ENTRYPOINT ["/bot/mgbot"]
+ENTRYPOINT ["/bot/stmpdbot"]
 
 CMD ["-config", "/var/lib/config.toml"]

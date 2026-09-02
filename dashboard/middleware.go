@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/disgoorg/snowflake/v2"
-	"github.com/milindmadhukar/MartinGarrixBot/dashboard/session"
+	"github.com/milindmadhukar/STMPDBot/dashboard/session"
 )
 
 type ctxKey int

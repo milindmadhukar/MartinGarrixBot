@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{if .Title}}{{.Title}} · {{end}}Garrix Dashboard</title>
+  <title>{{if .Title}}{{.Title}} · {{end}}STMPD Dashboard</title>
   <link rel="stylesheet" href="{{asset "/static/app.css"}}">
   <script src="{{asset "/static/htmx.min.js"}}" defer></script>
 </head>
@@ -14,7 +14,7 @@
   <header class="border-b border-white/10 bg-black/80 backdrop-blur">
     <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 sm:px-4">
       <a href="/" class="flex shrink-0 items-baseline gap-2">
-        <span class="text-base font-bold tracking-tighter text-white">MG</span>
+        <span class="text-sm font-bold tracking-tighter text-white sm:text-base">STMPD RCRDS</span>
         <span class="stamped hidden text-[9px] text-mint-300 sm:inline">Dashboard</span>
       </a>
 
@@ -77,7 +77,7 @@
   {{if not .Bare}}
   <footer class="mx-auto max-w-7xl px-3 pb-10 pt-6 sm:px-4">
     <div class="border-t border-white/10 pt-4">
-      <span class="stamped text-[9px] text-slate-700">Martin Garrix Bot</span>
+      <span class="stamped text-[9px] text-slate-700">STMPD Bot</span>
     </div>
   </footer>
   {{end}}

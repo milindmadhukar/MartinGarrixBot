@@ -10,7 +10,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/snowflake/v2"
-	"github.com/milindmadhukar/MartinGarrixBot/dashboard/session"
+	"github.com/milindmadhukar/STMPDBot/dashboard/session"
 )
 
 // TestAdministers pins the permission rule. Getting this wrong in either
@@ -87,13 +87,13 @@ func botAPIStub(t *testing.T, guilds []BotGuild) *BotAPI {
 
 func TestApplyEligibility(t *testing.T) {
 	botGuilds := []BotGuild{
-		{ID: "100", Name: "Garrix"},
+		{ID: "100", Name: "STMPD RCRDS"},
 		{ID: "200", Name: "STMPD"},
 	}
 
 	userGuilds := []discord.OAuth2Guild{
 		// Administered and the bot is present: eligible.
-		{ID: 100, Name: "Garrix", Permissions: discord.PermissionAdministrator},
+		{ID: 100, Name: "STMPD RCRDS", Permissions: discord.PermissionAdministrator},
 		// Administered but the bot is absent: invitable, not eligible.
 		{ID: 300, Name: "Somewhere else", Owner: true},
 		// Bot is present but the user is only a member: neither.

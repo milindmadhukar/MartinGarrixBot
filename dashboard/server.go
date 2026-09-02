@@ -11,8 +11,8 @@ import (
 	"github.com/disgoorg/disgo/oauth2"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/milindmadhukar/MartinGarrixBot/dashboard/session"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	"github.com/milindmadhukar/STMPDBot/dashboard/session"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 //go:embed templates

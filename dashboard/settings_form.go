@@ -10,7 +10,7 @@ import (
 
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/jackc/pgx/v5/pgtype"
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 // buildUpdate turns a submitted form into UpdateGuildConfigParams, validating

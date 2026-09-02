@@ -2,13 +2,13 @@
 UPDATE users SET in_hand=in_hand + $3 WHERE id = $1 AND guild_id = $2;
 
 -- name: GetBalance :one
-SELECT garrix_coins, in_hand FROM users WHERE id = $1 AND guild_id = $2;
+SELECT stmpd_coins, in_hand FROM users WHERE id = $1 AND guild_id = $2;
 
 -- name: WithdrawAmount :exec
-UPDATE users SET in_hand = in_hand + $3, garrix_coins = garrix_coins - $3 WHERE id = $1 AND guild_id = $2;
+UPDATE users SET in_hand = in_hand + $3, stmpd_coins = stmpd_coins - $3 WHERE id = $1 AND guild_id = $2;
 
 -- name: DepositAmount :exec
-UPDATE users SET in_hand = in_hand - $3, garrix_coins = garrix_coins + $3 WHERE id = $1 AND guild_id = $2;
+UPDATE users SET in_hand = in_hand - $3, stmpd_coins = stmpd_coins + $3 WHERE id = $1 AND guild_id = $2;
 
 -- name: GiveCoins :exec
 WITH sender_update AS (

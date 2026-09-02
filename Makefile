@@ -23,7 +23,7 @@ migrate_force:
 	docker run -v $(ROOT_DIR)/db/migrations:/migrations --network=host migrate/migrate -path=migrations/ -database postgresql://postgres:password@localhost:5432/garrixbot?sslmode=disable force $$VERSION
 
 build:
-	go build -o garrixbot .
+	go build -o stmpd-bot .
 
 dev:
 	air -c .air.toml
@@ -32,7 +32,7 @@ run:
 	go run . --sync-commands
 
 kill:
-	@pgrep -f "mgbot_bin\|garrixbot" | xargs kill || true
+	@pgrep -f "stmpdbot_bin\|stmpd-bot" | xargs kill || true
 # --- maintenance scripts (see scripts/README.md) ---------------------------------
 # CONFIG defaults to the bot's own config; override for a non-default database:
 #   make backfill-stmpd CONFIG=config.docker.toml
@@ -91,12 +91,12 @@ cover-html: cover
 	go tool cover -html=coverage.out -o coverage.html
 
 fuzz:
-	go test -run=^$$ -fuzz=Fuzz -fuzztime=30s ./mgbot/handlers/
+	go test -run=^$$ -fuzz=Fuzz -fuzztime=30s ./stmpdbot/handlers/
 
 # Hits the real tour and STMPD pages to check they still serve the shape the
 # parsers expect. Not part of `test` or CI; run it when a fetcher goes quiet.
 live-check:
-	go test -tags livefetch -count=1 -v ./mgbot/handlers/
+	go test -tags livefetch -count=1 -v ./stmpdbot/handlers/
 
 check: fmt-check vet test
 
@@ -132,4 +132,4 @@ dashboard:
 	go run ./cmd/dashboard -config=$(CONFIG) -dev
 
 build_dashboard:
-	go build -o garrixdashboard ./cmd/dashboard
+	go build -o stmpddashboard ./cmd/dashboard

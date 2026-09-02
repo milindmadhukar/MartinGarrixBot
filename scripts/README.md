@@ -210,7 +210,7 @@ the audit entry too would double-count the action and attribute it to the bot.
 
 ## Running against production
 
-The bot on `limitless` runs from `~/MartinGarrixBot` against the shared
+The bot on `limitless` runs from `~/STMPDBot` against the shared
 `postgres-db-1` container. The scripts are not in the deployed image (the Dockerfile
 builds only the bot binary), and there is no Go toolchain on the server — so run them
 from a local checkout. Postgres is published on the host's Tailscale address, so no
@@ -221,7 +221,7 @@ tunnel is needed:
 [database]
 host = "100.74.136.119"
 user = "postgres"
-password = "<the password from ~/MartinGarrixBot/config.docker.toml>"
+password = "<the password from ~/STMPDBot/config.docker.toml>"
 name = "garrixbot"
 port = 5432
 ```

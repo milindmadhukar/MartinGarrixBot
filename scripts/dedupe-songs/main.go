@@ -26,8 +26,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
-	"github.com/milindmadhukar/MartinGarrixBot/scripts/internal/script"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
+	"github.com/milindmadhukar/STMPDBot/scripts/internal/script"
 )
 
 // distinctSlugs counts how many different STMPD releases a group claims to be.

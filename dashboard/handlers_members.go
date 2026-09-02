@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	db "github.com/milindmadhukar/MartinGarrixBot/db/sqlc"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 // memberLogRow is one join/leave event with the member's name resolved.

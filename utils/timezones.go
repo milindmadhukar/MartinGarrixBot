@@ -76,7 +76,7 @@ func FilterTimezones(input string) []discord.AutocompleteChoice {
 // misconfigure a guild.
 //
 // time.LoadLocation("Local") succeeds and returns whatever zone the process is
-// running in -- and mgbot.SetupLogger reassigns time.Local to the *log* config's
+// running in -- and stmpdbot.SetupLogger reassigns time.Local to the *log* config's
 // timezone at startup. A guild that stored "Local" would therefore post at an hour
 // determined by an unrelated setting, and would move if that setting ever changed.
 // The empty string is the same trap: LoadLocation("") returns UTC without complaint,

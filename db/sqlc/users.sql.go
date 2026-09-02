@@ -14,7 +14,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO users(id, guild_id)
 VALUES ($1, $2)
-RETURNING id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand, guild_id
+RETURNING id, messages_sent, total_xp, last_xp_added, stmpd_coins, in_hand, guild_id
 `
 
 type CreateUserParams struct {
@@ -30,7 +30,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.MessagesSent,
 		&i.TotalXp,
 		&i.LastXpAdded,
-		&i.GarrixCoins,
+		&i.StmpdCoins,
 		&i.InHand,
 		&i.GuildID,
 	)
@@ -38,9 +38,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const getCoinsLeaderboard = `-- name: GetCoinsLeaderboard :many
-SELECT id, garrix_coins, in_hand FROM users
+SELECT id, stmpd_coins, in_hand FROM users
 WHERE guild_id = $1
-ORDER BY garrix_coins + in_hand DESC OFFSET $2 LIMIT 10
+ORDER BY stmpd_coins + in_hand DESC OFFSET $2 LIMIT 10
 `
 
 type GetCoinsLeaderboardParams struct {
@@ -49,9 +49,9 @@ type GetCoinsLeaderboardParams struct {
 }
 
 type GetCoinsLeaderboardRow struct {
-	ID          int64       `json:"id"`
-	GarrixCoins pgtype.Int8 `json:"garrixCoins"`
-	InHand      pgtype.Int8 `json:"inHand"`
+	ID         int64       `json:"id"`
+	StmpdCoins pgtype.Int8 `json:"stmpdCoins"`
+	InHand     pgtype.Int8 `json:"inHand"`
 }
 
 func (q *Queries) GetCoinsLeaderboard(ctx context.Context, arg GetCoinsLeaderboardParams) ([]GetCoinsLeaderboardRow, error) {
@@ -63,7 +63,7 @@ func (q *Queries) GetCoinsLeaderboard(ctx context.Context, arg GetCoinsLeaderboa
 	var items []GetCoinsLeaderboardRow
 	for rows.Next() {
 		var i GetCoinsLeaderboardRow
-		if err := rows.Scan(&i.ID, &i.GarrixCoins, &i.InHand); err != nil {
+		if err := rows.Scan(&i.ID, &i.StmpdCoins, &i.InHand); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -183,7 +183,7 @@ func (q *Queries) GetMessagesSentLeaderboard(ctx context.Context, arg GetMessage
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand, guild_id FROM users WHERE id = $1 AND guild_id = $2
+SELECT id, messages_sent, total_xp, last_xp_added, stmpd_coins, in_hand, guild_id FROM users WHERE id = $1 AND guild_id = $2
 `
 
 type GetUserParams struct {
@@ -199,7 +199,7 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 		&i.MessagesSent,
 		&i.TotalXp,
 		&i.LastXpAdded,
-		&i.GarrixCoins,
+		&i.StmpdCoins,
 		&i.InHand,
 		&i.GuildID,
 	)
@@ -208,12 +208,12 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 
 const getUserLevelData = `-- name: GetUserLevelData :one
 WITH user_ranks AS (
-  SELECT id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand, guild_id,
+  SELECT id, messages_sent, total_xp, last_xp_added, stmpd_coins, in_hand, guild_id,
          RANK() OVER (PARTITION BY guild_id ORDER BY total_xp DESC) as rank
   FROM users
   WHERE guild_id = $2
 )
-SELECT id, messages_sent, total_xp, last_xp_added, garrix_coins, in_hand, guild_id, rank
+SELECT id, messages_sent, total_xp, last_xp_added, stmpd_coins, in_hand, guild_id, rank
 FROM user_ranks
 WHERE id = $1 AND guild_id = $2
 `
@@ -228,7 +228,7 @@ type GetUserLevelDataRow struct {
 	MessagesSent pgtype.Int4      `json:"messagesSent"`
 	TotalXp      pgtype.Int4      `json:"totalXp"`
 	LastXpAdded  pgtype.Timestamp `json:"lastXpAdded"`
-	GarrixCoins  pgtype.Int8      `json:"garrixCoins"`
+	StmpdCoins   pgtype.Int8      `json:"stmpdCoins"`
 	InHand       pgtype.Int8      `json:"inHand"`
 	GuildID      int64            `json:"guildId"`
 	Rank         int64            `json:"rank"`
@@ -242,7 +242,7 @@ func (q *Queries) GetUserLevelData(ctx context.Context, arg GetUserLevelDataPara
 		&i.MessagesSent,
 		&i.TotalXp,
 		&i.LastXpAdded,
-		&i.GarrixCoins,
+		&i.StmpdCoins,
 		&i.InHand,
 		&i.GuildID,
 		&i.Rank,

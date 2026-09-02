@@ -79,7 +79,7 @@ SELECT
     (SELECT COUNT(*) FROM users u WHERE u.guild_id = $1)::bigint AS tracked_users,
     (SELECT COALESCE(SUM(u.messages_sent), 0) FROM users u WHERE u.guild_id = $1)::bigint AS messages_counted,
     (SELECT COALESCE(SUM(u.total_xp), 0) FROM users u WHERE u.guild_id = $1)::bigint AS total_xp,
-    (SELECT COALESCE(SUM(COALESCE(u.garrix_coins, 0) + COALESCE(u.in_hand, 0)), 0)
+    (SELECT COALESCE(SUM(COALESCE(u.stmpd_coins, 0) + COALESCE(u.in_hand, 0)), 0)
        FROM users u WHERE u.guild_id = $1)::bigint AS coins_in_circulation,
     (SELECT COUNT(*) FROM messages m
        WHERE m.guild_id = $1
@@ -209,16 +209,16 @@ SELECT
     id,
     messages_sent,
     total_xp,
-    garrix_coins,
+    stmpd_coins,
     in_hand,
-    (COALESCE(garrix_coins, 0) + COALESCE(in_hand, 0))::bigint AS net_worth
+    (COALESCE(stmpd_coins, 0) + COALESCE(in_hand, 0))::bigint AS net_worth
 FROM users
 WHERE guild_id = $1
 ORDER BY
     CASE WHEN sqlc.arg('sort')::text = 'messages' THEN messages_sent END DESC NULLS LAST,
     CASE WHEN sqlc.arg('sort')::text = 'xp'       THEN total_xp      END DESC NULLS LAST,
     CASE WHEN sqlc.arg('sort')::text = 'coins'
-         THEN COALESCE(garrix_coins, 0) + COALESCE(in_hand, 0)       END DESC NULLS LAST,
+         THEN COALESCE(stmpd_coins, 0) + COALESCE(in_hand, 0)       END DESC NULLS LAST,
     id
 LIMIT $2;
 
