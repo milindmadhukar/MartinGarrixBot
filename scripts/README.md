@@ -17,13 +17,20 @@ Every script takes the same flags:
 
 ## Order
 
-`rekey-songs` populates the keys the other three depend on. Run it first, and again
-after any change to the normalization rules in `utils/matchkey.go`.
+`rekey-songs` populates the columns the others depend on. Run it first, and again
+after any change to the normalization rules in `utils/matchkey.go` or
+`utils/title.go`.
 
 ```
 rekey-songs  →  backfill-stmpd  →  link-remix-parents  →  verify-catalogue
                 import-beatport  ↗
+             →  backfill-lyrics  ↗
 ```
+
+`backfill-lyrics` depends on `rekey-songs` for a different reason than the others:
+LRCLIB is queried with `songs.normalized_name`, because it indexes song titles and
+not credit strings. Asking it about "Sun Is Never Going Down (feat. Dawn Golden)"
+finds nothing; asking about "Sun Is Never Going Down" finds the record.
 
 `verify-catalogue` writes nothing and can be run at any time. Run it last: it names
 the pass that repairs whatever it finds, so a non-empty report is a to-do list.
@@ -32,13 +39,23 @@ the pass that repairs whatever it finds, so a non-empty report is a to-do list.
 
 ### `rekey-songs`
 
-Recomputes `match_key` and `base_key` for every row. These identify a recording
-(song + rendition + artist set) and a song (irrespective of rendition). They are
-derived in Go, so a migration cannot fill them in.
+Recomputes the columns derived from a song's title. `match_key` and `base_key`
+identify a recording (song + rendition + artist set) and a song (irrespective of
+rendition). `normalized_name` is the *answerable* form of the title — the name with
+any rendition and any featured-artist credit removed, so the quiz can accept "Breach"
+for a row stored as "Breach (Walk Alone)". All three are derived in Go, so a migration
+cannot fill them in.
 
-- **Requires:** migration `000011_add_match_keys`
-- **Idempotent:** yes — rows whose keys already match are not written
-- **Writes:** `match_key`, `base_key`
+Note that `normalized_name` strips more aggressively than the passes that rewrite
+`name` itself: those only drop a feature clause when the artists column already
+credits those people, and the rows this exists for are exactly the ones where it does
+not — "Sun Is Never Going Down (feat. Dawn Golden)" is credited to Martin Garrix
+alone.
+
+- **Requires:** migrations `000011_add_match_keys` and `000019_normalized_song_name`
+- **Idempotent:** yes — rows whose values already match are not written
+- **Writes:** `match_key`, `base_key`, `normalized_name`, `is_collection`, and
+  occasionally `name`/`mix_name`
 
 ### `backfill-stmpd`
 
@@ -165,6 +182,42 @@ Pop" becomes `xs-feat-icona-pop` where the stored title would give `xs`. This wa
 the authoritative value in hand and stores it on rows it skips as well as rows it
 inserts.
 
+### `backfill-lyrics`
+
+Fills `songs.lyrics` from [LRCLIB](https://lrclib.net), a free community lyrics
+database that needs no key and no account.
+
+Lyrics have only ever been entered by hand through `make psql`, so 79 rows out of 1348
+have them — and that handful is the entire pool the `/quiz` command draws from. This is
+the sweep that changes that. The bot's own daily watcher works the same queue in
+batches of sixty, which would take weeks to reach the end of it.
+
+Paced at one request every 500ms, which is the slower end of what LRCLIB's
+documentation asks for; a full pass over ~1200 rows takes about twenty minutes. A `429`
+stops the run rather than pushing through it — their docs say continuing may earn a
+ban, and the schedule this writes means a second run resumes exactly where it stopped.
+
+Every candidate is verified before its words are believed: `utils.SameRecording` for
+title and artists, plus a five-second duration check, which is the only thing that
+separates a song from its own cover, live cut or sped-up edit. **Run `-dry-run` first
+and read the log.** Each fill prints the record it came from, and hanging the wrong
+words on a song is the one failure here that nobody would ever notice.
+
+Where LRCLIB reports a track as instrumental — and only from an exact lookup, never
+from the search fallback — the row is flagged `is_instrumental` instead. That is what
+migration `000012` added the column for: an instrumental with no words otherwise sits
+in this backlog forever and the quiz can pick it and ask a player to recall lyrics that
+do not exist.
+
+Filling a canonical row fans the words out to its renditions via `CopyLyricsToRemixes`,
+so a song's twelve remixes are not twelve separate lookups for the same answer.
+
+- **Requires:** migration `000020_lrclib_lyrics`, and `rekey-songs` (see Order above)
+- **Idempotent:** yes — a row with words is never asked about again, and one LRCLIB has
+  nothing for is retired after four misses on a widening schedule (7 days, 28, 112, 448)
+- **Writes:** `lyrics` (only where NULL — hand-entered words are never overwritten),
+  `lrclib_id`, `lrclib_checked_at`, `lrclib_misses`, `is_instrumental`
+
 ### `verify-catalogue`
 
 Read-only. Recomputes each row's derived state and reports every row that disagrees
@@ -175,7 +228,11 @@ with what is stored, grouped by invariant, naming the pass that fixes it.
 - **Exit:** always 0; read the `checks_failed` and `rows_flagged` summary
 
 Checks: the collection flag against a recomputation, stale `match_key`/`base_key`,
-rows sharing a match key (the same recording twice), rendition trees that are deeper
+stale `normalized_name`, canonical rows sharing a normalized name with overlapping
+credits (one song written several ways — the catalogue holds "Now that I've Found You
+Feat. \"John & Michel\"" and two other spellings of the same song, which no match key
+can see because the credits differ), rows sharing a match key (the same recording
+twice), rendition trees that are deeper
 than one level or rooted at a release or at a row's own id, renditions left unfiled
 while their song sits in the table, Beatport ids with no slug to build a URL from,
 tracking parameters on streaming links, and songs carrying no link at all.

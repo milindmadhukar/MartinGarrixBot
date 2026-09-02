@@ -114,6 +114,12 @@ UPDATE songs SET
     -- title for some rows and not others.
     name                = COALESCE(sqlc.narg(title), name),
     mix_name            = sqlc.narg(mix_name),
+    -- normalized_name is derived from name in Go, so a name the catalogue rewrote
+    -- here invalidates it. Cleared rather than recomputed: SQL cannot derive it, and
+    -- NULL falls back to computing on read, whereas a leftover value would be
+    -- confidently wrong. The handler re-reads the row and refills this immediately.
+    normalized_name     = CASE WHEN name IS DISTINCT FROM COALESCE(sqlc.narg(title), name)
+                               THEN NULL ELSE normalized_name END,
     spotify_url         = COALESCE(sqlc.narg(spotify_url),         spotify_url),
     apple_music_url     = COALESCE(sqlc.narg(apple_music_url),     apple_music_url),
     youtube_url         = COALESCE(sqlc.narg(youtube_url),         youtube_url),
@@ -252,7 +258,9 @@ UPDATE songs SET match_key = $2, base_key = $3
 WHERE id = $1 AND (match_key IS DISTINCT FROM $2 OR base_key IS DISTINCT FROM $3);
 
 -- name: GetSongsForKeying :many
-SELECT id, name, artists, mix_name, length_ms, is_collection, apple_music_url, stmpd_slug FROM songs ORDER BY id;
+SELECT id, name, artists, mix_name, length_ms, is_collection, apple_music_url, stmpd_slug,
+       normalized_name
+FROM songs ORDER BY id;
 
 -- name: GetRandomSongForRadio :one
 -- Canonical rows only, so the rotation does not play six versions of one track, and
@@ -484,9 +492,20 @@ WHERE youtube_url IS NOT NULL
   AND youtube_url NOT LIKE '%youtu.be/%';
 
 -- name: SetSongTitle :execrows
-UPDATE songs SET name = sqlc.arg(name), mix_name = sqlc.narg(mix_name)
+-- normalized_name is written here too, and has to be: this query is how rekey-songs
+-- rewrites a name, so leaving it out would guarantee the derived column is stale on
+-- exactly the rows that needed correcting.
+UPDATE songs SET name = sqlc.arg(name), mix_name = sqlc.narg(mix_name),
+                 normalized_name = sqlc.narg(normalized_name)
 WHERE id = sqlc.arg(id)
-  AND (name IS DISTINCT FROM sqlc.arg(name) OR mix_name IS DISTINCT FROM sqlc.narg(mix_name));
+  AND (name IS DISTINCT FROM sqlc.arg(name)
+    OR mix_name IS DISTINCT FROM sqlc.narg(mix_name)
+    OR normalized_name IS DISTINCT FROM sqlc.narg(normalized_name));
+
+-- name: SetSongNormalizedName :execrows
+-- The answerable form of the title, derived in Go by utils/title.go.
+UPDATE songs SET normalized_name = sqlc.narg(normalized_name)
+WHERE id = sqlc.arg(id) AND normalized_name IS DISTINCT FROM sqlc.narg(normalized_name);
 
 -- name: GetSongsForSubsetDedupe :many
 -- Everything needed to spot rows that are the same recording credited to different
@@ -509,7 +528,62 @@ WHERE beatport_id IS NOT NULL AND beatport_slug IS NULL ORDER BY id;
 -- Everything the invariant checker needs to recompute a row's derived state and
 -- compare it against what is stored.
 SELECT id, name, artists, mix_name, length_ms, is_collection, parent_song_id,
-       match_key, base_key, release_date, apple_music_url, spotify_url, youtube_url, stmpd_slug,
+       match_key, base_key, normalized_name, release_date, apple_music_url, spotify_url,
+       youtube_url, stmpd_slug,
        beatport_id, beatport_slug, beatport_url, deezer_url, tidal_url,
        amazon_music_url, youtube_music_url, source
 FROM songs ORDER BY id;
+
+-- name: GetSongsMissingLyrics :many
+-- The LRCLIB backlog.
+--
+-- Canonical rows only: a rendition inherits its parent's words through
+-- CopyLyricsToRemixes, so asking LRCLIB separately about each of a song's twelve
+-- remixes is twelve times the requests for one answer.
+--
+-- The retry schedule widens with every miss -- 7 days, 28, 112, 448 -- and gives up
+-- after four. LRCLIB is community-contributed and does grow, so "never again" is
+-- wrong; but a row that has come up empty four times over a year and a half is not
+-- going to be filled by asking a fifth.
+--
+-- Newest first among never-asked rows, because a song released this month is the one
+-- people will actually be quizzed on and the one most likely to have just been added
+-- upstream.
+SELECT id, name, artists, mix_name, normalized_name, release_name, length_ms, lrclib_misses
+FROM songs
+WHERE lyrics IS NULL
+  AND NOT is_instrumental
+  AND NOT is_collection
+  AND parent_song_id IS NULL
+  AND lrclib_misses < 4
+  AND (lrclib_checked_at IS NULL
+       OR lrclib_checked_at < NOW() - (INTERVAL '7 days' * POWER(4, lrclib_misses)))
+ORDER BY lrclib_checked_at NULLS FIRST, release_date DESC NULLS LAST, id
+LIMIT sqlc.arg(lim);
+
+-- name: SetSongLyrics :execrows
+-- Guarded on lyrics IS NULL so a backfill can never overwrite words entered by hand.
+-- Those exist nowhere else, which is why dedupe-songs makes them a winner-selection
+-- tiebreaker, and a fill that clobbered them would be unrecoverable.
+UPDATE songs SET lyrics = sqlc.arg(lyrics), lrclib_id = sqlc.narg(lrclib_id),
+                 lrclib_checked_at = NOW(), lrclib_misses = 0
+WHERE id = sqlc.arg(id) AND lyrics IS NULL;
+
+-- name: MarkLrclibMiss :exec
+-- LRCLIB answered and had nothing usable. Spends one of the row's four attempts.
+UPDATE songs SET lrclib_checked_at = NOW(), lrclib_misses = lrclib_misses + 1
+WHERE id = $1;
+
+-- name: MarkLrclibChecked :exec
+-- Stamps the attempt without spending one, for a row whose result was rejected for a
+-- reason that is not LRCLIB's fault.
+UPDATE songs SET lrclib_checked_at = NOW() WHERE id = $1;
+
+-- name: MarkSongInstrumentalFromLrclib :execrows
+-- LRCLIB says this recording has no words. Migration 000012 added is_instrumental for
+-- exactly this: without a way to say so, an instrumental sits in the missing-lyrics
+-- backlog forever and the quiz can pick it and ask a player to recall words that do
+-- not exist. LRCLIB is the first source that can answer the question automatically.
+UPDATE songs SET is_instrumental = TRUE, lrclib_id = sqlc.narg(lrclib_id),
+                 lrclib_checked_at = NOW(), lrclib_misses = 0
+WHERE id = sqlc.arg(id) AND NOT is_instrumental;

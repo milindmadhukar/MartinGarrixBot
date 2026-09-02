@@ -112,6 +112,22 @@ type Song struct {
 	IsInstrumental    bool               `json:"isInstrumental"`
 	IsCollection      bool               `json:"isCollection"`
 	BeatportSlug      pgtype.Text        `json:"beatportSlug"`
+	NormalizedName    pgtype.Text        `json:"normalizedName"`
+	LrclibID          pgtype.Int8        `json:"lrclibId"`
+	LrclibCheckedAt   pgtype.Timestamptz `json:"lrclibCheckedAt"`
+	LrclibMisses      int16              `json:"lrclibMisses"`
+}
+
+type SongAnnouncement struct {
+	SongID     int64              `json:"songId"`
+	GuildID    int64              `json:"guildId"`
+	ChannelID  int64              `json:"channelId"`
+	MessageID  int64              `json:"messageId"`
+	ButtonsKey string             `json:"buttonsKey"`
+	PostedAt   pgtype.Timestamptz `json:"postedAt"`
+	EditedAt   pgtype.Timestamptz `json:"editedAt"`
+	EditCount  int16              `json:"editCount"`
+	FailedAt   pgtype.Timestamptz `json:"failedAt"`
 }
 
 type Tag struct {

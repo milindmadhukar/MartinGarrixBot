@@ -34,10 +34,26 @@ type NotificationItem struct {
 
 	// For interactive components (STMPD)
 	Components []discord.LayoutComponent
+
+	// SongID is the row this item announces, and zero when the item is not a song --
+	// which is every YouTube, Reddit and tour item, so those paths are unaffected.
+	//
+	// Set it and the notifier remembers where the message landed. A release's
+	// streaming links arrive over the weeks after it is announced, and until now the
+	// message id came back from CreateMessage, went into a debug log and was thrown
+	// away, so an announcement kept whatever buttons it had in its first fifteen
+	// minutes forever.
+	SongID int64
+
+	// LinkSignature is the button set as posted, from utils.SongLinkSignature.
+	LinkSignature string
 }
 
 // GuildNotificationConfig holds the channel and role info for a guild
 type GuildNotificationConfig struct {
+	// GuildID is needed to record an announcement: song_announcements is keyed on
+	// (guild_id, message_id).
+	GuildID   snowflake.ID
 	ChannelID snowflake.ID
 	RoleID    *snowflake.ID // nil if no role to ping
 }
@@ -152,6 +168,7 @@ func (bn *BatchNotifier) getGuildConfigs() ([]GuildNotificationConfig, error) {
 		}
 		for _, g := range guilds {
 			config := GuildNotificationConfig{
+				GuildID:   snowflake.ID(g.GuildID),
 				ChannelID: snowflake.ID(g.StmpdNotificationsChannel.Int64),
 			}
 			if g.StmpdNotificationsRole.Valid {
@@ -281,6 +298,7 @@ func (bn *BatchNotifier) sendToGuild(guild GuildNotificationConfig) error {
 				slog.Uint64("channel_id", uint64(guild.ChannelID)),
 				slog.Uint64("message_id", uint64(msg.ID)),
 				slog.Int("item_index", i))
+			bn.recordAnnouncement(guild, item, msg)
 		}
 
 		// Small delay between messages
@@ -377,9 +395,47 @@ func (bn *BatchNotifier) sendSingleItem(guild GuildNotificationConfig) error {
 			slog.String("type", string(bn.NotificationType)),
 			slog.Uint64("channel_id", uint64(guild.ChannelID)),
 			slog.Uint64("message_id", uint64(msg.ID)))
+		bn.recordAnnouncement(guild, item, msg)
 	}
 
 	return nil
+}
+
+// recordAnnouncement remembers where a song announcement landed, so its buttons can be
+// corrected later when the song gains a streaming link.
+//
+// Failures are logged and swallowed. Losing the bookkeeping costs a future edit, which
+// is strictly better than failing the announcement over it -- and a posting bot that
+// errors out because a side table rejected a row is a worse bot.
+//
+// msg.ChannelID rather than guild.ChannelID: the same value today, but it is what
+// Discord actually says the message is in.
+func (bn *BatchNotifier) recordAnnouncement(guild GuildNotificationConfig, item NotificationItem, msg *discord.Message) {
+	if item.SongID == 0 {
+		return // not a song: YouTube, Reddit and tour items have nothing to correct
+	}
+
+	ctx := context.Background()
+	if err := bn.Queries.InsertSongAnnouncement(ctx, db.InsertSongAnnouncementParams{
+		SongID:     item.SongID,
+		GuildID:    int64(guild.GuildID),
+		ChannelID:  int64(msg.ChannelID),
+		MessageID:  int64(msg.ID),
+		ButtonsKey: item.LinkSignature,
+	}); err != nil {
+		slog.Error("Failed to record where an announcement landed",
+			slog.Int64("song_id", item.SongID),
+			slog.Uint64("message_id", uint64(msg.ID)),
+			slog.Any("err", err))
+		return
+	}
+
+	// Whatever stopped this channel being editable is over, so un-park the messages
+	// that were left waiting on it.
+	if err := bn.Queries.ClearAnnouncementFailures(ctx, int64(msg.ChannelID)); err != nil {
+		slog.Warn("Failed to clear parked announcements for a channel",
+			slog.Uint64("channel_id", uint64(msg.ChannelID)), slog.Any("err", err))
+	}
 }
 
 // buildHeaderContent creates the header message with optional role ping

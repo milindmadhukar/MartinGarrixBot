@@ -65,6 +65,14 @@ dedupe_songs_dry:
 dedupe_songs:
 	go run ./scripts/dedupe-songs -config=$(CONFIG)
 
+backfill_lyrics_dry:
+	go run ./scripts/backfill-lyrics -config=$(CONFIG) -dry-run
+
+# Paced at LRCLIB's requested 500ms between requests, so a full sweep takes ~20
+# minutes -- past the 30m default only if the backlog grows a lot.
+backfill_lyrics:
+	go run ./scripts/backfill-lyrics -config=$(CONFIG) -timeout=60m
+
 verify_catalogue:
 	go run ./scripts/verify-catalogue -config=$(CONFIG)
 

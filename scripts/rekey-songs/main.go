@@ -1,9 +1,11 @@
-// Command rekey-songs recomputes songs.match_key and songs.base_key for every row.
+// Command rekey-songs recomputes the columns derived from a song's title:
+// songs.match_key, songs.base_key and songs.normalized_name.
 //
-// The keys are derived in Go by utils/matchkey.go, so they cannot be filled in by a
-// migration. Run this once after migration 000011, and again after any change to the
-// normalization rules -- backfill-stmpd and link-remix-parents both depend on the
-// keys being present and current.
+// All three are derived in Go -- by utils/matchkey.go and utils/title.go -- so they
+// cannot be filled in by a migration. Run this once after migrations 000011 and
+// 000019, and again after any change to the normalization rules: backfill-stmpd and
+// link-remix-parents depend on the keys being current, and the quiz reads
+// normalized_name to decide whether an answer is right.
 //
 // Idempotent: rows whose keys already match are left alone.
 package main
@@ -25,7 +27,7 @@ func main() {
 		script.Fatal("failed to load songs", err)
 	}
 
-	var changed, unchanged, flagged, unflagged, renamed, defeatured int
+	var changed, unchanged, flagged, unflagged, renamed, defeatured, normalized int
 	prog := script.NewProgress("rekey songs", len(rows))
 	for _, row := range rows {
 		prog.Step()
@@ -49,6 +51,7 @@ func main() {
 			name = base
 			if _, err := env.Queries.SetSongTitle(ctx, db.SetSongTitleParams{
 				ID: row.ID, Name: name, MixName: utils.Text(mix),
+				NormalizedName: utils.Text(utils.NormalizedTitle(name)),
 			}); err != nil {
 				slog.Warn("could not move a rendition out of the name",
 					slog.Int64("song_id", row.ID), slog.String("name", row.Name),
@@ -70,6 +73,7 @@ func main() {
 			utils.ArtistsSubsume(row.Artists, featured) {
 			if _, err := env.Queries.SetSongTitle(ctx, db.SetSongTitleParams{
 				ID: row.ID, Name: stripped, MixName: utils.Text(mix),
+				NormalizedName: utils.Text(utils.NormalizedTitle(stripped)),
 			}); err != nil {
 				slog.Warn("could not drop a redundant credit from the name",
 					slog.Int64("song_id", row.ID), slog.String("name", name), slog.Any("err", err))
@@ -83,6 +87,19 @@ func main() {
 
 		matchKey := utils.MatchKey(name, "", mix, row.Artists)
 		baseKey := utils.BaseKey(name, row.Artists)
+
+		// The answerable form of the title, for the quiz. Written unconditionally
+		// rather than only alongside a rename: the two passes above only rewrite name
+		// where doing so is safe, and the rows this column exists for -- "Sun Is Never
+		// Going Down (feat. Dawn Golden)" credited to Martin Garrix alone -- are
+		// exactly the ones they leave untouched.
+		if _, err := env.Queries.SetSongNormalizedName(ctx, db.SetSongNormalizedNameParams{
+			ID: row.ID, NormalizedName: utils.Text(utils.NormalizedTitle(name)),
+		}); err != nil {
+			script.Fatal("failed to write a normalized name", err)
+		} else if utils.NormalizedTitle(name) != name {
+			normalized++
+		}
 
 		// Nothing branches on DryRun any more: the whole run is inside a transaction
 		// that is rolled back, so the dry run exercises exactly the code the real one
@@ -150,5 +167,6 @@ func main() {
 		slog.Int("newly_flagged_as_collections", flagged),
 		slog.Int("restored_as_tracks", unflagged),
 		slog.Int("renditions_moved_out_of_name", renamed),
-		slog.Int("redundant_credits_dropped", defeatured))
+		slog.Int("redundant_credits_dropped", defeatured),
+		slog.Int("titles_with_a_shorter_answer", normalized))
 }

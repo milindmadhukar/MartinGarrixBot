@@ -180,6 +180,11 @@ func runStmpdCycle(ctx context.Context, b *mgbot.MartinGarrixBot, client *utils.
 				// UpdateSongWithStmpdRelease clears announced_at in that case, so
 				// re-reading tells us whether this is news.
 				if updated, err := b.Queries.GetSongByID(ctx, matched.ID); err == nil {
+					// The catalogue is the authority for a song's name, so this
+					// update may have replaced it -- which invalidates the answerable
+					// form derived from it. The query clears normalized_name when
+					// that happens; this fills it back in before anything reads it.
+					setNormalizedName(ctx, b, updated)
 					announceSong(ctx, b, notifier, updated, params.Thumbnail.String)
 				}
 			default:
@@ -258,6 +263,12 @@ func announceSong(ctx context.Context, b *mgbot.MartinGarrixBot, notifier *utils
 	notifier.AddItem(utils.NotificationItem{
 		Embed:      &embed,
 		Components: utils.GetSongButtonRows(song),
+		// Remember where this lands. Most of this song's streaming links do not exist
+		// yet -- they arrive from later STMPD cycles, the hourly enrichment and the
+		// backfill scripts -- and without the message id the announcement would keep
+		// today's buttons forever.
+		SongID:        song.ID,
+		LinkSignature: utils.SongLinkSignature(song),
 	})
 
 	// Stamped when the item joins the batch rather than after the batch is sent. A

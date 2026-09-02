@@ -66,8 +66,9 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 			return err
 		}
 
+		answers := utils.SongAnswers(song)
 		lines := strings.Split(song.Lyrics.String, "\n")
-		validLines := filterValidLines(lines, song.Name)
+		validLines := filterValidLines(lines, answers, lineCountFor(difficulty))
 		if len(validLines) == 0 {
 			return fmt.Errorf("no valid lines found in lyrics")
 		}
@@ -97,8 +98,7 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 
 			answerCheckFunc := func(messageEvent *events.MessageCreate) {
 				response := messageEvent.Message.Content
-				nameToCheck := song.Name
-				isClose := utils.IsCloseMatch(nameToCheck, response, 0.6)
+				isClose := utils.GuessMatchesSong(song, response)
 				var followUpResponseEmbed discord.Embed
 				if isClose {
 					// TODO: Maybe define it in constants?
@@ -172,16 +172,93 @@ func QuizHandler(b *mgbot.MartinGarrixBot) handler.CommandHandler {
 	}
 }
 
-func filterValidLines(lines []string, songName string) []string {
-	var validLines []string
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if len(line) >= 5 && !strings.Contains(strings.ToLower(line),
-			strings.ToLower(songName)) {
-			validLines = append(validLines, line)
+// filterValidLines drops the lyric lines that would give the answer away, weakening
+// the filter until enough of them survive.
+//
+// Hiding lines that contain the stored name is what this used to do, and it can never
+// fire on a name like "Breach (Walk Alone)" because no lyric line contains
+// parentheses. So the Breach round offered "You'll never walk alone" as the clue for a
+// song whose accepted answer is "Walk Alone". Filtering on every accepted form fixes
+// that -- but some accepted forms are ordinary words, and hiding every line containing
+// the subtitle of "Melt (Tasty)" can leave nothing to quiz on at all.
+//
+// Hence a ladder rather than a single rule. Each tier hides less than the one above,
+// and the first that leaves enough lines wins. A slightly generous clue beats a failed
+// interaction.
+func filterValidLines(lines []string, answers []string, need int) []string {
+	tiers := [][]string{
+		answers,            // every form a correct answer may take
+		firstN(answers, 2), // the stored name and the base title
+		firstN(answers, 1), // the stored name alone
+		nil,                // length only
+	}
+
+	var last []string
+	for _, terms := range tiers {
+		last = dropGiveaways(lines, terms)
+		if len(last) >= need {
+			return last
 		}
 	}
-	return validLines
+	return last
+}
+
+// dropGiveaways removes lines that are too short to be a clue, and lines naming any of
+// the given titles.
+func dropGiveaways(lines []string, titles []string) []string {
+	var kept []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if len(line) < 5 {
+			continue
+		}
+		if namesATitle(line, titles) {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return kept
+}
+
+// namesATitle reports whether a line gives away any of the titles.
+//
+// Empty titles are skipped rather than matched. strings.Contains(x, "") is always
+// true, which is how an empty song name used to filter out every line in the song and
+// leave the quiz with nothing to show.
+func namesATitle(line string, titles []string) bool {
+	for _, title := range titles {
+		if strings.TrimSpace(title) == "" {
+			continue
+		}
+		if utils.TitleAppearsIn(line, title) {
+			return true
+		}
+	}
+	return false
+}
+
+func firstN(s []string, n int) []string {
+	if len(s) < n {
+		return s
+	}
+	return s[:n]
+}
+
+// linesPerDifficulty is how many lyric lines a round shows. It is also what
+// filterValidLines needs, so that "enough lines survived" is a question about this
+// round rather than a number the filter has to guess at.
+var linesPerDifficulty = map[string]int{
+	"easy":    4,
+	"medium":  3,
+	"hard":    2,
+	"extreme": 1,
+}
+
+func lineCountFor(difficulty string) int {
+	if count := linesPerDifficulty[difficulty]; count > 0 {
+		return count
+	}
+	return 4
 }
 
 func selectLyricLines(lines []string, difficulty string) []string {
@@ -189,18 +266,7 @@ func selectLyricLines(lines []string, difficulty string) []string {
 		return []string{}
 	}
 
-	numLines := map[string]int{
-		"easy":    4,
-		"medium":  3,
-		"hard":    2,
-		"extreme": 1,
-	}
-
-	count := numLines[difficulty]
-	if count == 0 {
-		count = 4
-	}
-
+	count := lineCountFor(difficulty)
 	if count > len(lines) {
 		count = len(lines)
 	}

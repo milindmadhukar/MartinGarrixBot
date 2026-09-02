@@ -444,7 +444,7 @@ func (q *Queries) GetRandomSongNamesWithLyrics(ctx context.Context) ([]GetRandom
 }
 
 const getRandomSongWithLyrics = `-- name: GetRandomSongWithLyrics :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug FROM songs
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug, normalized_name, lrclib_id, lrclib_checked_at, lrclib_misses FROM songs
 WHERE lyrics IS NOT NULL
 AND NOT is_instrumental
 AND NOT is_collection
@@ -499,12 +499,16 @@ func (q *Queries) GetRandomSongWithLyrics(ctx context.Context) (Song, error) {
 		&i.IsInstrumental,
 		&i.IsCollection,
 		&i.BeatportSlug,
+		&i.NormalizedName,
+		&i.LrclibID,
+		&i.LrclibCheckedAt,
+		&i.LrclibMisses,
 	)
 	return i, err
 }
 
 const getRandomSongWithLyricsEasy = `-- name: GetRandomSongWithLyricsEasy :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug FROM songs
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug, normalized_name, lrclib_id, lrclib_checked_at, lrclib_misses FROM songs
 WHERE lyrics IS NOT NULL
 AND NOT is_instrumental
 AND NOT is_collection
@@ -554,12 +558,16 @@ func (q *Queries) GetRandomSongWithLyricsEasy(ctx context.Context) (Song, error)
 		&i.IsInstrumental,
 		&i.IsCollection,
 		&i.BeatportSlug,
+		&i.NormalizedName,
+		&i.LrclibID,
+		&i.LrclibCheckedAt,
+		&i.LrclibMisses,
 	)
 	return i, err
 }
 
 const getSong = `-- name: GetSong :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug FROM songs
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug, normalized_name, lrclib_id, lrclib_checked_at, lrclib_misses FROM songs
 WHERE name = $1 AND artists = $2 AND release_date IS NOT DISTINCT FROM $3
 `
 
@@ -611,12 +619,16 @@ func (q *Queries) GetSong(ctx context.Context, arg GetSongParams) (Song, error) 
 		&i.IsInstrumental,
 		&i.IsCollection,
 		&i.BeatportSlug,
+		&i.NormalizedName,
+		&i.LrclibID,
+		&i.LrclibCheckedAt,
+		&i.LrclibMisses,
 	)
 	return i, err
 }
 
 const getSongByBeatportID = `-- name: GetSongByBeatportID :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug FROM songs WHERE beatport_id = $1
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug, normalized_name, lrclib_id, lrclib_checked_at, lrclib_misses FROM songs WHERE beatport_id = $1
 `
 
 func (q *Queries) GetSongByBeatportID(ctx context.Context, beatportID pgtype.Int4) (Song, error) {
@@ -659,12 +671,16 @@ func (q *Queries) GetSongByBeatportID(ctx context.Context, beatportID pgtype.Int
 		&i.IsInstrumental,
 		&i.IsCollection,
 		&i.BeatportSlug,
+		&i.NormalizedName,
+		&i.LrclibID,
+		&i.LrclibCheckedAt,
+		&i.LrclibMisses,
 	)
 	return i, err
 }
 
 const getSongByID = `-- name: GetSongByID :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug FROM songs WHERE id = $1
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug, normalized_name, lrclib_id, lrclib_checked_at, lrclib_misses FROM songs WHERE id = $1
 `
 
 func (q *Queries) GetSongByID(ctx context.Context, id int64) (Song, error) {
@@ -707,12 +723,16 @@ func (q *Queries) GetSongByID(ctx context.Context, id int64) (Song, error) {
 		&i.IsInstrumental,
 		&i.IsCollection,
 		&i.BeatportSlug,
+		&i.NormalizedName,
+		&i.LrclibID,
+		&i.LrclibCheckedAt,
+		&i.LrclibMisses,
 	)
 	return i, err
 }
 
 const getSongByStmpdSlug = `-- name: GetSongByStmpdSlug :one
-SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug FROM songs WHERE stmpd_slug = $1
+SELECT id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug, normalized_name, lrclib_id, lrclib_checked_at, lrclib_misses FROM songs WHERE stmpd_slug = $1
 `
 
 func (q *Queries) GetSongByStmpdSlug(ctx context.Context, stmpdSlug pgtype.Text) (Song, error) {
@@ -755,6 +775,10 @@ func (q *Queries) GetSongByStmpdSlug(ctx context.Context, stmpdSlug pgtype.Text)
 		&i.IsInstrumental,
 		&i.IsCollection,
 		&i.BeatportSlug,
+		&i.NormalizedName,
+		&i.LrclibID,
+		&i.LrclibCheckedAt,
+		&i.LrclibMisses,
 	)
 	return i, err
 }
@@ -799,7 +823,8 @@ func (q *Queries) GetSongMixes(ctx context.Context, parentSongID pgtype.Int8) ([
 
 const getSongsForAudit = `-- name: GetSongsForAudit :many
 SELECT id, name, artists, mix_name, length_ms, is_collection, parent_song_id,
-       match_key, base_key, release_date, apple_music_url, spotify_url, youtube_url, stmpd_slug,
+       match_key, base_key, normalized_name, release_date, apple_music_url, spotify_url,
+       youtube_url, stmpd_slug,
        beatport_id, beatport_slug, beatport_url, deezer_url, tidal_url,
        amazon_music_url, youtube_music_url, source
 FROM songs ORDER BY id
@@ -815,6 +840,7 @@ type GetSongsForAuditRow struct {
 	ParentSongID    pgtype.Int8 `json:"parentSongId"`
 	MatchKey        pgtype.Text `json:"matchKey"`
 	BaseKey         pgtype.Text `json:"baseKey"`
+	NormalizedName  pgtype.Text `json:"normalizedName"`
 	ReleaseDate     pgtype.Text `json:"releaseDate"`
 	AppleMusicUrl   pgtype.Text `json:"appleMusicUrl"`
 	SpotifyUrl      pgtype.Text `json:"spotifyUrl"`
@@ -851,6 +877,7 @@ func (q *Queries) GetSongsForAudit(ctx context.Context) ([]GetSongsForAuditRow, 
 			&i.ParentSongID,
 			&i.MatchKey,
 			&i.BaseKey,
+			&i.NormalizedName,
 			&i.ReleaseDate,
 			&i.AppleMusicUrl,
 			&i.SpotifyUrl,
@@ -876,18 +903,21 @@ func (q *Queries) GetSongsForAudit(ctx context.Context) ([]GetSongsForAuditRow, 
 }
 
 const getSongsForKeying = `-- name: GetSongsForKeying :many
-SELECT id, name, artists, mix_name, length_ms, is_collection, apple_music_url, stmpd_slug FROM songs ORDER BY id
+SELECT id, name, artists, mix_name, length_ms, is_collection, apple_music_url, stmpd_slug,
+       normalized_name
+FROM songs ORDER BY id
 `
 
 type GetSongsForKeyingRow struct {
-	ID            int64       `json:"id"`
-	Name          string      `json:"name"`
-	Artists       string      `json:"artists"`
-	MixName       pgtype.Text `json:"mixName"`
-	LengthMs      pgtype.Int4 `json:"lengthMs"`
-	IsCollection  bool        `json:"isCollection"`
-	AppleMusicUrl pgtype.Text `json:"appleMusicUrl"`
-	StmpdSlug     pgtype.Text `json:"stmpdSlug"`
+	ID             int64       `json:"id"`
+	Name           string      `json:"name"`
+	Artists        string      `json:"artists"`
+	MixName        pgtype.Text `json:"mixName"`
+	LengthMs       pgtype.Int4 `json:"lengthMs"`
+	IsCollection   bool        `json:"isCollection"`
+	AppleMusicUrl  pgtype.Text `json:"appleMusicUrl"`
+	StmpdSlug      pgtype.Text `json:"stmpdSlug"`
+	NormalizedName pgtype.Text `json:"normalizedName"`
 }
 
 func (q *Queries) GetSongsForKeying(ctx context.Context) ([]GetSongsForKeyingRow, error) {
@@ -908,6 +938,7 @@ func (q *Queries) GetSongsForKeying(ctx context.Context) ([]GetSongsForKeyingRow
 			&i.IsCollection,
 			&i.AppleMusicUrl,
 			&i.StmpdSlug,
+			&i.NormalizedName,
 		); err != nil {
 			return nil, err
 		}
@@ -1198,6 +1229,74 @@ func (q *Queries) GetSongsMissingLinks(ctx context.Context) ([]GetSongsMissingLi
 			&i.ReleaseDate,
 			&i.Source,
 			&i.BeatportID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSongsMissingLyrics = `-- name: GetSongsMissingLyrics :many
+SELECT id, name, artists, mix_name, normalized_name, release_name, length_ms, lrclib_misses
+FROM songs
+WHERE lyrics IS NULL
+  AND NOT is_instrumental
+  AND NOT is_collection
+  AND parent_song_id IS NULL
+  AND lrclib_misses < 4
+  AND (lrclib_checked_at IS NULL
+       OR lrclib_checked_at < NOW() - (INTERVAL '7 days' * POWER(4, lrclib_misses)))
+ORDER BY lrclib_checked_at NULLS FIRST, release_date DESC NULLS LAST, id
+LIMIT $1
+`
+
+type GetSongsMissingLyricsRow struct {
+	ID             int64       `json:"id"`
+	Name           string      `json:"name"`
+	Artists        string      `json:"artists"`
+	MixName        pgtype.Text `json:"mixName"`
+	NormalizedName pgtype.Text `json:"normalizedName"`
+	ReleaseName    pgtype.Text `json:"releaseName"`
+	LengthMs       pgtype.Int4 `json:"lengthMs"`
+	LrclibMisses   int16       `json:"lrclibMisses"`
+}
+
+// The LRCLIB backlog.
+//
+// Canonical rows only: a rendition inherits its parent's words through
+// CopyLyricsToRemixes, so asking LRCLIB separately about each of a song's twelve
+// remixes is twelve times the requests for one answer.
+//
+// The retry schedule widens with every miss -- 7 days, 28, 112, 448 -- and gives up
+// after four. LRCLIB is community-contributed and does grow, so "never again" is
+// wrong; but a row that has come up empty four times over a year and a half is not
+// going to be filled by asking a fifth.
+//
+// Newest first among never-asked rows, because a song released this month is the one
+// people will actually be quizzed on and the one most likely to have just been added
+// upstream.
+func (q *Queries) GetSongsMissingLyrics(ctx context.Context, lim int32) ([]GetSongsMissingLyricsRow, error) {
+	rows, err := q.db.Query(ctx, getSongsMissingLyrics, lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSongsMissingLyricsRow
+	for rows.Next() {
+		var i GetSongsMissingLyricsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Artists,
+			&i.MixName,
+			&i.NormalizedName,
+			&i.ReleaseName,
+			&i.LengthMs,
+			&i.LrclibMisses,
 		); err != nil {
 			return nil, err
 		}
@@ -1504,7 +1603,7 @@ INSERT INTO songs (
     name, artists, release_date, thumbnail_url, beatport_id, mix_name,
     release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_slug, source
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'beatport')
-RETURNING id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug
+RETURNING id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug, normalized_name, lrclib_id, lrclib_checked_at, lrclib_misses
 `
 
 type InsertBeatportSongParams struct {
@@ -1577,6 +1676,10 @@ func (q *Queries) InsertBeatportSong(ctx context.Context, arg InsertBeatportSong
 		&i.IsInstrumental,
 		&i.IsCollection,
 		&i.BeatportSlug,
+		&i.NormalizedName,
+		&i.LrclibID,
+		&i.LrclibCheckedAt,
+		&i.LrclibMisses,
 	)
 	return i, err
 }
@@ -1594,7 +1697,7 @@ INSERT INTO songs (
     $14, $15,
     NOW(), 'stmpd'
 )
-RETURNING id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug
+RETURNING id, name, artists, thumbnail_url, spotify_url, apple_music_url, youtube_url, lyrics, is_unreleased, beatport_id, mix_name, release_date, release_name, genre, sub_genre, bpm, musical_key, length_ms, beatport_updated, source, first_seen_at, announced_at, stmpd_synced_at, deezer_url, tidal_url, amazon_music_url, youtube_music_url, beatport_url, beatport_release_id, stmpd_slug, match_key, base_key, parent_song_id, is_instrumental, is_collection, beatport_slug, normalized_name, lrclib_id, lrclib_checked_at, lrclib_misses
 `
 
 type InsertReleaseParams struct {
@@ -1671,6 +1774,10 @@ func (q *Queries) InsertRelease(ctx context.Context, arg InsertReleaseParams) (S
 		&i.IsInstrumental,
 		&i.IsCollection,
 		&i.BeatportSlug,
+		&i.NormalizedName,
+		&i.LrclibID,
+		&i.LrclibCheckedAt,
+		&i.LrclibMisses,
 	)
 	return i, err
 }
@@ -1684,6 +1791,28 @@ func (q *Queries) MarkBeatportUpdated(ctx context.Context, id int64) error {
 	return err
 }
 
+const markLrclibChecked = `-- name: MarkLrclibChecked :exec
+UPDATE songs SET lrclib_checked_at = NOW() WHERE id = $1
+`
+
+// Stamps the attempt without spending one, for a row whose result was rejected for a
+// reason that is not LRCLIB's fault.
+func (q *Queries) MarkLrclibChecked(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markLrclibChecked, id)
+	return err
+}
+
+const markLrclibMiss = `-- name: MarkLrclibMiss :exec
+UPDATE songs SET lrclib_checked_at = NOW(), lrclib_misses = lrclib_misses + 1
+WHERE id = $1
+`
+
+// LRCLIB answered and had nothing usable. Spends one of the row's four attempts.
+func (q *Queries) MarkLrclibMiss(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markLrclibMiss, id)
+	return err
+}
+
 const markSongAnnounced = `-- name: MarkSongAnnounced :exec
 UPDATE songs SET announced_at = NOW() WHERE id = $1 AND announced_at IS NULL
 `
@@ -1691,6 +1820,29 @@ UPDATE songs SET announced_at = NOW() WHERE id = $1 AND announced_at IS NULL
 func (q *Queries) MarkSongAnnounced(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, markSongAnnounced, id)
 	return err
+}
+
+const markSongInstrumentalFromLrclib = `-- name: MarkSongInstrumentalFromLrclib :execrows
+UPDATE songs SET is_instrumental = TRUE, lrclib_id = $1,
+                 lrclib_checked_at = NOW(), lrclib_misses = 0
+WHERE id = $2 AND NOT is_instrumental
+`
+
+type MarkSongInstrumentalFromLrclibParams struct {
+	LrclibID pgtype.Int8 `json:"lrclibId"`
+	ID       int64       `json:"id"`
+}
+
+// LRCLIB says this recording has no words. Migration 000012 added is_instrumental for
+// exactly this: without a way to say so, an instrumental sits in the missing-lyrics
+// backlog forever and the quiz can pick it and ask a player to recall words that do
+// not exist. LRCLIB is the first source that can answer the question automatically.
+func (q *Queries) MarkSongInstrumentalFromLrclib(ctx context.Context, arg MarkSongInstrumentalFromLrclibParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markSongInstrumentalFromLrclib, arg.LrclibID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const markSongUnreleased = `-- name: MarkSongUnreleased :exec
@@ -1878,6 +2030,48 @@ func (q *Queries) SetSongKeys(ctx context.Context, arg SetSongKeysParams) (int64
 	return result.RowsAffected(), nil
 }
 
+const setSongLyrics = `-- name: SetSongLyrics :execrows
+UPDATE songs SET lyrics = $1, lrclib_id = $2,
+                 lrclib_checked_at = NOW(), lrclib_misses = 0
+WHERE id = $3 AND lyrics IS NULL
+`
+
+type SetSongLyricsParams struct {
+	Lyrics   pgtype.Text `json:"lyrics"`
+	LrclibID pgtype.Int8 `json:"lrclibId"`
+	ID       int64       `json:"id"`
+}
+
+// Guarded on lyrics IS NULL so a backfill can never overwrite words entered by hand.
+// Those exist nowhere else, which is why dedupe-songs makes them a winner-selection
+// tiebreaker, and a fill that clobbered them would be unrecoverable.
+func (q *Queries) SetSongLyrics(ctx context.Context, arg SetSongLyricsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSongLyrics, arg.Lyrics, arg.LrclibID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setSongNormalizedName = `-- name: SetSongNormalizedName :execrows
+UPDATE songs SET normalized_name = $1
+WHERE id = $2 AND normalized_name IS DISTINCT FROM $1
+`
+
+type SetSongNormalizedNameParams struct {
+	NormalizedName pgtype.Text `json:"normalizedName"`
+	ID             int64       `json:"id"`
+}
+
+// The answerable form of the title, derived in Go by utils/title.go.
+func (q *Queries) SetSongNormalizedName(ctx context.Context, arg SetSongNormalizedNameParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSongNormalizedName, arg.NormalizedName, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setSongParent = `-- name: SetSongParent :execrows
 UPDATE songs SET parent_song_id = $1
 WHERE id = $2 AND parent_song_id IS DISTINCT FROM $1
@@ -1914,19 +2108,31 @@ func (q *Queries) SetSongReleaseDate(ctx context.Context, arg SetSongReleaseDate
 }
 
 const setSongTitle = `-- name: SetSongTitle :execrows
-UPDATE songs SET name = $1, mix_name = $2
-WHERE id = $3
-  AND (name IS DISTINCT FROM $1 OR mix_name IS DISTINCT FROM $2)
+UPDATE songs SET name = $1, mix_name = $2,
+                 normalized_name = $3
+WHERE id = $4
+  AND (name IS DISTINCT FROM $1
+    OR mix_name IS DISTINCT FROM $2
+    OR normalized_name IS DISTINCT FROM $3)
 `
 
 type SetSongTitleParams struct {
-	Name    string      `json:"name"`
-	MixName pgtype.Text `json:"mixName"`
-	ID      int64       `json:"id"`
+	Name           string      `json:"name"`
+	MixName        pgtype.Text `json:"mixName"`
+	NormalizedName pgtype.Text `json:"normalizedName"`
+	ID             int64       `json:"id"`
 }
 
+// normalized_name is written here too, and has to be: this query is how rekey-songs
+// rewrites a name, so leaving it out would guarantee the derived column is stale on
+// exactly the rows that needed correcting.
 func (q *Queries) SetSongTitle(ctx context.Context, arg SetSongTitleParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setSongTitle, arg.Name, arg.MixName, arg.ID)
+	result, err := q.db.Exec(ctx, setSongTitle,
+		arg.Name,
+		arg.MixName,
+		arg.NormalizedName,
+		arg.ID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -2093,6 +2299,12 @@ UPDATE songs SET
     -- title for some rows and not others.
     name                = COALESCE($3, name),
     mix_name            = $4,
+    -- normalized_name is derived from name in Go, so a name the catalogue rewrote
+    -- here invalidates it. Cleared rather than recomputed: SQL cannot derive it, and
+    -- NULL falls back to computing on read, whereas a leftover value would be
+    -- confidently wrong. The handler re-reads the row and refills this immediately.
+    normalized_name     = CASE WHEN name IS DISTINCT FROM COALESCE($3, name)
+                               THEN NULL ELSE normalized_name END,
     spotify_url         = COALESCE($5,         spotify_url),
     apple_music_url     = COALESCE($6,     apple_music_url),
     youtube_url         = COALESCE($7,         youtube_url),

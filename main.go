@@ -159,6 +159,18 @@ func main() {
 				// time, so the maintenance scripts stay one-off repairs.
 				go handlers.GetSongEnrichment(b, time.NewTicker(1*time.Hour))
 
+				// Daily rather than hourly: the backlog's retry floor is seven days,
+				// so anything faster only re-runs a query that returns nothing. The
+				// bulk of the catalogue is filled by scripts/backfill-lyrics; this
+				// picks up what LRCLIB gains afterwards.
+				go handlers.GetSongLyrics(b, time.NewTicker(24*time.Hour))
+
+				// Adds link buttons to an already-posted release announcement as the
+				// links are discovered. Hourly because that is the cadence of the
+				// enrichment producing them; a cycle where nothing changed makes no
+				// Discord calls at all.
+				go handlers.RefreshAnnouncements(b, time.NewTicker(1*time.Hour))
+
 				// Ticks far more often than it posts. Unlike the feeds above there
 				// is no remote source to poll -- what it waits for is each guild's
 				// own configured local hour, so the schedule lives per guild and

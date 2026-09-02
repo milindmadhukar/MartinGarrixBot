@@ -147,16 +147,19 @@ func (q *Queries) GetRedditNotificationChannels(ctx context.Context) ([]GetReddi
 }
 
 const getSTMPDNofiticationChannels = `-- name: GetSTMPDNofiticationChannels :many
-SELECT stmpd_notifications_channel, stmpd_notifications_role
+SELECT guild_id, stmpd_notifications_channel, stmpd_notifications_role
 FROM guilds
 WHERE stmpd_notifications_channel IS NOT NULL
 `
 
 type GetSTMPDNofiticationChannelsRow struct {
+	GuildID                   int64       `json:"guildId"`
 	StmpdNotificationsChannel pgtype.Int8 `json:"stmpdNotificationsChannel"`
 	StmpdNotificationsRole    pgtype.Int8 `json:"stmpdNotificationsRole"`
 }
 
+// guild_id comes back so a release announcement can be recorded against the guild it
+// landed in; song_announcements is keyed on (guild_id, message_id).
 func (q *Queries) GetSTMPDNofiticationChannels(ctx context.Context) ([]GetSTMPDNofiticationChannelsRow, error) {
 	rows, err := q.db.Query(ctx, getSTMPDNofiticationChannels)
 	if err != nil {
@@ -166,7 +169,7 @@ func (q *Queries) GetSTMPDNofiticationChannels(ctx context.Context) ([]GetSTMPDN
 	var items []GetSTMPDNofiticationChannelsRow
 	for rows.Next() {
 		var i GetSTMPDNofiticationChannelsRow
-		if err := rows.Scan(&i.StmpdNotificationsChannel, &i.StmpdNotificationsRole); err != nil {
+		if err := rows.Scan(&i.GuildID, &i.StmpdNotificationsChannel, &i.StmpdNotificationsRole); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

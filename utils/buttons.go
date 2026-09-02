@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -118,6 +119,62 @@ func GetSongButtons(song db.Song) []discord.InteractiveComponent {
 // of rows is harmless, so that guard is no longer needed.
 func GetSongButtonRows(song db.Song) []discord.LayoutComponent {
 	return ChunkButtonRows(GetSongButtons(song))
+}
+
+// LeadWith moves the button carrying the given label to the front, adding fallback
+// when the song's own links do not include one.
+//
+// The beatport announcement wants to lead with the beatport link. It used to do that by
+// prepending one unconditionally -- but a row inserted by the beatport fetcher carries
+// both a track id and a slug, so GetSongButtons had already produced exactly the same
+// button, and every beatport announcement went out with two identical Beatport buttons
+// next to each other. Moving beats adding: the ordering is preserved, and what is
+// posted matches what the row would render on its own, which is what lets the
+// announcement be corrected later without the first correction being "remove the
+// duplicate".
+func LeadWith(buttons []discord.InteractiveComponent, label string, fallback discord.ButtonComponent) []discord.InteractiveComponent {
+	for i, b := range buttons {
+		button, ok := b.(discord.ButtonComponent)
+		if !ok || button.Label != label {
+			continue
+		}
+		reordered := make([]discord.InteractiveComponent, 0, len(buttons))
+		reordered = append(reordered, button)
+		reordered = append(reordered, buttons[:i]...)
+		return append(reordered, buttons[i+1:]...)
+	}
+
+	return append([]discord.InteractiveComponent{fallback}, buttons...)
+}
+
+// SongLinkSignature fingerprints the link buttons a song would render right now.
+//
+// It exists so a posted announcement can be corrected when a song gains a link, without
+// editing every announcement on every cycle. Comparing this against what was stored at
+// post time is what makes an unchanged song cost zero REST calls.
+//
+// Built from songButtonConfigs so it cannot drift from what GetSongButtons actually
+// renders, and from the URLs rather than the labels: clearing a playlist Spotify link
+// or tidying a YouTube URL leaves the button count identical and still changes where it
+// goes.
+//
+// Deliberately not hashed. It is a few hundred bytes in a column nobody indexes, and
+// reading it in psql is worth more than the space -- a digest would turn "which button
+// changed" into an unanswerable question.
+func SongLinkSignature(song db.Song) string {
+	var b strings.Builder
+	for _, config := range songButtonConfigs(song) {
+		if !config.urlField.Valid || config.urlField.String == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(config.label)
+		b.WriteByte('=')
+		b.WriteString(config.urlField.String)
+	}
+	return b.String()
 }
 
 // ChunkButtonRows splits buttons into action rows within Discord's per-row cap, for

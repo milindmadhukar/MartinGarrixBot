@@ -1,0 +1,3 @@
+ALTER TABLE songs DROP COLUMN IF EXISTS lrclib_misses;
+ALTER TABLE songs DROP COLUMN IF EXISTS lrclib_checked_at;
+ALTER TABLE songs DROP COLUMN IF EXISTS lrclib_id;

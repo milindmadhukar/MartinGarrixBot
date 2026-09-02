@@ -8,61 +8,81 @@ import (
 	"testing"
 )
 
+// one wraps a single title as the answer set, for the cases that predate a song
+// having more than one accepted spelling.
+func one(title string) []string { return []string{title} }
+
 func TestFilterValidLines(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		lines    []string
-		songName string
-		want     []string
+		name    string
+		lines   []string
+		answers []string
+		want    []string
 	}{
 		{
-			name:     "keeps lines that do not give the answer away",
-			lines:    []string{"we are the people", "that you'll never get the best of"},
-			songName: "Animals",
-			want:     []string{"we are the people", "that you'll never get the best of"},
+			name:    "keeps lines that do not give the answer away",
+			lines:   []string{"we are the people", "that you'll never get the best of"},
+			answers: one("Animals"),
+			want:    []string{"we are the people", "that you'll never get the best of"},
 		},
 		{
-			name:     "drops a line containing the song name",
-			lines:    []string{"we are the animals", "keep this one"},
-			songName: "Animals",
-			want:     []string{"keep this one"},
+			name:    "drops a line containing the song name",
+			lines:   []string{"we are the animals", "keep this one"},
+			answers: one("Animals"),
+			want:    []string{"keep this one"},
 		},
 		{
-			name:     "the song name match is case insensitive",
-			lines:    []string{"WE ARE THE ANIMALS", "keep this one"},
-			songName: "animals",
-			want:     []string{"keep this one"},
+			name:    "the song name match is case insensitive",
+			lines:   []string{"WE ARE THE ANIMALS", "keep this one"},
+			answers: one("animals"),
+			want:    []string{"keep this one"},
 		},
 		{
-			name:     "drops lines under five characters",
-			lines:    []string{"hey", "oh", "a longer line"},
-			songName: "Animals",
-			want:     []string{"a longer line"},
+			name:    "drops lines under five characters",
+			lines:   []string{"hey", "oh", "a longer line"},
+			answers: one("Animals"),
+			want:    []string{"a longer line"},
 		},
 		{
-			name:     "trims surrounding whitespace",
-			lines:    []string{"   padded line   "},
-			songName: "Animals",
-			want:     []string{"padded line"},
+			name:    "trims surrounding whitespace",
+			lines:   []string{"   padded line   "},
+			answers: one("Animals"),
+			want:    []string{"padded line"},
 		},
 		{
-			name:     "a line that is only whitespace is dropped",
-			lines:    []string{"        ", "a longer line"},
-			songName: "Animals",
-			want:     []string{"a longer line"},
+			name:    "a line that is only whitespace is dropped",
+			lines:   []string{"        ", "a longer line"},
+			answers: one("Animals"),
+			want:    []string{"a longer line"},
 		},
 		{
-			name:     "exactly five characters is kept",
-			lines:    []string{"12345"},
-			songName: "Animals",
-			want:     []string{"12345"},
+			name:    "exactly five characters is kept",
+			lines:   []string{"12345"},
+			answers: one("Animals"),
+			want:    []string{"12345"},
 		},
 		{
-			name:     "four characters is dropped",
-			lines:    []string{"1234"},
-			songName: "Animals",
+			name:    "four characters is dropped",
+			lines:   []string{"1234"},
+			answers: one("Animals"),
+		},
+		{
+			// The Breach round: the stored name never appears in a lyric because no
+			// lyric contains parentheses, so only filtering on the subtitle catches it.
+			name:    "drops a line containing the subtitle",
+			lines:   []string{"You'll never walk alone", "The dead of the night, out in the cold"},
+			answers: []string{"Breach (Walk Alone)", "Breach", "Walk Alone"},
+			want:    []string{"The dead of the night, out in the cold"},
+		},
+		{
+			// Word boundaries, not substrings: a title of "Not" must not hide every
+			// line containing "nothing".
+			name:    "a title inside a longer word is not a giveaway",
+			lines:   []string{"there is nothing left to say"},
+			answers: []string{"It's Alright (Not)", "It's Alright", "Not"},
+			want:    []string{"there is nothing left to say"},
 		},
 	}
 
@@ -70,7 +90,7 @@ func TestFilterValidLines(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := filterValidLines(tt.lines, tt.songName)
+			got := filterValidLines(tt.lines, tt.answers, 1)
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("filterValidLines() = %v, want %v", got, tt.want)
 			}
@@ -83,23 +103,47 @@ func TestFilterValidLines_NoMatchesReturnsNil(t *testing.T) {
 	t.Parallel()
 
 	for _, lines := range [][]string{nil, {}, {"hey", "yo"}} {
-		if got := filterValidLines(lines, "Animals"); got != nil {
+		if got := filterValidLines(lines, one("Animals"), 1); got != nil {
 			t.Errorf("filterValidLines(%v) = %v, want nil", lines, got)
 		}
 	}
 }
 
-// BUG: strings.Contains(x, "") is always true, so an empty song name filters
-// every line out and the quiz has nothing to show. A song row with an empty
-// name would have to reach the handler for this to fire, so it is pinned rather
-// than fixed.
-func TestFilterValidLines_EmptySongNameDropsEverything(t *testing.T) {
+// An empty title used to filter every line out, because strings.Contains(x, "") is
+// always true. Empty forms are now skipped rather than matched.
+func TestFilterValidLines_EmptyTitleKeepsEverything(t *testing.T) {
 	t.Parallel()
 
 	lines := []string{"a perfectly good line", "another good line"}
 
-	if got := filterValidLines(lines, ""); got != nil {
-		t.Errorf("filterValidLines(%v, \"\") = %v, want nil (current behaviour)", lines, got)
+	if got := filterValidLines(lines, one(""), 1); !slices.Equal(got, lines) {
+		t.Errorf("filterValidLines(%v, \"\") = %v, want every line kept", lines, got)
+	}
+}
+
+// The strictest tier can hide the whole song when an accepted form is an ordinary
+// word. Weakening the filter beats showing the player nothing.
+func TestFilterValidLines_WeakensUntilEnoughLinesSurvive(t *testing.T) {
+	t.Parallel()
+
+	// Every line names the subtitle, so tier one leaves nothing.
+	lines := []string{
+		"tasty is all I ever wanted",
+		"and tasty is all I need",
+		"nothing but tasty tonight",
+	}
+	answers := []string{"Melt (Tasty)", "Melt", "Tasty"}
+
+	got := filterValidLines(lines, answers, 2)
+	if len(got) != 3 {
+		t.Fatalf("got %d lines, want all 3 after the filter weakened: %v", len(got), got)
+	}
+
+	// The stored name and the base title are still hidden at the tier that won, so a
+	// line naming "Melt" is dropped while the subtitle-only lines survive.
+	withBase := append(slices.Clone(lines), "I watch it melt away")
+	if got := filterValidLines(withBase, answers, 2); slices.Contains(got, "I watch it melt away") {
+		t.Errorf("the base title should still be hidden at the second tier: %v", got)
 	}
 }
 
@@ -130,6 +174,20 @@ func TestSelectLyricLines_CountPerDifficulty(t *testing.T) {
 					tt.difficulty, len(got), tt.want)
 			}
 		})
+	}
+}
+
+// filterValidLines and selectLyricLines have to agree about how many lines a round
+// needs, or the filter weakens for a target the round never wanted.
+func TestLineCountForMatchesSelection(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{"one", "two", "three", "four", "five", "six", "seven", "eight"}
+
+	for _, difficulty := range []string{"easy", "medium", "hard", "extreme", "unrecognised"} {
+		if got, want := len(selectLyricLines(lines, difficulty)), lineCountFor(difficulty); got != want {
+			t.Errorf("difficulty %q selects %d lines but lineCountFor says %d", difficulty, got, want)
+		}
 	}
 }
 
@@ -225,7 +283,7 @@ func TestQuizLinePipeline(t *testing.T) {
 			"Never gonna run around",
 		"\n")
 
-	valid := filterValidLines(lyrics, "Animals")
+	valid := filterValidLines(lyrics, one("Animals"), lineCountFor("hard"))
 	if len(valid) != 3 {
 		t.Fatalf("got %d valid lines, want 3: %v", len(valid), valid)
 	}

@@ -20,6 +20,12 @@ const (
 	// silent-failure signature this registry was written to catch, and it would cry
 	// wolf on days that simply have no anniversary.
 	SourceAnniversary = "anniversary"
+	// SourceLyrics follows the same rule as SourceAnniversary and for the same
+	// reason: the backlog is meant to drain. Once it has, there is nothing to fetch,
+	// and treating an empty queue as a failed cycle would report the source degraded
+	// exactly when it has finished its job. A cycle is a success whenever the queue
+	// could be read and nothing failed at the HTTP layer.
+	SourceLyrics = "lrclib"
 )
 
 // sourceFailureThreshold is how many consecutive bad cycles a source may have

@@ -445,16 +445,18 @@ func GetBeatportReleases(b *mgbot.MartinGarrixBot, ticker *time.Ticker) {
 				buttons := utils.GetSongButtons(song)
 				if track.Slug != "" {
 					beatportURL := utils.BeatportTrackURL(track.Slug, int32(track.ID))
-					buttons = append(
-						[]discord.InteractiveComponent{utils.BeatportButton(beatportURL)},
-						buttons...,
-					)
+					buttons = utils.LeadWith(buttons, "Beatport", utils.BeatportButton(beatportURL))
 				}
 				components := utils.ChunkButtonRows(buttons)
 
 				notifier.AddItem(utils.NotificationItem{
 					Embed:      &announcementEmbed,
 					Components: components,
+					// A beatport-sourced row has metadata and almost never a
+					// streaming link -- beatport supplies neither -- so this is the
+					// announcement that gains the most from being corrected later.
+					SongID:        song.ID,
+					LinkSignature: utils.SongLinkSignature(song),
 				})
 			}
 		}

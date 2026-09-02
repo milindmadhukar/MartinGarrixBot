@@ -9,7 +9,9 @@ FROM guilds
 WHERE youtube_notifications_channel IS NOT NULL;
 
 -- name: GetSTMPDNofiticationChannels :many
-SELECT stmpd_notifications_channel, stmpd_notifications_role
+-- guild_id comes back so a release announcement can be recorded against the guild it
+-- landed in; song_announcements is keyed on (guild_id, message_id).
+SELECT guild_id, stmpd_notifications_channel, stmpd_notifications_role
 FROM guilds
 WHERE stmpd_notifications_channel IS NOT NULL;
 

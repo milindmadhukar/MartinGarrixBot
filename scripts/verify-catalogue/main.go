@@ -72,6 +72,7 @@ func main() {
 	rep := newReport()
 	checkCollections(rep, rows)
 	checkKeys(rep, rows)
+	checkNormalizedNames(rep, rows)
 	checkDuplicates(rep, rows)
 	checkParents(rep, rows, byID)
 	checkLinks(rep, rows)
@@ -133,6 +134,79 @@ func checkKeys(rep *report, rows []db.GetSongsForAuditRow) {
 				r.ID, fmt.Sprintf("%s -- stored %q, want %q", r.Name, r.MatchKey.String, wantMatch))
 		}
 	}
+}
+
+// checkNormalizedNames catches two things the quiz depends on.
+//
+// A stale normalized_name is the milder one: readers fall back to deriving it, so the
+// answers stay right, but the stored value is then a lie that anyone reading the table
+// will believe. An absent one is not flagged at all -- NULL is a legitimate state that
+// means "derive it", and flagging it would make a fresh column look like a fault.
+//
+// Two canonical rows reducing to the same normalized name is the interesting one. It
+// means the same song is stored under several spellings of its credits -- the
+// catalogue holds "Now that I've Found You Feat. \"John & Michel\"", "Now That I've
+// Found You feat. John & Michel" and "Now That I've Found You feat. John Martin feat.
+// Michel Zitron" -- and no match key sees it, because the credits differ. Only a
+// title-only key does.
+func checkNormalizedNames(rep *report, rows []db.GetSongsForAuditRow) {
+	groups := map[string][]db.GetSongsForAuditRow{}
+
+	for _, r := range rows {
+		want := utils.NormalizedTitle(r.Name)
+		if r.NormalizedName.Valid && r.NormalizedName.String != want {
+			rep.flag("normalized name is stale", "rekey-songs",
+				r.ID, fmt.Sprintf("%s -- stored %q, want %q", r.Name, r.NormalizedName.String, want))
+		}
+
+		// Renditions and releases legitimately share a song's title with it, so only
+		// canonical tracks are compared against each other.
+		if r.IsCollection || r.ParentSongID.Valid {
+			continue
+		}
+		if key := utils.NormalizeToken(want); key != "" {
+			groups[key] = append(groups[key], r)
+		}
+	}
+
+	keys := make([]string, 0, len(groups))
+	for k := range groups {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		g := groups[k]
+		if len(g) < 2 {
+			continue
+		}
+		// Different artists writing songs with the same title is ordinary. Only flag a
+		// group whose credits overlap, which is what makes it one song written several
+		// ways rather than several songs sharing a name.
+		if !anyArtistsOverlap(g) {
+			continue
+		}
+		ids := make([]string, len(g))
+		for i, r := range g {
+			ids[i] = fmt.Sprint(r.ID)
+		}
+		rep.flag("one song stored under several spellings of its credits", "dedupe-songs",
+			g[0].ID, fmt.Sprintf("%s -- ids %s", g[0].Name, strings.Join(ids, ", ")))
+	}
+}
+
+// anyArtistsOverlap reports whether two rows in the group credit at least one artist
+// in common.
+func anyArtistsOverlap(g []db.GetSongsForAuditRow) bool {
+	for i := range g {
+		for j := i + 1; j < len(g); j++ {
+			if utils.ArtistsSubsume(g[i].Artists, g[j].Artists) ||
+				utils.ArtistsSubsume(g[j].Artists, g[i].Artists) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // checkDuplicates finds rows that are the same recording. Two rows sharing a match key

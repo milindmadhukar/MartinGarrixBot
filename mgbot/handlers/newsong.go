@@ -32,6 +32,8 @@ func finaliseNewSong(ctx context.Context, b *mgbot.MartinGarrixBot, song db.Song
 		slog.Error("Failed to key a new song", slog.Int64("song_id", song.ID), slog.Any("err", err))
 	}
 
+	setNormalizedName(ctx, b, song)
+
 	if utils.IsCollectionName(song.Name) {
 		if _, err := b.Queries.SetSongCollection(ctx, db.SetSongCollectionParams{
 			ID: song.ID, IsCollection: true,
@@ -64,4 +66,19 @@ func finaliseNewSong(ctx context.Context, b *mgbot.MartinGarrixBot, song db.Song
 	slog.Info("Filed a new rendition under its song",
 		slog.Int64("song_id", song.ID), slog.String("name", song.Name),
 		slog.Int64("parent_id", parent.ID), slog.String("parent", parent.Name))
+}
+
+// setNormalizedName writes the answerable form of a row's title.
+//
+// Called on insert and again whenever a fetcher rewrites songs.name, because the value
+// is derived from the name and UpdateSongWithStmpdRelease clears it when the catalogue
+// supplies a different one. Readers fall back to computing it, so a failure here costs
+// nothing beyond a row that has to derive its answers each time it is quizzed on.
+func setNormalizedName(ctx context.Context, b *mgbot.MartinGarrixBot, song db.Song) {
+	if _, err := b.Queries.SetSongNormalizedName(ctx, db.SetSongNormalizedNameParams{
+		ID: song.ID, NormalizedName: utils.Text(utils.NormalizedTitle(song.Name)),
+	}); err != nil {
+		slog.Error("Failed to normalise a song's name",
+			slog.Int64("song_id", song.ID), slog.Any("err", err))
+	}
 }

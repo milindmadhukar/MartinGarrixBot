@@ -1,0 +1,24 @@
+-- The answerable form of songs.name: the title with any rendition and any
+-- featured-artist credit removed. "Sun Is Never Going Down (feat. Dawn Golden)"
+-- becomes "Sun Is Never Going Down"; "Breach (Walk Alone)" becomes "Breach".
+--
+-- songs.name is the identity column -- half of unique_release, and what SongHeading
+-- displays -- so it keeps whatever shape its source gave it. rekey-songs already
+-- tidies it where that is safe, but only strips a feature clause when the artists
+-- column already credits those people, which is exactly not the case for the rows
+-- players complain about: "Sun Is Never Going Down (feat. Dawn Golden)" is credited
+-- to Martin Garrix alone. A derived column can strip unconditionally where the
+-- identity column must not.
+--
+-- Deliberately not GENERATED, for the same reason as match_key in 000011: telling a
+-- rendition from a credit from a second title needs the rules in utils/title.go, and
+-- those have to exist in Go anyway for the quiz to compare a guess against them. Two
+-- implementations would drift.
+--
+-- Nullable on purpose, and every reader coalesces to the value computed from name
+-- (utils.SongAnswers). NULL means "nobody has derived this yet", which has to be
+-- survivable: the column is written by Go, so any path that rewrites name in SQL
+-- leaves this stale, and stale is worse than absent. Read that way the column is an
+-- override with a computed default -- which is also the only place a human can
+-- correct a title the classifier gets wrong.
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS normalized_name TEXT;
