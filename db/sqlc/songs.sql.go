@@ -1450,8 +1450,9 @@ SELECT id, name, artists, mix_name, release_date
 FROM songs
 WHERE lyrics IS NOT NULL
   AND NOT is_collection
-  AND LOWER(artists || ' - ' || name) LIKE LOWER($1)
-ORDER BY (parent_song_id IS NOT NULL), release_date DESC
+  AND parent_song_id IS NULL
+  AND LOWER(artists || ' - ' || name || ' ' || COALESCE(mix_name, '')) LIKE LOWER($1)
+ORDER BY release_date DESC
 LIMIT 20
 `
 
@@ -1463,6 +1464,18 @@ type GetSongsWithLyricsLikeRow struct {
 	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
+// Canonical rows only, which is the opposite of what GetSongsLike does and is
+// deliberate. A remix carries its own streaming links, so /links has to list it; a
+// remix's words are byte-identical to the original's, so listing it in /lyrics is
+// eighteen ways to read the same page.
+//
+// This became visible when the LRCLIB backfill fanned lyrics out to renditions:
+// searching "scared to be lonely" returned the song plus seventeen of its remixes and
+// pushed everything else past Discord's 20-choice limit. Before the fan-out only the
+// canonical row had lyrics, so the missing filter never showed.
+//
+// GetRandomSongNamesWithLyrics, which answers the same autocomplete on empty input,
+// has always filtered this way. The two now agree.
 func (q *Queries) GetSongsWithLyricsLike(ctx context.Context, lower string) ([]GetSongsWithLyricsLikeRow, error) {
 	rows, err := q.db.Query(ctx, getSongsWithLyricsLike, lower)
 	if err != nil {

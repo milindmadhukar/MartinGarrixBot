@@ -1,10 +1,11 @@
 package commands
 
 import (
-	"log/slog"
+	"context"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
+	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 	"github.com/milindmadhukar/STMPDBot/stmpdbot"
 	"github.com/milindmadhukar/STMPDBot/utils"
 )
@@ -24,38 +25,21 @@ var links = discord.SlashCommandCreate{
 
 // PERF: Implement some sort of caching, we are hitting the database for every autocomplete request.
 func LinksAutocompleteHandler(b *stmpdbot.STMPDBot) handler.AutocompleteHandler {
-	return func(e *handler.AutocompleteEvent) error {
-		var songChoices []utils.SongChoice
-		autocompleteInput := e.Data.String("song")
-
-		if autocompleteInput == "" {
-			songs, err := b.Queries.GetRandomSongNames(e.Ctx)
-			if err != nil {
-				slog.Error("Failed to get random song names", slog.Any("err", err))
-				return err
-			}
-			for _, song := range songs {
-				songChoices = append(songChoices, utils.SongChoice{
-					ID: song.ID, Name: song.Name, Artists: song.Artists,
-					Mix: song.MixName.String,
-				})
-			}
-		} else {
-			songs, err := b.Queries.GetSongsLike(e.Ctx, "%"+autocompleteInput+"%")
-			if err != nil {
-				slog.Error("Failed to get songs like", slog.Any("err", err))
-				return err
-			}
-			for _, song := range songs {
-				songChoices = append(songChoices, utils.SongChoice{
-					ID: song.ID, Name: song.Name, Artists: song.Artists,
-					Mix: song.MixName.String,
-				})
-			}
+	return songAutocomplete("links", func(ctx context.Context, input string) ([]utils.SongChoice, error) {
+		// Renditions are listed here, unlike /lyrics: a remix has its own streaming
+		// links, and hiding it puts them out of reach.
+		if input == "" {
+			rows, err := b.Queries.GetRandomSongNames(ctx)
+			return songChoicesFrom(rows, func(r db.GetRandomSongNamesRow) utils.SongChoice {
+				return utils.SongChoice{ID: r.ID, Name: r.Name, Artists: r.Artists, Mix: r.MixName.String}
+			}), err
 		}
 
-		return e.AutocompleteResult(utils.BuildSongChoices(songChoices))
-	}
+		rows, err := b.Queries.GetSongsLike(ctx, searchPattern(input))
+		return songChoicesFrom(rows, func(r db.GetSongsLikeRow) utils.SongChoice {
+			return utils.SongChoice{ID: r.ID, Name: r.Name, Artists: r.Artists, Mix: r.MixName.String}
+		}), err
+	})
 }
 
 func LinksHandler(b *stmpdbot.STMPDBot) handler.CommandHandler {
