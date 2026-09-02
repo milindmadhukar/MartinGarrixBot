@@ -78,7 +78,7 @@ func (q *Queries) ClearUnresolvedYoutubePlaylists(ctx context.Context) (int64, e
 }
 
 const copyLyricsToRemixes = `-- name: CopyLyricsToRemixes :execrows
-UPDATE songs t SET lyrics = s.lyrics
+UPDATE songs t SET lyrics = s.lyrics, lrclib_id = s.lrclib_id
 FROM songs s
 WHERE s.id = $1 AND t.parent_song_id = s.id AND t.lyrics IS NULL
   AND s.lyrics IS NOT NULL AND NOT t.is_instrumental
@@ -86,6 +86,17 @@ WHERE s.id = $1 AND t.parent_song_id = s.id AND t.lyrics IS NULL
 
 // Lyrics are entered by hand against the canonical row. A remix of a vocal track has
 // the same words, so fan them out rather than making someone paste them ten times.
+//
+// lrclib_id travels with the words, and must. It is what separates lyrics that came
+// from LRCLIB from lyrics that exist nowhere else, and two things read that
+// distinction: an automatic fill is reversible only if every row it wrote can be
+// found, and dedupe-songs ranks a row carrying hand-entered lyrics above one without
+// when it picks which duplicate survives. Copying the words but not their provenance
+// made every fanned-out remix look hand-entered -- 146 of them on the first
+// production run.
+//
+// A parent whose lyrics really were typed in has a NULL id, and the copy inherits
+// that, which is correct: it is a copy of something irreplaceable.
 func (q *Queries) CopyLyricsToRemixes(ctx context.Context, id int64) (int64, error) {
 	result, err := q.db.Exec(ctx, copyLyricsToRemixes, id)
 	if err != nil {
