@@ -227,8 +227,26 @@ func main() {
 	}()
 
 	if *shouldSyncCommands {
-		slog.Info("Syncing commands globally")
-		if err = handler.SyncCommands(b.Client, commands.Commands, nil); err != nil {
+		// dev_guilds was being ignored: this passed a hardcoded nil, so the config
+		// option documented as "add guild ids the commands should sync to, leave
+		// empty to sync globally" did nothing at all.
+		//
+		// It is worth honouring rather than deleting -- guild commands appear
+		// instantly where a global sync can take an hour to propagate, which is the
+		// whole point of the option while developing.
+		//
+		// Note that SyncCommands does not clear the global set when given guild ids.
+		// A deployment that sets dev_guilds therefore freezes whatever is registered
+		// globally, and every guild but those listed keeps answering from it. That is
+		// a development convenience; production must leave dev_guilds empty.
+		guilds := b.Cfg.Bot.DevGuilds
+		if len(guilds) == 0 {
+			slog.Info("Syncing commands globally")
+		} else {
+			slog.Warn("Syncing commands to specific guilds; the global set is left as it is",
+				slog.Any("dev_guilds", guilds))
+		}
+		if err = handler.SyncCommands(b.Client, commands.Commands, guilds); err != nil {
 			slog.Error("Failed to sync commands", slog.Any("err", err))
 		}
 	}

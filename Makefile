@@ -106,9 +106,12 @@ fuzz:
 live-check:
 	go test -tags livefetch -count=1 -v ./stmpdbot/handlers/
 
-check: fmt-check vet test
+# Mirrors CI, lint included. Leaving lint out is how an errname and a staticcheck
+# failure reached main with a green local `make check`.
+# Needs golangci-lint on PATH: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+check: fmt-check vet lint test
 
-.PHONY: build dev run kill fmt fmt-check vet test test-integration cover cover-html fuzz live-check check \
+.PHONY: build dev run kill fmt fmt-check vet lint test test-integration cover cover-html fuzz live-check check \
 	migrate_up migrate_down make_migration sqlc psql migrate_force
 
 lint:
