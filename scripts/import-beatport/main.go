@@ -15,8 +15,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
-	"github.com/milindmadhukar/STMPDBot/stmpdbot"
 	"github.com/milindmadhukar/STMPDBot/scripts/internal/script"
+	"github.com/milindmadhukar/STMPDBot/stmpdbot"
 	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
