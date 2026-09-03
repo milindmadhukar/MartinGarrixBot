@@ -23,8 +23,9 @@ after any change to the normalization rules in `utils/matchkey.go` or
 
 ```
 rekey-songs  →  backfill-stmpd  →  link-remix-parents  →  verify-catalogue
-                import-beatport  ↗
+                import-beatport  ↗                      ↗
              →  backfill-lyrics  ↗
+             →  fix-shared-artwork  →  backfill-artwork ↗
 ```
 
 `backfill-lyrics` depends on `rekey-songs` for a different reason than the others:
@@ -35,13 +36,38 @@ finds nothing; asking about "Sun Is Never Going Down" finds the record.
 `verify-catalogue` writes nothing and can be run at any time. Run it last: it names
 the pass that repairs whatever it finds, so a non-empty report is a to-do list.
 
+## Hand corrections and `locked_fields`
+
+Every pass here writes columns a person can also edit in the dashboard, and these
+processes run forever while a person types a value once. `songs.locked_fields` is what
+stops the second from being undone by the first: editing a field in the dashboard adds
+that column's name to the row's lock set, and **every query in this repo that an
+automated path uses skips a column named there**.
+
+That applies to the scripts as much as to the bot's tickers, so the "Writes:" lines
+below should all be read as "…except columns listed in `songs.locked_fields`". A pass
+that would have written a locked column reports it as unchanged, which is why a run can
+legitimately report fewer writes than the rows it examined.
+
+The derived columns are deliberately *not* lockable — `match_key`, `base_key`,
+`search_text` and `normalized_name` are recomputed from the title and credits, and
+pinning one would leave a hand-renamed song unfindable under the name it now displays.
+`rekey-songs` therefore always rewrites them.
+
+To hand a field back to automation, click its **locked** badge on the song's page in the
+dashboard.
+
 ## The scripts
 
 ### `rekey-songs`
 
 Recomputes the columns derived from a song's title. `match_key` and `base_key`
 identify a recording (song + rendition + artist set) and a song (irrespective of
-rendition). `normalized_name` is the *answerable* form of the title — the name with
+rendition). `search_text` is the folded haystack the catalogue is searched by -- the
+credits, title, rendition and release name lowercased with accents stripped, apostrophes
+dropped and punctuation collapsed -- which is what lets "matisse sadko dont tell me"
+find a row credited to "Matisse & Sadko, Aspyer, Matluck". `normalized_name` is the
+*answerable* form of the title — the name with
 any rendition and any featured-artist credit removed, so the quiz can accept "Breach"
 for a row stored as "Breach (Walk Alone)". All three are derived in Go, so a migration
 cannot fill them in.
@@ -54,8 +80,8 @@ alone.
 
 - **Requires:** migrations `000011_add_match_keys` and `000021_normalized_song_name`
 - **Idempotent:** yes — rows whose values already match are not written
-- **Writes:** `match_key`, `base_key`, `normalized_name`, `is_collection`, and
-  occasionally `name`/`mix_name`
+- **Writes:** `match_key`, `base_key`, `search_text`, `normalized_name`,
+  `is_collection`, and occasionally `name`/`mix_name`
 
 ### `backfill-stmpd`
 
@@ -218,6 +244,62 @@ so a song's twelve remixes are not twelve separate lookups for the same answer.
 - **Writes:** `lyrics` (only where NULL — hand-entered words are never overwritten),
   `lrclib_id`, `lrclib_checked_at`, `lrclib_misses`, `is_instrumental`
 
+### `backfill-artwork`
+
+Fills in missing cover art from Apple, resolved from the numeric id already embedded in
+each row's own `apple_music_url`. Where a row has no Apple link, the same verified
+search used for release dates finds one; an unverified result would hang the wrong
+artwork on the song.
+
+Paced at one request every 3 seconds. It is the pass that repairs whatever
+`fix-shared-artwork` clears, so run it after that one.
+
+- **Requires:** nothing beyond the base schema
+- **Idempotent:** yes — a row that has a cover is never asked about again
+- **Writes:** `thumbnail_url` (only where empty, and never on a locked row)
+
+### `fix-shared-artwork`
+
+Removes cover art that belongs to a different song.
+
+Beatport exposes no per-track image, only a per-release one, and the importer took it
+unconditionally — so every track on a compilation came back wearing the compilation's
+cover. One image sat on twelve unrelated songs, and 295 rows in production wore artwork
+belonging to something else: a listener asking for "Dragon" got a card showing the
+Tomorrowland 2016 sleeve.
+
+A cover is cleared when the rows wearing it credit **nobody in common**, because then it
+cannot be any of their artwork. That is the whole rule, and it is the same one
+`verify-catalogue` reports, so a run of this pass and the report that sent you to it
+cannot disagree about which rows are wrong.
+
+Sharing on its own is not a defect, which is why the count is not the test:
+
+- a song and its own renditions share a cover — that is what a single's artwork is;
+- the tracks of one act's own EP share a cover — "Front 2 Back" is Bart B More on "The
+  Street EP", and the EP sleeve is exactly what Apple and Spotify show for it.
+
+Judging by release name instead ("the release is not named after this track") looks
+right and is not: it would have stripped 115 rows of correct EP artwork. That rule lives
+in `utils.BeatportReleaseIsThisTrack` and belongs in the *importer*, where it stops new
+bad rows arriving; here the artist-overlap rule is the correct one. It is also what
+catches Beatport's placeholder images, which land on unrelated singles whose release
+name **is** the track name.
+
+This pass only clears. Refilling is `backfill-artwork`'s job, and running it afterwards
+is the point of clearing: a NULL cover is a row the Apple enrichment will resolve, while
+a wrong one is a row nothing will ever revisit.
+
+- **Requires:** `rekey-songs` (for `base_key`) and migration `000024`
+- **Idempotent:** yes — a second run clears 0
+- **Writes:** `thumbnail_url` (only to NULL, and never on a locked row)
+
+```
+make fix_shared_artwork_dry     # read this first
+make fix_shared_artwork
+make backfill_artwork           # resolve replacements from Apple
+```
+
 ### `verify-catalogue`
 
 Read-only. Recomputes each row's derived state and reports every row that disagrees
@@ -228,14 +310,20 @@ with what is stored, grouped by invariant, naming the pass that fixes it.
 - **Exit:** always 0; read the `checks_failed` and `rows_flagged` summary
 
 Checks: the collection flag against a recomputation, stale `match_key`/`base_key`,
-stale `normalized_name`, canonical rows sharing a normalized name with overlapping
-credits (one song written several ways — the catalogue holds "Now that I've Found You
-Feat. \"John & Michel\"" and two other spellings of the same song, which no match key
-can see because the credits differ), rows sharing a match key (the same recording
-twice), rendition trees that are deeper
-than one level or rooted at a release or at a row's own id, renditions left unfiled
-while their song sits in the table, Beatport ids with no slug to build a URL from,
-tracking parameters on streaming links, and songs carrying no link at all.
+stale `search_text`, stale `normalized_name`, canonical rows sharing a normalized name
+with overlapping credits (one song written several ways — the catalogue holds "Now that
+I've Found You Feat. \"John & Michel\"" and two other spellings of the same song, which
+no match key can see because the credits differ), rows sharing a match key (the same
+recording twice), rendition trees that are deeper than one level or rooted at a release
+or at a row's own id, renditions left unfiled while their song sits in the table,
+**canonical rows carrying less than one of their own renditions does**, **covers shared
+by unrelated acts**, **songs with no cover at all**, Beatport ids with no slug to build
+a URL from, tracking parameters on streaming links, and songs carrying no link at all.
+
+The invariants themselves live in `utils/catalogue`, not in this command. The
+dashboard's **Catalogue → What's wrong** page reports the same set by calling the same
+`catalogue.Audit`, so the two cannot drift; what lives here is only how a terminal
+renders them.
 
 It exists because the alternative was reading the table by hand. Every defect found
 that way turned out to be a class rather than a row — one wrongly flagged collection
@@ -297,11 +385,20 @@ ssh milind@100.74.136.119 \
 Then, in order:
 
 ```sh
-go run ./scripts/rekey-songs        -config=config.prod.toml
-go run ./scripts/backfill-stmpd     -config=config.prod.toml -dry-run   # read this
-go run ./scripts/backfill-stmpd     -config=config.prod.toml
-go run ./scripts/link-remix-parents -config=config.prod.toml
+go run ./scripts/rekey-songs         -config=config.prod.toml
+go run ./scripts/backfill-stmpd      -config=config.prod.toml -dry-run   # read this
+go run ./scripts/backfill-stmpd      -config=config.prod.toml
+go run ./scripts/link-remix-parents  -config=config.prod.toml
+go run ./scripts/fix-shared-artwork  -config=config.prod.toml -dry-run   # read this too
+go run ./scripts/fix-shared-artwork  -config=config.prod.toml
+go run ./scripts/backfill-artwork    -config=config.prod.toml
+go run ./scripts/verify-catalogue    -config=config.prod.toml
 ```
+
+`rekey-songs` must run before the dashboard is useful: `search_text` is NULL on every
+row until it does, and search falls back to an unfolded expression that cannot find a
+song by a partial credit string. Migration `000024` adds the column, so deploy the bot
+image first.
 
 Run `backfill-stmpd` until it reports `rows_written=0`. It converges in three or four
 passes: each pass records which release owns which row, and a release displaced

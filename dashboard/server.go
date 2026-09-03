@@ -32,6 +32,9 @@ type Server struct {
 	oauth    *oauth2.Client
 	renderer *renderer
 	http     *http.Server
+
+	// songAudit memoizes the whole-catalogue invariant audit; see songAuditTTL.
+	songAudit songAuditCache
 }
 
 func NewServer(opts *Options, pool *pgxpool.Pool, dev bool) (*Server, error) {
@@ -97,6 +100,22 @@ func (s *Server) routes() http.Handler {
 	// requireCSRF composes INSIDE guildScoped: it reads the session that
 	// authed installs on the request context.
 	mux.Handle("POST /g/{guildID}/settings", s.guildScoped(s.requireCSRF(s.handleSettingsSave)))
+
+	// The catalogue is global, not guild-scoped: every guild the bot is in reads one
+	// songs table. Browsing is open to any authenticated user; writing is owners only,
+	// because there is no guild to scope a mistake to.
+	mux.Handle("GET /songs", s.authed(s.handleSongs))
+	mux.Handle("GET /songs/table", s.authed(s.handleSongs))
+	mux.Handle("GET /songs/problems", s.authed(s.handleSongProblems))
+	mux.Handle("GET /songs/problems/list", s.authed(s.handleSongProblems))
+	mux.Handle("GET /songs/{songID}", s.authed(s.handleSong))
+
+	mux.Handle("GET /songs/{songID}/merge", s.ownerOnly(s.handleSongMergePick))
+	mux.Handle("POST /songs/{songID}", s.ownerOnly(s.requireCSRF(s.handleSongSave)))
+	mux.Handle("POST /songs/{songID}/unlock", s.ownerOnly(s.requireCSRF(s.handleSongUnlock)))
+	mux.Handle("POST /songs/{songID}/parent", s.ownerOnly(s.requireCSRF(s.handleSongParent)))
+	mux.Handle("POST /songs/{songID}/promote", s.ownerOnly(s.requireCSRF(s.handleSongPromote)))
+	mux.Handle("POST /songs/{songID}/merge", s.ownerOnly(s.requireCSRF(s.handleSongMerge)))
 
 	return chain(mux,
 		s.recoverer,

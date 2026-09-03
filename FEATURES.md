@@ -57,6 +57,18 @@ A community-built Discord bot for STMPD RCRDS — turning listeners into an acti
 - **Message logging** — edits with before/after, and deletions with full content
 - **Configurable moderator role** — fits whatever staff structure the server already has
 
+## Web Dashboard
+
+- **Discord sign-in** — no separate account; you see the servers you already administer
+- **Server overview** — activity, members and moderation at a glance
+- **Moderation log & member log** — searchable, filterable, linkable
+- **Server settings** — channels, roles, notifications and radio, without touching a config file
+- **Song catalogue** — the whole discography, searchable by artist and title in any order
+- **Every field visible** — links, artwork, lyrics, BPM, key, release, renditions and where each song has been announced
+- **What's wrong** — the catalogue audited against every invariant, each finding naming its fix
+- **Fix it in place** — correct a field, re-file a rendition, promote the right version, merge a duplicate
+- **Corrections stick** — a hand-edited field is locked against the syncs until you release it
+
 ## Fun & Utility
 
 - **Member lookup** — avatars and profile info

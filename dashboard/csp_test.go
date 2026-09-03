@@ -56,6 +56,42 @@ func TestCSPAllowsInlineStyles(t *testing.T) {
 	}
 }
 
+// Cover art is served from wherever the source published it -- the catalogue stores
+// the URL, it never proxies or copies the image. So an artwork host missing from
+// img-src does not degrade gracefully: every cover on the catalogue pages renders as a
+// broken image, which reads as bad data rather than as a bad policy. curl does not
+// enforce CSP, so nothing else here would catch it.
+func TestCSPAllowsSongArtworkHosts(t *testing.T) {
+	s := &Server{opts: testOptions(t)}
+
+	rec := httptest.NewRecorder()
+	s.securityHeaders(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	imgSrc := directive(rec.Header().Get("Content-Security-Policy"), "img-src")
+	if imgSrc == "" {
+		t.Fatal("no img-src directive")
+	}
+
+	// Every host the songs table actually holds artwork on.
+	for _, host := range []string{
+		"https://geo-media.beatport.com",        // beatport release covers
+		"https://d384qsdodhwrqp.cloudfront.net", // STMPD's own CDN
+		"https://cdn.sanity.io",                 // the STMPD Sanity dataset
+		"https://*.mzstatic.com",                // Apple, served from is1..is5
+		"https://cdn.discordapp.com",            // avatars and guild icons
+	} {
+		if !strings.Contains(imgSrc, host) {
+			t.Errorf("img-src is %q; without %s those covers render broken", imgSrc, host)
+		}
+	}
+
+	// Relaxing img-src is not a reason to relax the directive that matters.
+	if scriptSrc := directive(rec.Header().Get("Content-Security-Policy"), "script-src"); strings.Contains(scriptSrc, "unsafe-inline") {
+		t.Errorf("script-src must not allow inline script, got %q", scriptSrc)
+	}
+}
+
 // TestChartBarsCarryDistinctWidths renders the busiest-channels panel with two
 // very different values. If the bars come out the same width the chart is
 // meaningless, which is exactly how the CSP bug looked in the browser.

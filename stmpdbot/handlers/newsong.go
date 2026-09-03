@@ -28,6 +28,7 @@ func finaliseNewSong(ctx context.Context, b *stmpdbot.STMPDBot, song db.Song, in
 
 	if _, err := b.Queries.SetSongKeys(ctx, db.SetSongKeysParams{
 		ID: song.ID, MatchKey: utils.Text(matchKey), BaseKey: utils.Text(baseKey),
+		SearchText: utils.Text(utils.SearchText(song.Artists, song.Name, song.MixName.String, song.ReleaseName.String)),
 	}); err != nil {
 		slog.Error("Failed to key a new song", slog.Int64("song_id", song.ID), slog.Any("err", err))
 	}

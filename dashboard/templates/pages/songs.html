@@ -1,0 +1,187 @@
+{{define "page"}}
+<div class="flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <p class="stamp-label">Catalogue</p>
+    <h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">Songs</h1>
+  </div>
+  <a href="/songs/problems" class="rounded btn-ghost">What's wrong with the catalogue</a>
+</div>
+
+{{/* Filters are ordinary query params on the fragment route, so every view is
+     linkable, back-button-correct and renders identically server-side. */}}
+<form class="mt-4 grid grid-cols-2 items-end gap-3 sm:flex sm:flex-wrap"
+      hx-get="/songs/table"
+      hx-target="#songs-table"
+      hx-swap="outerHTML"
+      hx-push-url="true"
+      hx-trigger="change, submit, keyup changed delay:400ms from:input[type=text]">
+
+  <label class="stamp-muted col-span-2 sm:col-span-1">
+    Search
+    <input type="text" name="q" value="{{.Data.Filters.q}}"
+           placeholder="artist, title, any order"
+           class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-72">
+  </label>
+
+  <label class="stamp-muted">
+    Source
+    <select name="source" class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
+      <option value="">Any</option>
+      <option value="stmpd" {{if eq .Data.Filters.source "stmpd"}}selected{{end}}>stmpd</option>
+      <option value="beatport" {{if eq .Data.Filters.source "beatport"}}selected{{end}}>beatport</option>
+    </select>
+  </label>
+
+  <label class="stamp-muted">
+    Kind
+    <select name="canonical" class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
+      <option value="">Any</option>
+      <option value="true" {{if eq .Data.Filters.canonical "true"}}selected{{end}}>Songs</option>
+      <option value="false" {{if eq .Data.Filters.canonical "false"}}selected{{end}}>Renditions</option>
+    </select>
+  </label>
+
+  <label class="stamp-muted">
+    Releases
+    <select name="collection" class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
+      <option value="">Include</option>
+      <option value="false" {{if eq .Data.Filters.collection "false"}}selected{{end}}>Tracks only</option>
+      <option value="true" {{if eq .Data.Filters.collection "true"}}selected{{end}}>Releases only</option>
+    </select>
+  </label>
+
+  <label class="stamp-muted">
+    Links
+    <select name="links" class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
+      <option value="">Any</option>
+      <option value="true" {{if eq .Data.Filters.links "true"}}selected{{end}}>Has links</option>
+      <option value="false" {{if eq .Data.Filters.links "false"}}selected{{end}}>No links</option>
+    </select>
+  </label>
+
+  <label class="stamp-muted">
+    Artwork
+    <select name="artwork" class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
+      <option value="">Any</option>
+      <option value="true" {{if eq .Data.Filters.artwork "true"}}selected{{end}}>Has a cover</option>
+      <option value="false" {{if eq .Data.Filters.artwork "false"}}selected{{end}}>No cover</option>
+    </select>
+  </label>
+
+  <label class="stamp-muted">
+    Lyrics
+    <select name="lyrics" class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
+      <option value="">Any</option>
+      <option value="true" {{if eq .Data.Filters.lyrics "true"}}selected{{end}}>Has lyrics</option>
+      <option value="false" {{if eq .Data.Filters.lyrics "false"}}selected{{end}}>No lyrics</option>
+    </select>
+  </label>
+
+  <label class="stamp-muted col-span-2 sm:col-span-1">
+    Problem
+    <select name="problem" class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
+      <option value="">Any</option>
+      {{range .Data.Checks}}
+        <option value="{{.ID}}" {{if eq $.Data.Filters.problem .ID}}selected{{end}}>{{.Title}}</option>
+      {{end}}
+    </select>
+  </label>
+
+  <a href="/songs" class="rounded btn-ghost">Reset</a>
+</form>
+
+{{template "songs-table" .}}
+{{end}}
+
+{{define "songs-table"}}
+<div id="songs-table" class="mt-5">
+  {{if .Data.Rows}}
+
+  {{/* Narrow screens get cards; the real table appears from md up. Both render the
+       same rows -- a phone is how most of this gets looked at in practice. */}}
+  <ul class="space-y-2 md:hidden">
+    {{range .Data.Rows}}
+      <li class="panel p-3">
+        <a href="/songs/{{.ID}}" class="flex items-start gap-3">
+          {{template "songThumb" dict "URL" .ThumbnailUrl.String "Size" "h-12 w-12"}}
+          <span class="min-w-0 flex-1">
+            <span class="block truncate font-medium text-white">
+              {{.Name}}{{if .MixName.String}} <span class="text-slate-500">({{.MixName.String}})</span>{{end}}
+            </span>
+            <span class="block truncate text-sm text-slate-400">{{.Artists}}</span>
+            <span class="mt-1 flex flex-wrap items-center gap-1">
+              {{template "sourceBadge" .Source}}
+              {{if .ParentSongID.Valid}}<span class="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">rendition</span>{{end}}
+              {{if .IsCollection}}<span class="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">release</span>{{end}}
+              {{if not .HasLinks}}<span class="rounded bg-red-950 px-1.5 py-0.5 text-xs text-red-300">no links</span>{{end}}
+              {{range .Problems}}{{template "problemBadge" .}}{{end}}
+            </span>
+          </span>
+        </a>
+      </li>
+    {{end}}
+  </ul>
+
+  <div class="hidden overflow-x-auto md:block">
+    <table class="w-full text-left text-sm">
+      <thead class="stamp-muted border-b border-white/10">
+        <tr>
+          <th class="py-2 pr-3 font-normal"></th>
+          <th class="py-2 pr-3 font-normal">Song</th>
+          <th class="py-2 pr-3 font-normal">Artists</th>
+          <th class="py-2 pr-3 font-normal">Released</th>
+          <th class="py-2 pr-3 font-normal">Source</th>
+          <th class="py-2 pr-3 font-normal">Has</th>
+          <th class="py-2 pr-3 font-normal">Problems</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-white/5">
+        {{range .Data.Rows}}
+          <tr class="hover:bg-white/[0.03]">
+            <td class="py-2 pr-3">
+              <a href="/songs/{{.ID}}">
+                {{template "songThumb" dict "URL" .ThumbnailUrl.String "Size" "h-10 w-10"}}
+              </a>
+            </td>
+            <td class="py-2 pr-3">
+              <a href="/songs/{{.ID}}" class="font-medium text-white hover:text-mint-200">{{.Name}}</a>
+              {{if .MixName.String}}<span class="text-slate-500"> ({{.MixName.String}})</span>{{end}}
+              <div class="flex flex-wrap items-center gap-1 pt-0.5">
+                {{if .ParentSongID.Valid}}
+                  <a href="/songs/{{.ParentSongID.Int64}}" class="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200">rendition of #{{.ParentSongID.Int64}}</a>
+                {{end}}
+                {{if gt .RenditionCount 0}}
+                  <span class="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">{{.RenditionCount}} rendition{{if ne .RenditionCount 1}}s{{end}}</span>
+                {{end}}
+                {{if .IsCollection}}<span class="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">release</span>{{end}}
+                {{if .IsUnreleased}}<span class="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">unreleased</span>{{end}}
+                {{if .LockedFields}}<span class="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-300">{{len .LockedFields}} locked</span>{{end}}
+              </div>
+            </td>
+            <td class="py-2 pr-3 text-slate-300">{{.Artists}}</td>
+            <td class="py-2 pr-3 text-slate-400">{{if .ReleaseDate.Valid}}{{.ReleaseDate.String}}{{else}}—{{end}}</td>
+            <td class="py-2 pr-3">{{template "sourceBadge" .Source}}</td>
+            <td class="py-2 pr-3">
+              <div class="flex gap-1">
+                <span class="rounded px-1.5 py-0.5 text-xs {{if .HasLinks}}bg-mint-300/15 text-mint-200{{else}}bg-red-950 text-red-300{{end}}">links</span>
+                <span class="rounded px-1.5 py-0.5 text-xs {{if .HasLyrics}}bg-mint-300/15 text-mint-200{{else}}bg-slate-800 text-slate-500{{end}}">lyrics</span>
+                <span class="rounded px-1.5 py-0.5 text-xs {{if .ThumbnailUrl.Valid}}bg-mint-300/15 text-mint-200{{else}}bg-red-950 text-red-300{{end}}">art</span>
+              </div>
+            </td>
+            <td class="py-2 pr-3">
+              <div class="flex flex-wrap gap-1">
+                {{range .Problems}}{{template "problemBadge" .}}{{end}}
+              </div>
+            </td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+
+  {{template "pagination" .Data.Pagination}}
+  {{else}}
+    {{template "empty" "No songs match those filters."}}
+  {{end}}
+</div>
+{{end}}

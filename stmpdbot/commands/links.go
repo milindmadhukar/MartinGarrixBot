@@ -41,7 +41,7 @@ func LinksAutocompleteHandler(b *stmpdbot.STMPDBot) handler.AutocompleteHandler 
 				})
 			}
 		} else {
-			songs, err := b.Queries.GetSongsLike(e.Ctx, "%"+autocompleteInput+"%")
+			songs, err := b.Queries.GetSongsLike(e.Ctx, utils.SearchTerms(autocompleteInput))
 			if err != nil {
 				slog.Error("Failed to get songs like", slog.Any("err", err))
 				return err

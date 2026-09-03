@@ -73,6 +73,18 @@ backfill_lyrics_dry:
 backfill_lyrics:
 	go run ./scripts/backfill-lyrics -config=$(CONFIG) -timeout=60m
 
+backfill_artwork_dry:
+	go run ./scripts/backfill-artwork -config=$(CONFIG) -dry-run
+
+backfill_artwork:
+	go run ./scripts/backfill-artwork -config=$(CONFIG)
+
+fix_shared_artwork_dry:
+	go run ./scripts/fix-shared-artwork -config=$(CONFIG) -dry-run
+
+fix_shared_artwork:
+	go run ./scripts/fix-shared-artwork -config=$(CONFIG)
+
 verify_catalogue:
 	go run ./scripts/verify-catalogue -config=$(CONFIG)
 

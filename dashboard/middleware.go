@@ -93,8 +93,17 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	// curl does not enforce CSP. See TestCSPAllowsInlineStyles.
 	//
 	// cdn.discordapp.com is required for avatars and guild icons.
+	//
+	// The four artwork hosts are required by the catalogue pages, which show a cover
+	// per song. Cover art is never proxied or copied -- the table stores the URL the
+	// source gave it -- so an omitted host does not degrade, it renders every cover on
+	// the page as a broken image and makes correct data look like bad data. mzstatic
+	// is wildcarded because Apple serves the same asset from is1 through is5.
+	// See TestCSPAllowsSongArtworkHosts.
 	const csp = "default-src 'self'; " +
-		"img-src 'self' https://cdn.discordapp.com data:; " +
+		"img-src 'self' https://cdn.discordapp.com " +
+		"https://geo-media.beatport.com https://d384qsdodhwrqp.cloudfront.net " +
+		"https://cdn.sanity.io https://*.mzstatic.com data:; " +
 		"style-src 'self' 'unsafe-inline'; script-src 'self'; " +
 		"form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
@@ -150,8 +159,27 @@ func (s *Server) guildScoped(next http.HandlerFunc) http.Handler {
 	})
 }
 
-// requireCSRF guards mutating requests. Unused in the read-only v1 and wired in
-// with the settings form in phase 2.
+// ownerOnly gates the catalogue's write routes.
+//
+// Browsing the catalogue is open to any authenticated user; editing it is not. A song
+// row is global -- every guild the bot is in reads the same table -- so unlike a guild
+// setting there is no scope to contain a mistake to.
+//
+// 404 rather than 403, for the same reason guildScoped uses 404: a 403 confirms the
+// route is there and that someone else may use it.
+func (s *Server) ownerOnly(next http.HandlerFunc) http.Handler {
+	return s.authed(func(w http.ResponseWriter, r *http.Request) {
+		sess, ok := sessionFrom(r.Context())
+		if !ok || !sess.Owner {
+			s.renderError(w, r, http.StatusNotFound, "Not found", "No such page.")
+			return
+		}
+		next(w, r)
+	})
+}
+
+// requireCSRF guards mutating requests. Used by the guild settings form and by every
+// catalogue write.
 func (s *Server) requireCSRF(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sess, ok := sessionFrom(r.Context())

@@ -1,0 +1,66 @@
+{{define "page"}}
+<div class="flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <p class="stamp-label">Catalogue</p>
+    <h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">What's wrong</h1>
+  </div>
+  <a href="/songs" class="rounded btn-ghost">Back to the catalogue</a>
+</div>
+
+<p class="mt-2 max-w-3xl text-sm text-slate-400">
+  The same invariants <code>make verify_catalogue</code> checks, run against the table as
+  it is right now. Each one names the pass that repairs it. A check firing on three
+  hundred rows is one broken rule, not three hundred broken rows.
+</p>
+
+{{template "problems-list" .}}
+{{end}}
+
+{{define "problems-list"}}
+<div id="problems-list" class="mt-5 space-y-4">
+  {{if .Data.Failing}}
+    {{range .Data.Failing}}
+      <section class="panel p-4">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h2 class="font-medium text-red-300">{{.Check.Title}}</h2>
+            <p class="mt-0.5 max-w-3xl text-sm text-slate-400">{{.Check.Explain}}</p>
+          </div>
+          <span class="shrink-0 rounded bg-red-950 px-2 py-0.5 text-sm text-red-300">{{comma .Count}} rows</span>
+        </div>
+
+        <ul class="mt-3 space-y-1 text-sm">
+          {{range .Samples}}
+            <li class="truncate">
+              <a href="/songs/{{.SongID}}" class="font-mono text-xs text-mint-200 hover:underline">#{{.SongID}}</a>
+              <span class="text-slate-400">{{.Detail}}</span>
+            </li>
+          {{end}}
+        </ul>
+
+        <div class="mt-3 flex flex-wrap items-center gap-3">
+          <a href="/songs?problem={{.Check.ID}}" class="rounded btn-ghost">
+            {{if gt .Overflow 0}}Show all {{comma .Count}}{{else}}Show these in the catalogue{{end}}
+          </a>
+          <span class="stamp-muted">Fix: <code>make {{.Check.Remedy}}</code></span>
+        </div>
+      </section>
+    {{end}}
+  {{else}}
+    <div class="rounded-lg border border-mint-300/30 bg-mint-300/5 px-4 py-10 text-center text-mint-200">
+      The catalogue satisfies every invariant.
+    </div>
+  {{end}}
+
+  {{if .Data.Passing}}
+    <section class="panel p-4">
+      <h2 class="stamp-label mb-3">Passing</h2>
+      <ul class="grid gap-1 text-sm sm:grid-cols-2">
+        {{range .Data.Passing}}
+          <li class="text-slate-500"><span class="text-mint-300">&check;</span> {{.Check.Title}}</li>
+        {{end}}
+      </ul>
+    </section>
+  {{end}}
+</div>
+{{end}}

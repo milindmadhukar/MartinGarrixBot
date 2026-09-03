@@ -1,0 +1,62 @@
+{{define "page"}}
+{{$song := .Data.Song}}
+<a href="/songs/{{$song.ID}}" class="stamp-muted hover:text-slate-300">&larr; {{$song.Name}}</a>
+
+<p class="stamp-label mt-2">Catalogue</p>
+<h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">Merge into #{{$song.ID}}</h1>
+<p class="mt-1 text-slate-300">{{$song.Name}} — {{$song.Artists}}</p>
+
+<div class="mt-4 rounded-lg border border-amber-900/60 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
+  The row you pick is <strong>deleted</strong>. This row keeps everything it already has
+  and inherits whatever the other row has and it does not — links, lyrics, artwork,
+  BPM — plus its renditions, its Beatport and STMPD identifiers, its locked fields and
+  its posted announcements. Only merge two rows that are the same recording.
+</div>
+
+<form class="mt-4 flex flex-wrap items-end gap-3" hx-get="/songs/{{$song.ID}}/merge"
+      hx-target="#merge-candidates" hx-swap="outerHTML" hx-push-url="true"
+      hx-trigger="submit, keyup changed delay:400ms from:input[type=text]">
+  <label class="stamp-muted">
+    Find the duplicate
+    <input type="text" name="q" value="{{.Data.Query}}"
+           class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-96">
+  </label>
+  <button type="submit" class="rounded btn-ghost">Search</button>
+</form>
+
+{{template "merge-candidates" .}}
+{{end}}
+
+{{define "merge-candidates"}}
+{{$song := .Data.Song}}
+<div id="merge-candidates" class="mt-5">
+  {{if .Data.Candidates}}
+    <ul class="space-y-2">
+      {{range .Data.Candidates}}
+        <li class="panel flex flex-wrap items-center gap-3 p-3">
+          {{template "songThumb" dict "URL" .ThumbnailUrl.String "Size" "h-10 w-10"}}
+          <div class="min-w-0 flex-1">
+            <a href="/songs/{{.ID}}" class="font-medium text-white hover:text-mint-200">
+              {{.Name}}{{if .MixName.String}} <span class="text-slate-500">({{.MixName.String}})</span>{{end}}
+            </a>
+            <p class="truncate text-sm text-slate-400">{{.Artists}}</p>
+            <p class="stamp-muted">
+              #{{.ID}} · {{.Source}} ·
+              {{if .ReleaseDate.Valid}}{{.ReleaseDate.String}}{{else}}no date{{end}}
+              {{if .IsCollection}} · release{{end}}
+              {{if .ParentSongID.Valid}} · rendition of #{{.ParentSongID.Int64}}{{end}}
+            </p>
+          </div>
+          <form hx-post="/songs/{{$song.ID}}/merge" hx-target="body" hx-swap="outerHTML"
+                hx-confirm="Delete #{{.ID}} “{{.Name}}” and fold it into #{{$song.ID}}? This cannot be undone.">
+            <input type="hidden" name="loser_id" value="{{.ID}}">
+            <button type="submit" class="rounded btn-mint">Merge into #{{$song.ID}}</button>
+          </form>
+        </li>
+      {{end}}
+    </ul>
+  {{else}}
+    {{template "empty" "Nothing matches that search."}}
+  {{end}}
+</div>
+{{end}}

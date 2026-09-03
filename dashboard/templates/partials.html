@@ -106,3 +106,50 @@
   <path d="M20.3 4.9A19.8 19.8 0 0 0 15.4 3.4l-.24.44a18.3 18.3 0 0 1 4.2 1.6c-2-1-4.1-1.5-6.3-1.5s-4.3.5-6.3 1.5a18.3 18.3 0 0 1 4.2-1.6L10.7 3.4A19.8 19.8 0 0 0 5.8 4.9C2.7 9.5 1.9 14 2.3 18.4a19.9 19.9 0 0 0 6 3l.72-1.2a13 13 0 0 1-2-1l.42-.33a14.2 14.2 0 0 0 12.2 0l.42.33a13 13 0 0 1-2 1l.72 1.2a19.9 19.9 0 0 0 6-3c.5-5.1-.8-9.6-3.4-13.5zM8.9 15.7c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4zm6.2 0c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4z" />
 </svg>
 {{end}}
+
+{{/* songThumb renders a cover at a fixed size, with a placeholder when the row has
+     none. The placeholder is deliberate rather than a broken <img>: after the shared
+     artwork repair a missing cover is an honest state, and it should read as "not known
+     yet" rather than as a fault in the page. */}}
+{{define "songThumb"}}
+{{if .URL}}
+  <img src="{{.URL}}" alt="" loading="lazy"
+       class="{{.Size}} shrink-0 rounded object-cover ring-1 ring-white/10">
+{{else}}
+  <div class="{{.Size}} shrink-0 rounded border border-dashed border-white/15 bg-white/5"></div>
+{{end}}
+{{end}}
+
+{{/* sourceBadge marks which importer owns a row. */}}
+{{define "sourceBadge"}}
+<span class="rounded px-1.5 py-0.5 text-xs font-medium
+  {{if eq . "stmpd"}}bg-mint-300/15 text-mint-200{{else}}bg-slate-800 text-slate-300{{end}}">{{.}}</span>
+{{end}}
+
+{{/* lockBadge shows whether a field is pinned against the syncs, and for an owner is
+     the control that releases it. Not a button when the viewer cannot act on it -- a
+     control that does nothing is worse than a label. */}}
+{{define "lockBadge"}}
+{{if .Locked}}
+  {{if .IsOwner}}
+    <form hx-post="/songs/{{.Song}}/unlock" hx-target="#song-detail" hx-swap="outerHTML"
+          class="inline">
+      <input type="hidden" name="field" value="{{.Field}}">
+      <button type="submit"
+              title="Locked against the sync. Click to hand this field back to automation."
+              class="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-300 hover:bg-amber-900">
+        locked
+      </button>
+    </form>
+  {{else}}
+    <span title="Locked against the sync"
+          class="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-300">locked</span>
+  {{end}}
+{{end}}
+{{end}}
+
+{{/* problemBadge names one broken invariant, linking to the list filtered by it. */}}
+{{define "problemBadge"}}
+<a href="/songs?problem={{.ID}}" title="{{.Explain}} — fix: {{.Remedy}}"
+   class="rounded bg-red-950 px-1.5 py-0.5 text-xs text-red-300 hover:bg-red-900">{{.Title}}</a>
+{{end}}

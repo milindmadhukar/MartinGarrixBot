@@ -18,10 +18,20 @@ SELECT * FROM songs WHERE beatport_id = $1;
 --
 -- Collections are still excluded: an EP is not something to fetch links for as a song.
 -- mix_name comes back so the caller can tell two renditions apart in the label.
+--
+-- Matching is per term against the folded haystack, not one contiguous LIKE over the
+-- raw columns. The old form could not find "Don't Tell Me" by "Matisse & Sadko, Aspyer,
+-- Matluck" from "matisse sadko dont tell me": every word is in the row, but not
+-- adjacent and not in that order, so the song read as missing from the catalogue.
+--
+-- COALESCE onto an unfolded expression so a row inserted before the next rekey-songs is
+-- still findable, just without accent and apostrophe folding.
 SELECT id, name, artists, mix_name, release_date
 FROM songs
 WHERE NOT is_collection
-  AND LOWER(artists || ' - ' || name || ' ' || COALESCE(mix_name, '')) LIKE LOWER($1)
+  AND COALESCE(search_text,
+               LOWER(artists || ' ' || name || ' ' || COALESCE(mix_name, '')))
+        LIKE ALL (sqlc.arg(terms)::text[])
 ORDER BY (parent_song_id IS NOT NULL), release_date DESC
 LIMIT 20;
 
@@ -33,11 +43,14 @@ ORDER BY RANDOM()
 LIMIT 20;
 
 -- name: GetSongsWithLyricsLike :many
+-- The same term matching as GetSongsLike; see the note there.
 SELECT id, name, artists, mix_name, release_date
 FROM songs
 WHERE lyrics IS NOT NULL
   AND NOT is_collection
-  AND LOWER(artists || ' - ' || name) LIKE LOWER($1)
+  AND COALESCE(search_text,
+               LOWER(artists || ' ' || name || ' ' || COALESCE(mix_name, '')))
+        LIKE ALL (sqlc.arg(terms)::text[])
 ORDER BY (parent_song_id IS NOT NULL), release_date DESC
 LIMIT 20;
 
@@ -101,35 +114,56 @@ SELECT * FROM songs WHERE stmpd_slug = $1;
 -- pre-existing row already has stamped -- without that watermark this UPDATE would
 -- make the back catalogue look new.
 --
+-- Every column a person can correct is wrapped in a locked_fields test, and the same
+-- test is mirrored in the WHERE. Both halves are needed: guarding only the SET list
+-- leaves the WHERE matching forever, so :execrows reports a write every cycle and the
+-- churn the IS DISTINCT FROM guards exist to kill comes straight back.
+--
+-- The re-arm pair below additionally requires release_date to be unlocked. Without that
+-- a row whose date someone set by hand would have its announcement re-armed on the next
+-- sync and be posted to every server a second time.
+--
 -- thumbnail_url is only ever filled in, never overwritten: roughly 800 of the 1015
 -- releases have no artwork in the dataset, and an empty value there means "unknown",
 -- not "this release has none".
 UPDATE songs SET
     stmpd_slug          = COALESCE(sqlc.narg(stmpd_slug),          stmpd_slug),
-    release_date        = COALESCE(sqlc.narg(release_date),        release_date),
+    release_date        = CASE WHEN 'release_date' = ANY(locked_fields) THEN release_date
+                               ELSE COALESCE(sqlc.narg(release_date), release_date) END,
     -- The catalogue is the authority for what a release is called and which
     -- rendition it is, so both are taken from it rather than merged with whatever
     -- the row happened to hold. This is what keeps the shape uniform: the name is
     -- the song's name and the rendition lives in mix_name, never smuggled into the
     -- title for some rows and not others.
-    name                = COALESCE(sqlc.narg(title), name),
-    mix_name            = sqlc.narg(mix_name),
+    name                = CASE WHEN 'name' = ANY(locked_fields) THEN name
+                               ELSE COALESCE(sqlc.narg(title), name) END,
+    mix_name            = CASE WHEN 'mix_name' = ANY(locked_fields) THEN mix_name
+                               ELSE sqlc.narg(mix_name) END,
     -- normalized_name is derived from name in Go, so a name the catalogue rewrote
     -- here invalidates it. Cleared rather than recomputed: SQL cannot derive it, and
     -- NULL falls back to computing on read, whereas a leftover value would be
     -- confidently wrong. The handler re-reads the row and refills this immediately.
     normalized_name     = CASE WHEN name IS DISTINCT FROM COALESCE(sqlc.narg(title), name)
                                THEN NULL ELSE normalized_name END,
-    spotify_url         = COALESCE(sqlc.narg(spotify_url),         spotify_url),
-    apple_music_url     = COALESCE(sqlc.narg(apple_music_url),     apple_music_url),
-    youtube_url         = COALESCE(sqlc.narg(youtube_url),         youtube_url),
-    youtube_music_url   = COALESCE(sqlc.narg(youtube_music_url),   youtube_music_url),
-    deezer_url          = COALESCE(sqlc.narg(deezer_url),          deezer_url),
-    tidal_url           = COALESCE(sqlc.narg(tidal_url),           tidal_url),
-    amazon_music_url    = COALESCE(sqlc.narg(amazon_music_url),    amazon_music_url),
-    beatport_url        = COALESCE(sqlc.narg(beatport_url),        beatport_url),
+    spotify_url = CASE WHEN 'spotify_url' = ANY(locked_fields) THEN spotify_url
+                               ELSE COALESCE(sqlc.narg(spotify_url), spotify_url) END,
+    apple_music_url = CASE WHEN 'apple_music_url' = ANY(locked_fields) THEN apple_music_url
+                               ELSE COALESCE(sqlc.narg(apple_music_url), apple_music_url) END,
+    youtube_url = CASE WHEN 'youtube_url' = ANY(locked_fields) THEN youtube_url
+                               ELSE COALESCE(sqlc.narg(youtube_url), youtube_url) END,
+    youtube_music_url = CASE WHEN 'youtube_music_url' = ANY(locked_fields) THEN youtube_music_url
+                               ELSE COALESCE(sqlc.narg(youtube_music_url), youtube_music_url) END,
+    deezer_url = CASE WHEN 'deezer_url' = ANY(locked_fields) THEN deezer_url
+                               ELSE COALESCE(sqlc.narg(deezer_url), deezer_url) END,
+    tidal_url = CASE WHEN 'tidal_url' = ANY(locked_fields) THEN tidal_url
+                               ELSE COALESCE(sqlc.narg(tidal_url), tidal_url) END,
+    amazon_music_url = CASE WHEN 'amazon_music_url' = ANY(locked_fields) THEN amazon_music_url
+                               ELSE COALESCE(sqlc.narg(amazon_music_url), amazon_music_url) END,
+    beatport_url = CASE WHEN 'beatport_url' = ANY(locked_fields) THEN beatport_url
+                               ELSE COALESCE(sqlc.narg(beatport_url), beatport_url) END,
     beatport_release_id = COALESCE(sqlc.narg(beatport_release_id), beatport_release_id),
     thumbnail_url       = CASE WHEN COALESCE(thumbnail_url, '') = ''
+                                     AND NOT ('thumbnail_url' = ANY(locked_fields))
                                THEN sqlc.narg(thumbnail_url) ELSE thumbnail_url END,
     -- A song someone added because they heard it played, which has now actually
     -- come out. Clearing announced_at re-arms the announcement: the row is old, but
@@ -138,29 +172,46 @@ UPDATE songs SET
     -- The ::text casts are load-bearing. IS NOT NULL accepts any type, so these are
     -- the only places the parameter appears without a type to infer from, and
     -- Postgres rejects the whole statement with 42P08 at execution time.
-    is_unreleased = CASE WHEN sqlc.narg(release_date)::text IS NOT NULL THEN FALSE ELSE is_unreleased END,
+    is_unreleased = CASE WHEN sqlc.narg(release_date)::text IS NOT NULL
+                              AND NOT ('release_date' = ANY(locked_fields))
+                              AND NOT ('is_unreleased' = ANY(locked_fields))
+                         THEN FALSE ELSE is_unreleased END,
     announced_at  = CASE WHEN is_unreleased AND sqlc.narg(release_date)::text IS NOT NULL
+                              AND NOT ('release_date' = ANY(locked_fields))
                          THEN NULL ELSE announced_at END,
     stmpd_synced_at     = NOW()
 WHERE id = sqlc.arg(id)
   AND (
-       (is_unreleased AND sqlc.narg(release_date)::text IS NOT NULL)
+       (is_unreleased AND sqlc.narg(release_date)::text IS NOT NULL
+        AND NOT ('release_date' = ANY(locked_fields)))
     OR stmpd_slug          IS DISTINCT FROM COALESCE(sqlc.narg(stmpd_slug),          stmpd_slug)
-    OR release_date        IS DISTINCT FROM COALESCE(sqlc.narg(release_date),        release_date)
-    OR name                IS DISTINCT FROM COALESCE(sqlc.narg(title), name)
-    OR mix_name            IS DISTINCT FROM sqlc.narg(mix_name)
-    OR spotify_url         IS DISTINCT FROM COALESCE(sqlc.narg(spotify_url),         spotify_url)
-    OR apple_music_url     IS DISTINCT FROM COALESCE(sqlc.narg(apple_music_url),     apple_music_url)
-    OR youtube_url         IS DISTINCT FROM COALESCE(sqlc.narg(youtube_url),         youtube_url)
-    OR youtube_music_url   IS DISTINCT FROM COALESCE(sqlc.narg(youtube_music_url),   youtube_music_url)
-    OR deezer_url          IS DISTINCT FROM COALESCE(sqlc.narg(deezer_url),          deezer_url)
-    OR tidal_url           IS DISTINCT FROM COALESCE(sqlc.narg(tidal_url),           tidal_url)
-    OR amazon_music_url    IS DISTINCT FROM COALESCE(sqlc.narg(amazon_music_url),    amazon_music_url)
-    OR beatport_url        IS DISTINCT FROM COALESCE(sqlc.narg(beatport_url),        beatport_url)
+    OR (NOT ('release_date' = ANY(locked_fields))
+        AND release_date IS DISTINCT FROM COALESCE(sqlc.narg(release_date), release_date))
+    OR (NOT ('name' = ANY(locked_fields))
+        AND name IS DISTINCT FROM COALESCE(sqlc.narg(title), name))
+    OR (NOT ('mix_name' = ANY(locked_fields))
+        AND mix_name IS DISTINCT FROM sqlc.narg(mix_name))
+    OR (NOT ('spotify_url' = ANY(locked_fields))
+        AND spotify_url IS DISTINCT FROM COALESCE(sqlc.narg(spotify_url), spotify_url))
+    OR (NOT ('apple_music_url' = ANY(locked_fields))
+        AND apple_music_url IS DISTINCT FROM COALESCE(sqlc.narg(apple_music_url), apple_music_url))
+    OR (NOT ('youtube_url' = ANY(locked_fields))
+        AND youtube_url IS DISTINCT FROM COALESCE(sqlc.narg(youtube_url), youtube_url))
+    OR (NOT ('youtube_music_url' = ANY(locked_fields))
+        AND youtube_music_url IS DISTINCT FROM COALESCE(sqlc.narg(youtube_music_url), youtube_music_url))
+    OR (NOT ('deezer_url' = ANY(locked_fields))
+        AND deezer_url IS DISTINCT FROM COALESCE(sqlc.narg(deezer_url), deezer_url))
+    OR (NOT ('tidal_url' = ANY(locked_fields))
+        AND tidal_url IS DISTINCT FROM COALESCE(sqlc.narg(tidal_url), tidal_url))
+    OR (NOT ('amazon_music_url' = ANY(locked_fields))
+        AND amazon_music_url IS DISTINCT FROM COALESCE(sqlc.narg(amazon_music_url), amazon_music_url))
+    OR (NOT ('beatport_url' = ANY(locked_fields))
+        AND beatport_url IS DISTINCT FROM COALESCE(sqlc.narg(beatport_url), beatport_url))
     OR beatport_release_id IS DISTINCT FROM COALESCE(sqlc.narg(beatport_release_id), beatport_release_id)
     -- Cast for the same reason as in UpdateSongWithStmpdLinks: IS NOT NULL leaves
     -- the parameter's type undetermined and Postgres raises 42P08.
-    OR (COALESCE(thumbnail_url, '') = '' AND sqlc.narg(thumbnail_url)::text IS NOT NULL)
+    OR (COALESCE(thumbnail_url, '') = '' AND sqlc.narg(thumbnail_url)::text IS NOT NULL
+        AND NOT ('thumbnail_url' = ANY(locked_fields)))
     OR stmpd_synced_at IS NULL
   );
 
@@ -184,35 +235,46 @@ SELECT EXISTS(SELECT 1 FROM songs WHERE beatport_id = $1);
 -- reported updated=73 forever, which hid whether anything had actually changed.
 -- thumbnail_url is COALESCEd rather than assigned: a beatport track with no square
 -- artwork arrives as NULL and must not erase artwork another source already found.
+--
+-- Every editable column is wrapped in a locked_fields test, and the same test is
+-- repeated in the WHERE. Both halves are needed. Guarding only the SET list would leave
+-- the WHERE matching forever: the other assignments still fire, :execrows keeps
+-- returning 1 every cycle, and the write churn the IS DISTINCT FROM guards were added
+-- to kill comes straight back.
+--
+-- beatport_updated is deliberately unguarded -- it is the fetcher's own "already
+-- enriched" sentinel, and locking it would stall the fetcher rather than protect
+-- anything a person typed.
 UPDATE songs SET
-    name          = sqlc.arg(name),
-    artists       = sqlc.arg(artists),
-    thumbnail_url = COALESCE(sqlc.narg(thumbnail_url), thumbnail_url),
+    name          = CASE WHEN 'name' = ANY(locked_fields) THEN name ELSE sqlc.arg(name) END,
+    artists       = CASE WHEN 'artists' = ANY(locked_fields) THEN artists ELSE sqlc.arg(artists) END,
+    thumbnail_url = CASE WHEN 'thumbnail_url' = ANY(locked_fields) THEN thumbnail_url
+                         ELSE COALESCE(sqlc.narg(thumbnail_url), thumbnail_url) END,
     beatport_id   = sqlc.narg(beatport_id),
     beatport_slug = COALESCE(sqlc.narg(beatport_slug), beatport_slug),
-    mix_name      = sqlc.narg(mix_name),
-    release_date  = sqlc.arg(release_date),
-    release_name  = sqlc.narg(release_name),
-    genre         = sqlc.narg(genre),
-    sub_genre     = sqlc.narg(sub_genre),
-    bpm           = sqlc.narg(bpm),
-    musical_key   = sqlc.narg(musical_key),
+    mix_name      = CASE WHEN 'mix_name' = ANY(locked_fields) THEN mix_name ELSE sqlc.narg(mix_name) END,
+    release_date  = CASE WHEN 'release_date' = ANY(locked_fields) THEN release_date ELSE sqlc.arg(release_date) END,
+    release_name  = CASE WHEN 'release_name' = ANY(locked_fields) THEN release_name ELSE sqlc.narg(release_name) END,
+    genre         = CASE WHEN 'genre' = ANY(locked_fields) THEN genre ELSE sqlc.narg(genre) END,
+    sub_genre     = CASE WHEN 'sub_genre' = ANY(locked_fields) THEN sub_genre ELSE sqlc.narg(sub_genre) END,
+    bpm           = CASE WHEN 'bpm' = ANY(locked_fields) THEN bpm ELSE sqlc.narg(bpm) END,
+    musical_key   = CASE WHEN 'musical_key' = ANY(locked_fields) THEN musical_key ELSE sqlc.narg(musical_key) END,
     length_ms     = sqlc.narg(length_ms),
     beatport_updated = TRUE
 WHERE id = sqlc.arg(id)
   AND (
-       name          IS DISTINCT FROM sqlc.arg(name)
-    OR artists       IS DISTINCT FROM sqlc.arg(artists)
-    OR thumbnail_url IS DISTINCT FROM COALESCE(sqlc.narg(thumbnail_url), thumbnail_url)
+       (NOT ('name' = ANY(locked_fields))          AND name          IS DISTINCT FROM sqlc.arg(name))
+    OR (NOT ('artists' = ANY(locked_fields))       AND artists       IS DISTINCT FROM sqlc.arg(artists))
+    OR (NOT ('thumbnail_url' = ANY(locked_fields)) AND thumbnail_url IS DISTINCT FROM COALESCE(sqlc.narg(thumbnail_url), thumbnail_url))
     OR beatport_id   IS DISTINCT FROM sqlc.narg(beatport_id)
     OR beatport_slug IS DISTINCT FROM COALESCE(sqlc.narg(beatport_slug), beatport_slug)
-    OR mix_name      IS DISTINCT FROM sqlc.narg(mix_name)
-    OR release_date  IS DISTINCT FROM sqlc.arg(release_date)
-    OR release_name  IS DISTINCT FROM sqlc.narg(release_name)
-    OR genre         IS DISTINCT FROM sqlc.narg(genre)
-    OR sub_genre     IS DISTINCT FROM sqlc.narg(sub_genre)
-    OR bpm           IS DISTINCT FROM sqlc.narg(bpm)
-    OR musical_key   IS DISTINCT FROM sqlc.narg(musical_key)
+    OR (NOT ('mix_name' = ANY(locked_fields))      AND mix_name      IS DISTINCT FROM sqlc.narg(mix_name))
+    OR (NOT ('release_date' = ANY(locked_fields))  AND release_date  IS DISTINCT FROM sqlc.arg(release_date))
+    OR (NOT ('release_name' = ANY(locked_fields))  AND release_name  IS DISTINCT FROM sqlc.narg(release_name))
+    OR (NOT ('genre' = ANY(locked_fields))         AND genre         IS DISTINCT FROM sqlc.narg(genre))
+    OR (NOT ('sub_genre' = ANY(locked_fields))     AND sub_genre     IS DISTINCT FROM sqlc.narg(sub_genre))
+    OR (NOT ('bpm' = ANY(locked_fields))           AND bpm           IS DISTINCT FROM sqlc.narg(bpm))
+    OR (NOT ('musical_key' = ANY(locked_fields))   AND musical_key   IS DISTINCT FROM sqlc.narg(musical_key))
     OR length_ms     IS DISTINCT FROM sqlc.narg(length_ms)
     OR beatport_updated IS DISTINCT FROM TRUE
   );
@@ -254,12 +316,23 @@ SELECT id, name, artists, source, beatport_id, beatport_release_id,
 FROM songs;
 
 -- name: SetSongKeys :execrows
-UPDATE songs SET match_key = $2, base_key = $3
-WHERE id = $1 AND (match_key IS DISTINCT FROM $2 OR base_key IS DISTINCT FROM $3);
+-- search_text rides along with the match keys rather than getting a writer of its own:
+-- all three are derived from name + artists by the same pass, and a path that could
+-- update one without the others is a path that leaves a renamed song unfindable.
+--
+-- Deliberately not guarded by locked_fields. These are pure derivations, not values a
+-- human would ever want to pin; locking them would mean a hand-corrected title never
+-- became searchable under its new spelling.
+UPDATE songs SET match_key = $2, base_key = $3, search_text = $4
+WHERE id = $1 AND (match_key IS DISTINCT FROM $2
+                OR base_key IS DISTINCT FROM $3
+                OR search_text IS DISTINCT FROM $4);
 
 -- name: GetSongsForKeying :many
+-- release_name is selected because search_text folds it in: it is how someone looks
+-- for a track by the EP it came on, which is often all they remember of it.
 SELECT id, name, artists, mix_name, length_ms, is_collection, apple_music_url, stmpd_slug,
-       normalized_name
+       normalized_name, release_name, search_text
 FROM songs ORDER BY id;
 
 -- name: GetRandomSongForRadio :one
@@ -315,7 +388,12 @@ UPDATE songs w SET
     announced_at    = LEAST(w.announced_at,       l.announced_at),
     first_seen_at   = LEAST(w.first_seen_at,      l.first_seen_at),
     stmpd_synced_at = COALESCE(w.stmpd_synced_at, l.stmpd_synced_at),
-    beatport_updated = w.beatport_updated OR l.beatport_updated
+    beatport_updated = w.beatport_updated OR l.beatport_updated,
+    -- The union, not the winner's set. A lock records that a person corrected that
+    -- column by hand; dropping the loser's locks would hand its hand-corrected columns
+    -- straight back to the next sync to overwrite.
+    locked_fields = (SELECT COALESCE(array_agg(DISTINCT e), '{}')
+                     FROM unnest(w.locked_fields || l.locked_fields) e)
 FROM songs l
 WHERE w.id = sqlc.arg(winner_id) AND l.id = sqlc.arg(loser_id);
 
@@ -334,19 +412,35 @@ WHERE spotify_url IS NULL AND apple_music_url IS NULL AND youtube_url IS NULL;
 
 -- name: SetSongParent :execrows
 UPDATE songs SET parent_song_id = sqlc.narg(parent_song_id)
-WHERE id = sqlc.arg(id) AND parent_song_id IS DISTINCT FROM sqlc.narg(parent_song_id);
+WHERE id = sqlc.arg(id) AND parent_song_id IS DISTINCT FROM sqlc.narg(parent_song_id)
+  AND NOT ('parent_song_id' = ANY(locked_fields));
 
 -- name: SetSongInstrumental :execrows
-UPDATE songs SET is_instrumental = $2 WHERE id = $1 AND is_instrumental IS DISTINCT FROM $2;
+UPDATE songs SET is_instrumental = $2
+WHERE id = $1 AND is_instrumental IS DISTINCT FROM $2
+  AND NOT ('is_instrumental' = ANY(locked_fields));
 
 -- name: GetSongsForParentLinking :many
-SELECT id, name, artists, mix_name, release_date, source, base_key,
-       spotify_url, youtube_url, apple_music_url, lyrics, parent_song_id, is_collection
+-- stmpd_slug is selected because electing a canonical row weighs provenance first, and
+-- a column that is not in the row cannot be weighed. Leaving it out is what let a
+-- beatport row with no links win over the STMPD row for the same song.
+SELECT id, name, artists, mix_name, release_date, source, base_key, stmpd_slug,
+       spotify_url, youtube_url, apple_music_url, lyrics, parent_song_id, is_collection,
+       locked_fields
 FROM songs ORDER BY id;
 
 -- name: GetSongMixes :many
--- The renditions hanging off a canonical song, for the track card to list.
-SELECT id, name, mix_name, artists FROM songs
+-- The renditions hanging off a canonical song, for the track card and the dashboard's
+-- song page to list.
+--
+-- The link and lyric columns are selected so a reader can see at a glance that a
+-- rendition carries something its canonical row does not -- which is exactly the
+-- defect that hid "Break Through The Silence"'s streaming links behind a linkless
+-- beatport row, and is the button that promotes the better row.
+SELECT id, name, mix_name, artists, release_date, thumbnail_url, source,
+       spotify_url, youtube_url, apple_music_url, beatport_url,
+       (lyrics IS NOT NULL)::boolean AS has_lyrics
+FROM songs
 WHERE parent_song_id = $1 ORDER BY release_date, id;
 
 -- name: CopyLyricsToRemixes :execrows
@@ -367,7 +461,9 @@ FROM songs WHERE release_date = '1970-01-01' OR release_date LIKE '%-01-01'
 ORDER BY (apple_music_url IS NULL), id;
 
 -- name: SetSongReleaseDate :execrows
-UPDATE songs SET release_date = $2 WHERE id = $1 AND release_date IS DISTINCT FROM $2;
+UPDATE songs SET release_date = $2
+WHERE id = $1 AND release_date IS DISTINCT FROM $2
+  AND NOT ('release_date' = ANY(locked_fields));
 
 -- name: GetDuplicateMatchKeyRows :many
 -- Every row belonging to a match_key held by more than one row. A match_key is the
@@ -425,7 +521,9 @@ SELECT id, name, artists, lyrics IS NOT NULL AS has_lyrics, first_seen_at
 FROM songs WHERE is_unreleased ORDER BY first_seen_at DESC, id;
 
 -- name: SetSongCollection :execrows
-UPDATE songs SET is_collection = $2 WHERE id = $1 AND is_collection IS DISTINCT FROM $2;
+UPDATE songs SET is_collection = $2
+WHERE id = $1 AND is_collection IS DISTINCT FROM $2
+  AND NOT ('is_collection' = ANY(locked_fields));
 
 -- name: ClearStmpdSlug :execrows
 -- Detach a release identity from a row it does not belong to.
@@ -454,7 +552,8 @@ ORDER BY id;
 
 -- name: SetSongYoutubeURL :execrows
 UPDATE songs SET youtube_url = sqlc.narg(youtube_url)
-WHERE id = sqlc.arg(id) AND youtube_url IS DISTINCT FROM sqlc.narg(youtube_url);
+WHERE id = sqlc.arg(id) AND youtube_url IS DISTINCT FROM sqlc.narg(youtube_url)
+  AND NOT ('youtube_url' = ANY(locked_fields));
 
 -- name: ClearPlaylistSpotifyLinks :execrows
 -- Spotify playlist links cannot be resolved without the Spotify API, and pointing a
@@ -471,7 +570,8 @@ ORDER BY (apple_music_url IS NULL), id;
 
 -- name: SetSongArtwork :execrows
 UPDATE songs SET thumbnail_url = sqlc.narg(thumbnail_url)
-WHERE id = sqlc.arg(id) AND coalesce(thumbnail_url, '') = '';
+WHERE id = sqlc.arg(id) AND coalesce(thumbnail_url, '') = ''
+  AND NOT ('thumbnail_url' = ANY(locked_fields));
 
 -- name: GetSongsToCheckForCollection :many
 -- Rows not yet known to be releases, that carry an Apple link we can ask about.
@@ -495,17 +595,22 @@ WHERE youtube_url IS NOT NULL
 -- normalized_name is written here too, and has to be: this query is how rekey-songs
 -- rewrites a name, so leaving it out would guarantee the derived column is stale on
 -- exactly the rows that needed correcting.
-UPDATE songs SET name = sqlc.arg(name), mix_name = sqlc.narg(mix_name),
-                 normalized_name = sqlc.narg(normalized_name)
+UPDATE songs SET
+    name = CASE WHEN 'name' = ANY(locked_fields) THEN name ELSE sqlc.arg(name) END,
+    mix_name = CASE WHEN 'mix_name' = ANY(locked_fields) THEN mix_name ELSE sqlc.narg(mix_name) END,
+    normalized_name = CASE WHEN 'normalized_name' = ANY(locked_fields) THEN normalized_name
+                           ELSE sqlc.narg(normalized_name) END
 WHERE id = sqlc.arg(id)
-  AND (name IS DISTINCT FROM sqlc.arg(name)
-    OR mix_name IS DISTINCT FROM sqlc.narg(mix_name)
-    OR normalized_name IS DISTINCT FROM sqlc.narg(normalized_name));
+  AND ((NOT ('name' = ANY(locked_fields)) AND name IS DISTINCT FROM sqlc.arg(name))
+    OR (NOT ('mix_name' = ANY(locked_fields)) AND mix_name IS DISTINCT FROM sqlc.narg(mix_name))
+    OR (NOT ('normalized_name' = ANY(locked_fields))
+        AND normalized_name IS DISTINCT FROM sqlc.narg(normalized_name)));
 
 -- name: SetSongNormalizedName :execrows
 -- The answerable form of the title, derived in Go by utils/title.go.
 UPDATE songs SET normalized_name = sqlc.narg(normalized_name)
-WHERE id = sqlc.arg(id) AND normalized_name IS DISTINCT FROM sqlc.narg(normalized_name);
+WHERE id = sqlc.arg(id) AND normalized_name IS DISTINCT FROM sqlc.narg(normalized_name)
+  AND NOT ('normalized_name' = ANY(locked_fields));
 
 -- name: GetSongsForSubsetDedupe :many
 -- Everything needed to spot rows that are the same recording credited to different
@@ -528,10 +633,12 @@ WHERE beatport_id IS NOT NULL AND beatport_slug IS NULL ORDER BY id;
 -- Everything the invariant checker needs to recompute a row's derived state and
 -- compare it against what is stored.
 SELECT id, name, artists, mix_name, length_ms, is_collection, parent_song_id,
-       match_key, base_key, normalized_name, release_date, apple_music_url, spotify_url,
-       youtube_url, stmpd_slug,
+       match_key, base_key, normalized_name, search_text, release_date,
+       apple_music_url, spotify_url, youtube_url, stmpd_slug,
        beatport_id, beatport_slug, beatport_url, deezer_url, tidal_url,
-       amazon_music_url, youtube_music_url, source
+       amazon_music_url, youtube_music_url, source,
+       thumbnail_url, is_instrumental, is_unreleased, locked_fields,
+       (lyrics IS NOT NULL)::boolean AS has_lyrics
 FROM songs ORDER BY id;
 
 -- name: GetSongsMissingLyrics :many
@@ -567,7 +674,8 @@ LIMIT sqlc.arg(lim);
 -- tiebreaker, and a fill that clobbered them would be unrecoverable.
 UPDATE songs SET lyrics = sqlc.arg(lyrics), lrclib_id = sqlc.narg(lrclib_id),
                  lrclib_checked_at = NOW(), lrclib_misses = 0
-WHERE id = sqlc.arg(id) AND lyrics IS NULL;
+WHERE id = sqlc.arg(id) AND lyrics IS NULL
+  AND NOT ('lyrics' = ANY(locked_fields));
 
 -- name: MarkLrclibMiss :exec
 -- LRCLIB answered and had nothing usable. Spends one of the row's four attempts.
@@ -586,4 +694,37 @@ UPDATE songs SET lrclib_checked_at = NOW() WHERE id = $1;
 -- not exist. LRCLIB is the first source that can answer the question automatically.
 UPDATE songs SET is_instrumental = TRUE, lrclib_id = sqlc.narg(lrclib_id),
                  lrclib_checked_at = NOW(), lrclib_misses = 0
-WHERE id = sqlc.arg(id) AND NOT is_instrumental;
+WHERE id = sqlc.arg(id) AND NOT is_instrumental
+  AND NOT ('is_instrumental' = ANY(locked_fields));
+
+-- name: GetSongsWithSharedArtwork :many
+-- Rows wearing a cover that also sits on a different song.
+--
+-- Sharing is counted per rendition family rather than per row: a song and its own
+-- remixes share a cover legitimately, and they do not share a base key, because beatport
+-- credits a remix to the original artists plus the remixer. Grouping on the family root
+-- -- the parent id, or the row's own id when it is canonical -- is what tells "one
+-- single's artwork across its versions" from "one compilation's cover across its
+-- tracks".
+SELECT id, name, artists, mix_name, release_name, thumbnail_url, source,
+       apple_music_url, locked_fields
+FROM songs
+WHERE COALESCE(thumbnail_url, '') <> ''
+  AND thumbnail_url IN (
+      SELECT thumbnail_url FROM songs
+      WHERE COALESCE(thumbnail_url, '') <> ''
+      GROUP BY thumbnail_url
+      HAVING count(DISTINCT COALESCE(parent_song_id, id)) > 1)
+ORDER BY thumbnail_url, id;
+
+-- name: ClearSongArtwork :execrows
+-- Removes a cover that belongs to a different song, so that the Apple enrichment can
+-- resolve the right one on its next pass.
+--
+-- SetSongArtwork cannot do this: it is guarded on the column being empty, because its
+-- job is filling an absence and it must never overwrite what is already there. This one
+-- exists precisely to overwrite -- but only a value no human has claimed.
+UPDATE songs SET thumbnail_url = NULL
+WHERE id = $1
+  AND thumbnail_url IS NOT NULL
+  AND NOT ('thumbnail_url' = ANY(locked_fields));
