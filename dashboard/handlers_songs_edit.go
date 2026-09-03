@@ -421,10 +421,6 @@ func (s *Server) handleSongMerge(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	if err = q.DeleteSong(ctx, loser.ID); err != nil {
-		s.serverError(w, r, err)
-		return
-	}
 	if err = tx.Commit(ctx); err != nil {
 		s.serverError(w, r, err)
 		return

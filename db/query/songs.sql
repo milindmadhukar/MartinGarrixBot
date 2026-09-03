@@ -368,11 +368,29 @@ UPDATE songs SET announced_at = NOW() WHERE id = $1 AND announced_at IS NULL;
 SELECT id, name, artists, release_date FROM songs WHERE announced_at IS NULL;
 
 -- name: MergeSongRows :exec
--- Fold `loser` into `winner`, keeping the first non-null of each field. Used when a
--- release_date correction would collide with the unique_release constraint: the
--- collision means a twin row already holds that identity, so the two are the same
--- song arriving from two sources. Nothing has a foreign key to songs, so the loser
--- can be deleted afterwards.
+-- Fold `loser` into `winner`, keeping the first non-null of each field, and delete
+-- the loser. Used when a release_date correction would collide with the
+-- unique_release constraint: the collision means a twin row already holds that
+-- identity, so the two are the same song arriving from two sources.
+--
+-- The delete is part of this statement rather than a DeleteSong call after it, and
+-- that is the whole point. unique_release is (name, artists, mix_name, release_date)
+-- NULLS NOT DISTINCT, and the COALESCEs below can hand the winner the very identity
+-- the loser still holds: a pair differing only in that one names "Extended Mix" and
+-- the other names no rendition ends with the winner adopting "Extended Mix" while the
+-- loser is still sitting in the index. That is a 23505, and it took the whole merge
+-- down after the release/adopt dance had already run --
+--   Key (name, artists, mix_name, release_date)=(Waiting For Love, Brooks, Alida,
+--   Extended Mix, 2019-07-26) already exists
+-- -- on a catalogue where exactly that pair is the commonest kind of duplicate,
+-- because beatport files nearly every plain release as an extended mix.
+--
+-- Deleting inside the statement removes the conflicting row before the index check
+-- for the update runs, so the winner can take an identity the loser was holding.
+-- Every caller deleted the loser on the next line anyway; none may do so now.
+WITH l AS (
+    DELETE FROM songs d WHERE d.id = sqlc.arg(loser_id) RETURNING d.*
+)
 UPDATE songs w SET
     spotify_url     = COALESCE(w.spotify_url,     l.spotify_url),
     apple_music_url = COALESCE(w.apple_music_url, l.apple_music_url),
@@ -415,8 +433,8 @@ UPDATE songs w SET
     -- straight back to the next sync to overwrite.
     locked_fields = (SELECT COALESCE(array_agg(DISTINCT e), '{}')
                      FROM unnest(w.locked_fields || l.locked_fields) e)
-FROM songs l
-WHERE w.id = sqlc.arg(winner_id) AND l.id = sqlc.arg(loser_id);
+FROM l
+WHERE w.id = sqlc.arg(winner_id);
 
 -- name: DeleteSong :exec
 DELETE FROM songs WHERE id = $1;

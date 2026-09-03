@@ -177,10 +177,6 @@ func mergeInto(ctx context.Context, env *script.Env, row db.GetSongsWithPlacehol
 		slog.Error("failed to merge", slog.Int64("song_id", row.ID), slog.Any("err", err))
 		return false
 	}
-	if err := env.Queries.DeleteSong(ctx, row.ID); err != nil {
-		slog.Error("failed to delete merged row", slog.Int64("song_id", row.ID), slog.Any("err", err))
-		return false
-	}
 	return true
 }
 

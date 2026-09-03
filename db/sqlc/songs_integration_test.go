@@ -787,6 +787,66 @@ func TestLockedFieldsBlockAutomatedWrites(t *testing.T) {
 // Lyrics are the one column that exists nowhere else -- they are hand-entered or
 // verified against a duration, and nothing can re-derive them. A lock has to survive a
 // merge, or folding a duplicate away silently hands its hand-corrected columns back to
+// A merge must survive the winner taking an identity the loser is still holding.
+//
+// unique_release is (name, artists, mix_name, release_date) NULLS NOT DISTINCT, and
+// MergeSongRows COALESCEs the loser's mix_name onto a winner that has none. Those two
+// facts together mean a pair differing only in that one names a rendition and the
+// other does not -- beatport files nearly every plain release as an "Extended Mix",
+// so this is the commonest duplicate in the catalogue -- produced a 23505 and left
+// the merge half done, with the identifiers already moved. It only stopped happening
+// when the delete became part of the same statement, which is why this test exists
+// here and not in a unit test: the constraint is in the schema.
+func TestMergeSurvivesARenditionOnlyCollision(t *testing.T) {
+	t.Parallel()
+
+	q := queries(t)
+	ctx := context.Background()
+
+	name := testSongName(t, "Waiting For Love")
+
+	winner, err := q.InsertRelease(ctx, db.InsertReleaseParams{
+		Name: name, Artists: "Collision Artist", ReleaseDate: text("2019-07-26"),
+	})
+	if err != nil {
+		t.Fatalf("InsertRelease failed: %v", err)
+	}
+	t.Cleanup(func() { deleteSong(t, winner.ID) })
+
+	// Identical in every column unique_release reads, except the rendition the winner
+	// is about to inherit.
+	loser, err := q.InsertRelease(ctx, db.InsertReleaseParams{
+		Name: name, Artists: "Collision Artist", ReleaseDate: text("2019-07-26"),
+		MixName: text("Extended Mix"),
+	})
+	if err != nil {
+		t.Fatalf("InsertRelease failed: %v", err)
+	}
+	// The merge is what removes this row, but a failing merge must not leave it
+	// behind: the next run reuses these names and would collide on the insert
+	// instead, reporting the wrong fault.
+	t.Cleanup(func() { deleteSong(t, loser.ID) })
+
+	if err = q.MergeSongRows(ctx, db.MergeSongRowsParams{
+		WinnerID: winner.ID, LoserID: loser.ID,
+	}); err != nil {
+		t.Fatalf("the merge collided with unique_release instead of replacing the loser: %v", err)
+	}
+
+	got, err := q.GetSongByID(ctx, winner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MixName.String != "Extended Mix" {
+		t.Errorf("the winner did not take the loser's rendition: %q", got.MixName.String)
+	}
+
+	// The loser must be gone, and gone by the merge itself -- no caller deletes it now.
+	if _, err = q.GetSongByID(ctx, loser.ID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Errorf("the merged-away row is still present: err = %v", err)
+	}
+}
+
 // the next sync to overwrite.
 func TestLockedFieldsSurviveAMerge(t *testing.T) {
 	t.Parallel()
@@ -830,9 +890,6 @@ func TestLockedFieldsSurviveAMerge(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("MergeSongRows failed: %v", err)
 	}
-	if err = q.DeleteSong(ctx, loser.ID); err != nil {
-		t.Fatalf("DeleteSong failed: %v", err)
-	}
 
 	got, err := q.GetSongByID(ctx, winner.ID)
 	if err != nil {
@@ -852,7 +909,7 @@ func TestLockedFieldsSurviveAMerge(t *testing.T) {
 }
 
 // Deleting a merged-away row used to delete its announcement history with it:
-// song_announcements.song_id is ON DELETE CASCADE, and the merge ends in DeleteSong.
+// song_announcements.song_id is ON DELETE CASCADE, and MergeSongRows deletes the loser.
 // Repointing first is what keeps the record of already-posted messages, without which
 // the refresh loop has no idea they exist.
 func TestMergeKeepsAnnouncements(t *testing.T) {
@@ -896,9 +953,6 @@ func TestMergeKeepsAnnouncements(t *testing.T) {
 		WinnerID: winner.ID, LoserID: loser.ID,
 	}); err != nil {
 		t.Fatalf("MergeSongRows failed: %v", err)
-	}
-	if err = q.DeleteSong(ctx, loser.ID); err != nil {
-		t.Fatalf("DeleteSong failed: %v", err)
 	}
 
 	posted, err := q.DashSongAnnouncements(ctx, winner.ID)

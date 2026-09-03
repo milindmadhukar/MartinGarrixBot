@@ -251,11 +251,6 @@ func mergeTwin(ctx context.Context, env *script.Env, release utils.SanityRelease
 		c.failed++
 		return
 	}
-	if err := env.Queries.DeleteSong(ctx, matched.ID); err != nil {
-		slog.Error("failed to delete merged row", slog.String("name", name), slog.Any("err", err))
-		c.failed++
-		return
-	}
 	c.merged++
 
 	params.ID = twin.ID

@@ -134,17 +134,13 @@ func main() {
 				continue
 			}
 
-			if env.DryRun {
-				slog.Info("would merge",
-					slog.String("match_key", key),
-					slog.Int64("keep", winner.ID), slog.String("keep_name", winner.Name),
-					slog.String("keep_date", dateOf(winner.ReleaseDate)),
-					slog.Int64("drop", r.ID), slog.String("drop_name", r.Name),
-					slog.String("drop_date", dateOf(r.ReleaseDate)))
-				merged++
-				continue
-			}
-
+			// Nothing branches on DryRun here, for the reason rekey-songs learned
+			// the same way: the whole run is already inside a transaction that is
+			// rolled back, so the dry run should exercise the code the real one
+			// does. The branch that used to sit here logged "would merge" and
+			// skipped mergeRows entirely, which meant a dry run could not fail --
+			// and a merge that dies on unique_release reported a clean success
+			// minutes before the real run broke on it.
 			if !mergeRows(ctx, env, winner.ID, r.ID, winner.StmpdSlug, r.StmpdSlug,
 				winner.BeatportID, r.BeatportID) {
 				failed++
@@ -161,12 +157,20 @@ func main() {
 
 	subsetMerged, subsetDeferred := dedupeBySubsetCredit(ctx, env)
 
+	// Last, because it is the only pass that does not reason about the credits at all.
+	// Whatever the first two can settle from the artist string they should settle
+	// first; this one exists for the rows they cannot see, where the act has been
+	// renamed and only the streaming link says the two rows are one record.
+	identityMerged, identityDeferred := dedupeBySharedIdentifier(ctx, env)
+
 	slog.Info("Dedupe complete",
 		slog.Int("groups", len(order)),
 		slog.Int("rows_merged_away", merged),
 		slog.Int("groups_left_for_review", deferred),
 		slog.Int("merged_by_subset_credit", subsetMerged),
 		slog.Int("subset_pairs_left_for_review", subsetDeferred),
+		slog.Int("merged_by_shared_identifier", identityMerged),
+		slog.Int("identifier_pairs_left_for_review", identityDeferred),
 		slog.Int("failed", failed))
 }
 
@@ -313,10 +317,6 @@ func mergeRows(ctx context.Context, env *script.Env, winnerID, loserID int64,
 		WinnerID: winnerID, LoserID: loserID,
 	}); err != nil {
 		slog.Error("failed to merge", slog.Int64("song_id", loserID), slog.Any("err", err))
-		return false
-	}
-	if err := env.Queries.DeleteSong(ctx, loserID); err != nil {
-		slog.Error("failed to delete merged row", slog.Int64("song_id", loserID), slog.Any("err", err))
 		return false
 	}
 	return true

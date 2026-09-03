@@ -188,6 +188,29 @@ disagree on who made it, in three shapes needing different judgement:
 A shared title plus a subset credit is *not* proof of a duplicate, which is why this
 reports rather than merges.
 
+The run makes three passes, narrowest evidence first:
+
+1. **exact `match_key`** — same artist set, same base title, same rendition
+2. **subset credit** — same title and rendition, one artist set contained in the other
+   (`Moksi` and `Moksi Ft. Adam McInnis`)
+3. **shared identifier** — the two rows link to the same YouTube video, Apple release
+   or Spotify record
+
+The third exists because the first two both reason about the artist string, and a
+renamed act defeats any such reasoning: `Sikdope & IBRA` and `Sikdope, Ibranovski` are
+one release, as are `King Arthur`/`King Topher` and `DJ Raiden`/`Raiden`. Neither
+artist set contains the other, and the substring test in the suspects report needs six
+characters on both sides before it will accept one name as another — `ibra` is four.
+Lowering that floor is not the fix, because `Ra` is a substring of `Raiden` and an
+artist in its own right.
+
+So the third pass reads evidence instead of credits: a row that links to YouTube
+`NxhlqzCtc2w` *is* that recording, whatever it calls its artists. It merges only where
+the base titles are equal and the renditions agree, which is what keeps a track and the
+EP it appears on — they share a release id and often a video — from collapsing into
+each other. Rows it declines to merge for any reason other than "different songs" are
+logged with that reason.
+
 ### `import-beatport`
 
 One-off unbounded import of the Beatport catalogue — the bot's former
