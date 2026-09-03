@@ -24,5 +24,26 @@ const (
 )
 
 const (
-	RANK_PICTURE_WIDTH = 680
+	RANK_PICTURE_WIDTH  = 680
+	RankCardWidth       = 1000
+	RankCardHeight      = 300
+	RankPanelInset      = 20
+	RankPanelRadius     = 24
+	RankBarX            = 261
+	RankBarY            = 194
+	RankBarHeight       = 50
+	RankAvatarX         = 43
+	RankAvatarY         = 63
+	RankAvatarDiameter  = 173
+	RankUsernameX       = 284
+	RankUsernameY       = 145
+	RankXpTextX         = 925
+	RankXpTextY         = 150
+	RankBlockRightX     = RankCardWidth - RankPanelInset - 20
+	RankBlockGap        = 30
+	RankNumberY         = 50
+	RankLabelY          = 93
+	RankLabelFontSize   = 22
+	RankNumberFontSize  = 50
+	RankUsernameMaxSize = 36
 )

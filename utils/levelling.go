@@ -5,21 +5,24 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
-	"image/png"
-	"io"
+	_ "image/jpeg"
+	_ "image/png"
 	"math"
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/fogleman/gg"
 	"github.com/nfnt/resize"
-
-	"golang.org/x/image/font"
-	"golang.org/x/image/math/fixed"
 
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
+
+const rankCardFontPath = "assets/font.ttf"
+const rankCardBackgroundsDir = "assets/backgrounds"
 
 func FXpForNextLevel(lvl int) int32 {
 	return int32(5*lvl*lvl + 50*lvl + 100)
@@ -54,171 +57,246 @@ func GetUserLevelData(totalXp int32) UserLevelData {
 	}
 }
 
-var (
-	colors = map[string]color.RGBA{
-		"red":    {255, 0, 0, 255},
-		"green":  {0, 255, 0, 255},
-		"yellow": {255, 255, 0, 255},
-		"pink":   {255, 0, 255, 255},
+// pickRandomBackground picks a random image out of assets/backgrounds. Adding
+// a new background is just dropping a new image file in that directory.
+func pickRandomBackground() (string, error) {
+	entries, err := os.ReadDir(rankCardBackgroundsDir)
+	if err != nil {
+		return "", err
 	}
-)
 
-// Helper function to measure text width
-func measureString(face font.Face, text string) fixed.Int26_6 {
-	return font.MeasureString(face, text)
+	var candidates []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		switch strings.ToLower(filepath.Ext(entry.Name())) {
+		case ".png", ".jpg", ".jpeg":
+			candidates = append(candidates, filepath.Join(rankCardBackgroundsDir, entry.Name()))
+		}
+	}
+
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("no background images found in %s", rankCardBackgroundsDir)
+	}
+
+	return candidates[rand.Intn(len(candidates))], nil
+}
+
+func loadImage(path string) (image.Image, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	img, _, err := image.Decode(f)
+	return img, err
+}
+
+// coverResizeCrop resizes img so it fully covers a targetW x targetH canvas
+// and center-crops the overflow, the same way CSS `background-size: cover`
+// would, so a background image of any size or aspect ratio works.
+func coverResizeCrop(img image.Image, targetW, targetH int) image.Image {
+	bounds := img.Bounds()
+	srcW, srcH := bounds.Dx(), bounds.Dy()
+
+	scale := math.Max(float64(targetW)/float64(srcW), float64(targetH)/float64(srcH))
+	newW := int(math.Ceil(float64(srcW) * scale))
+	newH := int(math.Ceil(float64(srcH) * scale))
+
+	resized := resize.Resize(uint(newW), uint(newH), img, resize.Lanczos3)
+
+	offsetX := (newW - targetW) / 2
+	offsetY := (newH - targetH) / 2
+
+	cropped := image.NewRGBA(image.Rect(0, 0, targetW, targetH))
+	draw.Draw(cropped, cropped.Bounds(), resized, image.Pt(offsetX, offsetY), draw.Src)
+	return cropped
+}
+
+// averageColor returns the mean RGB colour of every pixel in img, used as
+// the progress-bar fill colour so it always matches the chosen background.
+func averageColor(img image.Image) color.RGBA {
+	bounds := img.Bounds()
+	var rSum, gSum, bSum, count uint64
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			rSum += uint64(r >> 8)
+			gSum += uint64(g >> 8)
+			bSum += uint64(b >> 8)
+			count++
+		}
+	}
+
+	if count == 0 {
+		return color.RGBA{R: 93, G: 93, B: 93, A: 255}
+	}
+
+	return color.RGBA{
+		R: uint8(rSum / count),
+		G: uint8(gSum / count),
+		B: uint8(bSum / count),
+		A: 255,
+	}
+}
+
+// dynamicFontSize shrinks text down from maxSize until it fits within
+// imgFraction of the card width, mirroring the previous shrink-long-usernames
+// behaviour.
+func dynamicFontSize(ctx *gg.Context, text string, maxSize int, imgFraction float64) (int, error) {
+	fontSize := 12
+	for {
+		if err := ctx.LoadFontFace(rankCardFontPath, float64(fontSize)); err != nil {
+			return 0, err
+		}
+		w, _ := ctx.MeasureString(text)
+		if w >= float64(RANK_PICTURE_WIDTH)*imgFraction {
+			break
+		}
+		fontSize++
+		if fontSize >= maxSize {
+			break
+		}
+	}
+	return fontSize - 1, nil
 }
 
 func RankPicture(user db.GetUserLevelDataRow, memberName string, avatarUrl string) (image.Image, error) {
 	lvlData := GetUserLevelData(user.TotalXp)
 	percentage := float64(lvlData.CurrentXp) / float64(lvlData.XpForNextLvl)
 
-	bgImgFile, err := os.Open("assets/grey_bg.png")
+	bgPath, err := pickRandomBackground()
 	if err != nil {
 		return nil, err
 	}
 
-	base, err := png.Decode(bgImgFile)
+	bgImg, err := loadImage(bgPath)
 	if err != nil {
 		return nil, err
 	}
+	background := coverResizeCrop(bgImg, RankCardWidth, RankCardHeight)
+	fillColor := averageColor(background)
 
-	// TODO: Add more colours / templates
-	primaryColours := []string{"red", "green", "yellow", "pink"}
-	primaryColourIdx := rand.Intn(len(primaryColours))
-	primaryColour := primaryColours[primaryColourIdx]
+	ctx := gg.NewContext(RankCardWidth, RankCardHeight)
+	ctx.DrawImage(background, 0, 0)
 
-	progressBar := image.NewRGBA(
-		image.Rect(
-			0,
-			0,
-			int(RANK_PICTURE_WIDTH*percentage),
-			50,
-		),
-	)
+	// Translucent rounded panel, inset from the canvas edges.
+	panelX := float64(RankPanelInset)
+	panelY := float64(RankPanelInset)
+	panelW := float64(RankCardWidth - 2*RankPanelInset)
+	panelH := float64(RankCardHeight - 2*RankPanelInset)
+	ctx.DrawRoundedRectangle(panelX, panelY, panelW, panelH, RankPanelRadius)
+	ctx.SetRGBA255(18, 18, 18, 145)
+	ctx.Fill()
 
-	for x := 0; x < progressBar.Bounds().Dx(); x++ {
-		for y := 0; y < progressBar.Bounds().Dy(); y++ {
-			progressBar.Set(x, y, colors[primaryColour])
-		}
+	// Progress bar track (grey stadium/pill).
+	barX := float64(RankBarX)
+	barY := float64(RankBarY)
+	barW := float64(RANK_PICTURE_WIDTH)
+	barH := float64(RankBarHeight)
+	ctx.DrawRoundedRectangle(barX, barY, barW, barH, barH/2)
+	ctx.SetRGBA255(93, 93, 93, 255)
+	ctx.Fill()
+
+	// Progress fill, clipped to the same pill shape so only its left cap is
+	// rounded (matching how much of the bar is actually filled).
+	fillWidth := barW * percentage
+	if fillWidth > 0 {
+		ctx.Push()
+		ctx.DrawRoundedRectangle(barX, barY, barW, barH, barH/2)
+		ctx.Clip()
+		ctx.SetColor(fillColor)
+		ctx.DrawRectangle(barX, barY, fillWidth, barH)
+		ctx.Fill()
+		ctx.Pop()
+		// See the matching comment above the avatar's ResetClip() call.
+		ctx.ResetClip()
 	}
 
-	draw.Draw(base.(draw.Image),
-		image.Rect(261, 194, 261+progressBar.Bounds().Dx(), 194+progressBar.Bounds().Dy()),
-		progressBar,
-		image.Point{0, 0},
-		draw.Over)
-
-	templateFile, err := os.Open("assets/" + primaryColour + ".png")
-	if err != nil {
-		return nil, err
-	}
-
-	template, err := png.Decode(templateFile)
-	if err != nil {
-		return nil, err
-	}
-
-	draw.Draw(base.(draw.Image),
-		template.Bounds(),
-		template,
-		image.Point{0, 0},
-		draw.Over)
-
+	// Avatar, circular-masked.
 	pfp, err := http.Get(avatarUrl)
 	if err != nil {
 		return nil, err
 	}
+	defer pfp.Body.Close()
 
-	avatar, err := png.Decode(pfp.Body)
+	avatar, _, err := image.Decode(pfp.Body)
 	if err != nil {
 		return nil, err
 	}
+	resizedAvatar := resize.Resize(RankAvatarDiameter, RankAvatarDiameter, avatar, resize.Lanczos3)
 
-	resizedAvatar := resize.Resize(173, 173, avatar, resize.Lanczos3)
+	avatarRadius := float64(RankAvatarDiameter) / 2
+	avatarCenterX := float64(RankAvatarX) + avatarRadius
+	avatarCenterY := float64(RankAvatarY) + avatarRadius
 
-	circleAvatar := image.NewRGBA(image.Rect(0, 0, 173, 173))
+	ctx.Push()
+	ctx.DrawCircle(avatarCenterX, avatarCenterY, avatarRadius)
+	ctx.Clip()
+	ctx.DrawImage(resizedAvatar, RankAvatarX, RankAvatarY)
+	ctx.Pop()
+	// gg's Pop() intentionally does not restore the clip mask, so it must be
+	// cleared explicitly or every draw after this point stays clipped to the
+	// avatar circle.
+	ctx.ResetClip()
 
-	// PERF: A very bad vay of masking
-	for x := 0; x < 173; x++ {
-		for y := 0; y < 173; y++ {
-			dx := float64(x - 173/2)
-			dy := float64(y - 173/2)
-			d := math.Sqrt(dx*dx + dy*dy)
+	// Text.
+	ctx.SetColor(color.White)
 
-			if d <= float64(173/2) {
-				circleAvatar.Set(x, y, resizedAvatar.At(x, y))
-			} else {
-				circleAvatar.Set(x, y, color.RGBA{0, 0, 0, 0})
-			}
+	fontSize := RankUsernameMaxSize
+	if len(memberName) > 20 {
+		fontSize, err = dynamicFontSize(ctx, memberName, RankUsernameMaxSize, 0.6)
+		if err != nil {
+			return nil, err
 		}
 	}
-
-	draw.Draw(base.(draw.Image),
-		image.Rect(43, 63, 43+circleAvatar.Bounds().Dx(), 63+circleAvatar.Bounds().Dy()),
-		circleAvatar,
-		image.Point{0, 0},
-		draw.Over)
-
-	fontFile, err := os.Open("assets/font.ttf")
-	if err != nil {
+	if err := ctx.LoadFontFace(rankCardFontPath, float64(fontSize)); err != nil {
 		return nil, err
 	}
-	defer fontFile.Close()
+	ctx.SetColor(color.White)
+	ctx.DrawStringAnchored(memberName, RankUsernameX, RankUsernameY, 0, 1)
 
-	fontBytes, err := io.ReadAll(fontFile)
-	if err != nil {
+	xpProgress := fmt.Sprintf("%s/%s", Humanize(lvlData.CurrentXp), Humanize(lvlData.XpForNextLvl))
+	if err := ctx.LoadFontFace(rankCardFontPath, 32); err != nil {
 		return nil, err
 	}
+	ctx.DrawStringAnchored(xpProgress, RankXpTextX, RankXpTextY, 1, 1)
 
-	textDrawer, err := NewTextDrawer(base.(draw.Image), fontBytes)
-	if err != nil {
+	// RANK and LEVEL: both the label and the number of a block are
+	// right-aligned to the *same* x-anchor, so they can never drift apart
+	// from each other regardless of digit count. The two blocks are then
+	// spaced apart using the actually-measured LEVEL block width.
+	levelX := float64(RankBlockRightX)
+
+	if err := ctx.LoadFontFace(rankCardFontPath, RankLabelFontSize); err != nil {
 		return nil, err
 	}
+	ctx.DrawStringAnchored("LEVEL", levelX, RankLabelY, 1, 1)
+	levelLabelW, _ := ctx.MeasureString("LEVEL")
 
-	// Member name with dynamic font size
-	fontSize := 36
-	if len(memberName) > 20 {
-		fontSize = textDrawer.calculateDynamicFontSize(memberName, 36, 0.6)
-	}
-	if err := textDrawer.drawText(memberName, 284, 145, fontSize); err != nil {
+	levelStr := strconv.Itoa(lvlData.Lvl)
+	if err := ctx.LoadFontFace(rankCardFontPath, RankNumberFontSize); err != nil {
 		return nil, err
 	}
+	ctx.DrawStringAnchored(levelStr, levelX, RankNumberY, 1, 1)
+	levelNumW, _ := ctx.MeasureString(levelStr)
 
-	// XP Progress
-	xpProgress := fmt.Sprintf("%s/%s",
-		Humanize(lvlData.CurrentXp),
-		Humanize(lvlData.XpForNextLvl))
-	if err := textDrawer.drawTextRightAligned(xpProgress, 925, 150, 32); err != nil {
+	levelBlockWidth := math.Max(levelLabelW, levelNumW)
+	rankX := levelX - levelBlockWidth - RankBlockGap
+
+	rankStr := fmt.Sprintf("#%d", user.Rank)
+	if err := ctx.LoadFontFace(rankCardFontPath, RankNumberFontSize); err != nil {
 		return nil, err
 	}
+	ctx.DrawStringAnchored(rankStr, rankX, RankNumberY, 1, 1)
 
-	levelX := 845
-	face, err := textDrawer.createFace(22)
-	if err != nil {
+	if err := ctx.LoadFontFace(rankCardFontPath, RankLabelFontSize); err != nil {
 		return nil, err
 	}
-	levelLabelWidth := measureString(face, "LEVEL")
-	rankLabelWidth := measureString(face, "RANK")
+	ctx.DrawStringAnchored("RANK", rankX, RankLabelY, 1, 1)
 
-	if err := textDrawer.drawTextRightAligned("LEVEL", levelX, 77, 22); err != nil {
-		return nil, err
-	}
-	if err := textDrawer.drawText(strconv.Itoa(lvlData.Lvl), levelX+10, 50, 50); err != nil {
-		return nil, err
-	}
-
-	const SPACING_BETWEEN_RANK_AND_LEVEL = 100
-	rankX := levelX - int(levelLabelWidth.Ceil()) - SPACING_BETWEEN_RANK_AND_LEVEL
-
-	// Draw rank number and label
-	rank := user.Rank
-	rankText := fmt.Sprintf("#%d", rank)
-	if err := textDrawer.drawTextRightAligned(rankText, rankX+rankLabelWidth.Ceil(), 50, 50); err != nil {
-		return nil, err
-	}
-	if err := textDrawer.drawTextRightAligned("RANK", rankX, 77, 22); err != nil {
-		return nil, err
-	}
-
-	return base, nil
+	return ctx.Image(), nil
 }
