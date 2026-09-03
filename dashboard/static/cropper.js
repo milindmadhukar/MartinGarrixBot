@@ -57,6 +57,13 @@
       naturalW = img.naturalWidth;
       naturalH = img.naturalHeight;
 
+      // Unhide the stage before measuring the viewport: getBoundingClientRect()
+      // on a descendant of a `hidden` element returns 0x0, which previously made
+      // every scale/offset below compute against a zero-size box -- the image
+      // loaded successfully but rendered at 0x0, invisible in a viewport that
+      // otherwise looked fine.
+      stage.hidden = false;
+
       const vp = viewport.getBoundingClientRect();
       // "cover" fit: the smaller edge fills the viewport, the larger one
       // overflows and is what dragging reveals.
@@ -67,7 +74,6 @@
 
       zoom.value = "1";
       applyTransform();
-      stage.hidden = false;
       submitBtn.disabled = false;
     };
     img.src = URL.createObjectURL(file);

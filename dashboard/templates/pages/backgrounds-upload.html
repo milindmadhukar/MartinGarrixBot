@@ -40,7 +40,12 @@
         <input type="range" id="crop-zoom" min="1" max="3" step="0.01" value="1" class="flex-1 accent-mint-300">
       </label>
 
-      <input type="file" name="image" id="cropped-file" hidden required>
+      {{/* No `required` here: it's a hidden field, and a browser refuses to
+           submit a form over a failed required-field check on an element it
+           cannot show a validation prompt for -- the button just silently
+           does nothing. The disabled submit button below is what actually
+           stops a submit before an image is chosen. */}}
+      <input type="file" name="image" id="cropped-file" hidden>
     </div>
   </div>
 

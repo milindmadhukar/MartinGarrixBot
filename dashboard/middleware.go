@@ -100,8 +100,14 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	// the page as a broken image and makes correct data look like bad data. mzstatic
 	// is wildcarded because Apple serves the same asset from is1 through is5.
 	// See TestCSPAllowsSongArtworkHosts.
+	//
+	// blob: is required by the backgrounds upload page: static/cropper.js previews the
+	// chosen file via URL.createObjectURL(file), which is a blob: URL. Without it the
+	// browser silently drops the <img> load -- no error dialog, no broken-image icon --
+	// so the crop stage never appears and the (still-disabled) Upload button looks
+	// broken. See TestCSPAllowsBlobImages.
 	const csp = "default-src 'self'; " +
-		"img-src 'self' https://cdn.discordapp.com " +
+		"img-src 'self' blob: https://cdn.discordapp.com " +
 		"https://geo-media.beatport.com https://d384qsdodhwrqp.cloudfront.net " +
 		"https://cdn.sanity.io https://*.mzstatic.com data:; " +
 		"style-src 'self' 'unsafe-inline'; script-src 'self'; " +

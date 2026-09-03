@@ -92,6 +92,26 @@ func TestCSPAllowsSongArtworkHosts(t *testing.T) {
 	}
 }
 
+// TestCSPAllowsBlobImages guards a bug that shipped once: the crop step on the
+// backgrounds upload page previews the chosen file via
+// URL.createObjectURL(file), a blob: URL. Without blob: in img-src the browser
+// blocks the load with no visible error (no broken-image icon, nothing in the
+// DOM to inspect) -- the crop stage just never appears, and the Upload button,
+// which only enables once the preview loads, looks permanently broken. curl
+// does not enforce CSP, so nothing else here would catch it.
+func TestCSPAllowsBlobImages(t *testing.T) {
+	s := &Server{opts: testOptions(t)}
+
+	rec := httptest.NewRecorder()
+	s.securityHeaders(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	imgSrc := directive(rec.Header().Get("Content-Security-Policy"), "img-src")
+	if !strings.Contains(imgSrc, "blob:") {
+		t.Errorf("img-src is %q; without blob: the upload page's crop preview never loads", imgSrc)
+	}
+}
+
 // TestChartBarsCarryDistinctWidths renders the busiest-channels panel with two
 // very different values. If the bars come out the same width the chart is
 // meaningless, which is exactly how the CSP bug looked in the browser.
