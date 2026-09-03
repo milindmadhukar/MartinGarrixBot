@@ -282,8 +282,11 @@ func pgInt8(v int64) pgtype.Int8 {
 // while another row still holds them.
 func mergeRows(ctx context.Context, env *script.Env, winnerID, loserID int64,
 	winnerSlug, loserSlug pgtype.Text, winnerBP, loserBP pgtype.Int4) bool {
-	// Announcements move first, because this function ends in DeleteSong and
-	// song_announcements.song_id has been ON DELETE CASCADE since 000023. Without this
+	// Announcements move first, because MergeSongRows now deletes the losing row inside
+	// its own statement and song_announcements.song_id has been ON DELETE CASCADE since
+	// 000023 -- so the cascade fires on that statement rather than on a later
+	// DeleteSong, which makes the ordering here load-bearing rather than incidental.
+	// Without this
 	// the merge takes the record of every message already posted for the losing row
 	// with it, and the refresh loop then has no idea those messages exist -- so their
 	// buttons are never updated again and nothing reports that they were lost.
