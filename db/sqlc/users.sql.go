@@ -280,3 +280,73 @@ func (q *Queries) GetUserLevelData(ctx context.Context, arg GetUserLevelDataPara
 	)
 	return i, err
 }
+
+const getUsersInGuild = `-- name: GetUsersInGuild :many
+SELECT id, messages_sent, total_xp, last_xp_added, stmpd_coins, in_hand, guild_id FROM users WHERE guild_id = $1
+`
+
+// Every tracked member of one guild. Used by maintenance passes that need to
+// diff the whole table before writing.
+func (q *Queries) GetUsersInGuild(ctx context.Context, guildID int64) ([]User, error) {
+	rows, err := q.db.Query(ctx, getUsersInGuild, guildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.MessagesSent,
+			&i.TotalXp,
+			&i.LastXpAdded,
+			&i.StmpdCoins,
+			&i.InHand,
+			&i.GuildID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const importUserStats = `-- name: ImportUserStats :exec
+INSERT INTO users (id, guild_id, total_xp, messages_sent)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (id, guild_id) DO UPDATE
+SET total_xp      = EXCLUDED.total_xp,
+    messages_sent = EXCLUDED.messages_sent
+`
+
+type ImportUserStatsParams struct {
+	ID           int64 `json:"id"`
+	GuildID      int64 `json:"guildId"`
+	TotalXp      int32 `json:"totalXp"`
+	MessagesSent int32 `json:"messagesSent"`
+}
+
+// Overwrites one member's XP and message count from an external source of
+// truth, creating the row if this is somebody the bot has never seen.
+//
+// Called once per member rather than as one bulk statement, deliberately: each
+// call is its own auto-committed transaction, so a row lock is held for barely a
+// millisecond and the live bot's MessageSent never queues behind the import.
+// Batching every row into one transaction is what made a first attempt block the
+// bot for 21 seconds.
+//
+// Coins are deliberately absent. stmpd_coins and in_hand are this bot's own
+// economy with no counterpart to import, so an import must not touch them.
+func (q *Queries) ImportUserStats(ctx context.Context, arg ImportUserStatsParams) error {
+	_, err := q.db.Exec(ctx, importUserStats,
+		arg.ID,
+		arg.GuildID,
+		arg.TotalXp,
+		arg.MessagesSent,
+	)
+	return err
+}

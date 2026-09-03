@@ -18,6 +18,10 @@ type leaderboardRow struct {
 	Avatar string
 	// Left marks someone who is no longer in the guild. They keep their XP and
 	// their place; the flag only lets the UI say so.
+	//
+	// It defaults to false, and must: a resolve that fails says nothing about
+	// whether the member is still here. Defaulting it true made a batch timeout
+	// render as "(left)" against every row on the page.
 	Left bool
 	// Level and the two XP figures come from utils, the same code /rank uses, so
 	// the dashboard and the bot can never disagree about what a total means.
@@ -81,7 +85,6 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 			ID:           id,
 			Name:         id,
 			Avatar:       avatarURL(id, ""),
-			Left:         true,
 			Level:        lvl.Lvl,
 			CurrentXP:    int64(lvl.CurrentXp),
 			XPForNextLvl: int64(lvl.XpForNextLvl),

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -25,6 +26,13 @@ type BotAPI struct {
 	baseURL string
 	secret  string
 	client  *http.Client
+	// resolveClient carries a longer deadline than client. Every other call is a
+	// cached metadata GET the bot answers from its disgo cache in milliseconds;
+	// /users/resolve is the only one that fans out to Discord REST, up to two
+	// calls per uncached id. A cold cache and a 50-row page therefore blew the
+	// 5s budget, ResolveUsers returned an empty map, and every row on the page
+	// rendered as a raw snowflake.
+	resolveClient *http.Client
 
 	mu    sync.Mutex
 	cache map[string]cacheEntry
@@ -91,11 +99,12 @@ func (c BotChannel) IsText() bool {
 
 func NewBotAPI(baseURL, secret string, ttl time.Duration) *BotAPI {
 	return &BotAPI{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		secret:  secret,
-		client:  &http.Client{Timeout: 5 * time.Second},
-		cache:   make(map[string]cacheEntry),
-		ttl:     ttl,
+		baseURL:       strings.TrimRight(baseURL, "/"),
+		secret:        secret,
+		client:        &http.Client{Timeout: 5 * time.Second},
+		resolveClient: &http.Client{Timeout: 30 * time.Second},
+		cache:         make(map[string]cacheEntry),
+		ttl:           ttl,
 	}
 }
 
@@ -186,12 +195,16 @@ func (b *BotAPI) ResolveUsers(ctx context.Context, guildID snowflake.ID, ids []s
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Internal-Token", b.secret)
 
-	resp, err := b.client.Do(req)
+	resp, err := b.resolveClient.Do(req)
 	if err != nil {
+		slog.Warn("Resolving users failed; the page will show raw IDs",
+			slog.Any("err", err), slog.Int("ids", len(missing)))
 		return out
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		slog.Warn("Resolving users returned an error status",
+			slog.Int("status", resp.StatusCode), slog.Int("ids", len(missing)))
 		return out
 	}
 	// A decode failure leaves the fetched set empty, which renders as raw IDs.

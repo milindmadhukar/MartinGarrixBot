@@ -55,3 +55,26 @@ WITH user_ranks AS (
 SELECT *
 FROM user_ranks
 WHERE id = $1 AND guild_id = $2;
+
+-- name: ImportUserStats :exec
+-- Overwrites one member's XP and message count from an external source of
+-- truth, creating the row if this is somebody the bot has never seen.
+--
+-- Called once per member rather than as one bulk statement, deliberately: each
+-- call is its own auto-committed transaction, so a row lock is held for barely a
+-- millisecond and the live bot's MessageSent never queues behind the import.
+-- Batching every row into one transaction is what made a first attempt block the
+-- bot for 21 seconds.
+--
+-- Coins are deliberately absent. stmpd_coins and in_hand are this bot's own
+-- economy with no counterpart to import, so an import must not touch them.
+INSERT INTO users (id, guild_id, total_xp, messages_sent)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (id, guild_id) DO UPDATE
+SET total_xp      = EXCLUDED.total_xp,
+    messages_sent = EXCLUDED.messages_sent;
+
+-- name: GetUsersInGuild :many
+-- Every tracked member of one guild. Used by maintenance passes that need to
+-- diff the whole table before writing.
+SELECT * FROM users WHERE guild_id = $1;

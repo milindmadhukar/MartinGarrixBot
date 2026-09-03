@@ -446,3 +446,32 @@ GROUP BY 1;
 SELECT count(*) FILTER (WHERE parent_song_id IS NULL) AS canonical,
        count(*) FILTER (WHERE parent_song_id IS NOT NULL) AS remixes FROM songs;
 ```
+
+## import-mee6
+
+Replaces this bot's `total_xp` and `messages_sent` with Mee6's, for one guild.
+
+Mee6 ran alongside this bot in the STMPD server the whole time and kept counting
+correctly while our own numbers drifted -- its XP total for the server was about
+three and a half times ours, and our `messages_sent` was inflated for roughly half
+the members. Both systems use the *same* level curve (`5*lvl^2 + 50*lvl + 100`,
+which is `utils.FXpForNextLevel`, because the Python predecessor copied Mee6's),
+so the numbers are directly comparable and nothing is converted.
+
+```
+go run ./scripts/import-mee6 -config config.prod.toml -guild <id> -dry-run
+go run ./scripts/import-mee6 -config config.prod.toml -guild <id>
+```
+
+It **overwrites**: members whose Mee6 XP is lower than ours lose the difference.
+Members absent from Mee6 are left alone rather than zeroed, and coins are never
+touched.
+
+Unlike the other passes, `-dry-run` here writes nothing at all instead of writing
+inside a rolled-back transaction. That transaction holds a row lock on every
+member for the length of the pass, and on the live database the bot's
+`MessageSent` queued behind it for 21 seconds. The real run writes a row at a
+time so each lock lasts about a millisecond.
+
+Take a backup first -- `CREATE TABLE users_backup_pre_mee6 AS SELECT * FROM users;`
+-- because the overwrite is not otherwise reversible.
