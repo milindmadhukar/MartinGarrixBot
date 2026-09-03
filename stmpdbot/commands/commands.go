@@ -39,7 +39,6 @@ func SetupHandlers(b *stmpdbot.STMPDBot) *handler.Mux {
 	rootHandler.Command("/give", GiveHandler(b))
 
 	rootHandler.Command("/rank", RankHandler(b))
-	// BUG: This is not being recognized
 	rootHandler.Command("/leaderboard", LeaderboardHandler(b))
 
 	rootHandler.Command("/links", LinksHandler(b))
@@ -55,17 +54,28 @@ func SetupHandlers(b *stmpdbot.STMPDBot) *handler.Mux {
 	rootHandler.Command("/config", ConfigHandler(b))
 	rootHandler.Autocomplete("/config", ConfigAutocompleteHandler(b))
 
-	fun := handler.New()
-	fun.Command("/8ball", EightBallHandler)
-	fun.Command("/lyrics", LyricsHandler(b))
-	fun.Autocomplete("/lyrics", LyricsAutocompleteHandler(b))
-	fun.Command("/quiz", QuizHandler(b))
-	rootHandler.Mount("/", fun)
-
-	extras := handler.New()
-	extras.Command("/avatar", AvatarHandler)
-	extras.Command("/ping", PingHandler)
-	rootHandler.Mount("/", extras)
+	// These were grouped into sub-muxes mounted at "/" ("fun" and "extras"). That
+	// stopped working in disgo v0.19 and took /ping, /avatar, /8ball, /lyrics and
+	// /quiz down with it -- silently, which is why it went unnoticed for a day.
+	//
+	// v0.18's splitPath used strings.FieldsFunc, which drops empty fields, so
+	// splitPath("/") was []. The pattern loop in Mux.Match had nothing to iterate and
+	// fell through to the mounted mux's own routes. v0.19 changed it to TrimPrefix
+	// plus Split, so splitPath("/") is [""] -- one empty string. The loop now runs
+	// once and compares "" against "ping", does not match, and the mount is skipped.
+	//
+	// Nothing reports this. Mux.Handle returns nil when no route matches, so the
+	// interaction is neither answered nor logged and Discord shows "The application
+	// did not respond" with an empty bot log.
+	//
+	// Registered flat, like every other command above. A sub-mux is only worth having
+	// at a real path prefix, and these are all top-level commands.
+	rootHandler.Command("/8ball", EightBallHandler)
+	rootHandler.Command("/lyrics", LyricsHandler(b))
+	rootHandler.Autocomplete("/lyrics", LyricsAutocompleteHandler(b))
+	rootHandler.Command("/quiz", QuizHandler(b))
+	rootHandler.Command("/avatar", AvatarHandler)
+	rootHandler.Command("/ping", PingHandler)
 
 	// h.Command("/whois", WhoisHandler)
 

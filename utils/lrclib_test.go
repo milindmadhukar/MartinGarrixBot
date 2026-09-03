@@ -115,9 +115,9 @@ func TestLrclibGet_RateLimitedCarriesRetryAfter(t *testing.T) {
 
 	_, err := utils.NewLrclibClientAt(srv.URL).Get(t.Context(), "Breach", "Martin Garrix", "", 0)
 
-	var limited utils.ErrLrclibRateLimited
+	var limited utils.LrclibRateLimitedError
 	if !errors.As(err, &limited) {
-		t.Fatalf("Get returned %v, want ErrLrclibRateLimited", err)
+		t.Fatalf("Get returned %v, want LrclibRateLimitedError", err)
 	}
 	if limited.RetryAfter != 12*time.Second {
 		t.Errorf("RetryAfter = %s, want 12s", limited.RetryAfter)
@@ -139,9 +139,9 @@ func TestLrclibGet_RateLimitedWithoutAUsableHeader(t *testing.T) {
 
 		_, err := utils.NewLrclibClientAt(srv.URL).Get(t.Context(), "Breach", "Martin Garrix", "", 0)
 
-		var limited utils.ErrLrclibRateLimited
+		var limited utils.LrclibRateLimitedError
 		if !errors.As(err, &limited) {
-			t.Fatalf("Retry-After %q: got %v, want ErrLrclibRateLimited", header, err)
+			t.Fatalf("Retry-After %q: got %v, want LrclibRateLimitedError", header, err)
 		}
 		if limited.RetryAfter <= 0 {
 			t.Errorf("Retry-After %q produced a back-off of %s", header, limited.RetryAfter)

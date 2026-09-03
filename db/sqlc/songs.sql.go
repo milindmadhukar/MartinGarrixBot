@@ -99,7 +99,7 @@ func (q *Queries) ClearUnresolvedYoutubePlaylists(ctx context.Context) (int64, e
 }
 
 const copyLyricsToRemixes = `-- name: CopyLyricsToRemixes :execrows
-UPDATE songs t SET lyrics = s.lyrics
+UPDATE songs t SET lyrics = s.lyrics, lrclib_id = s.lrclib_id
 FROM songs s
 WHERE s.id = $1 AND t.parent_song_id = s.id AND t.lyrics IS NULL
   AND s.lyrics IS NOT NULL AND NOT t.is_instrumental
@@ -107,6 +107,17 @@ WHERE s.id = $1 AND t.parent_song_id = s.id AND t.lyrics IS NULL
 
 // Lyrics are entered by hand against the canonical row. A remix of a vocal track has
 // the same words, so fan them out rather than making someone paste them ten times.
+//
+// lrclib_id travels with the words, and must. It is what separates lyrics that came
+// from LRCLIB from lyrics that exist nowhere else, and two things read that
+// distinction: an automatic fill is reversible only if every row it wrote can be
+// found, and dedupe-songs ranks a row carrying hand-entered lyrics above one without
+// when it picks which duplicate survives. Copying the words but not their provenance
+// made every fanned-out remix look hand-entered -- 146 of them on the first
+// production run.
+//
+// A parent whose lyrics really were typed in has a NULL id, and the copy inherits
+// that, which is correct: it is a copy of something irreplaceable.
 func (q *Queries) CopyLyricsToRemixes(ctx context.Context, id int64) (int64, error) {
 	result, err := q.db.Exec(ctx, copyLyricsToRemixes, id)
 	if err != nil {
@@ -1535,10 +1546,11 @@ SELECT id, name, artists, mix_name, release_date
 FROM songs
 WHERE lyrics IS NOT NULL
   AND NOT is_collection
+  AND parent_song_id IS NULL
   AND COALESCE(search_text,
                LOWER(artists || ' ' || name || ' ' || COALESCE(mix_name, '')))
         LIKE ALL ($1::text[])
-ORDER BY (parent_song_id IS NOT NULL), release_date DESC
+ORDER BY release_date DESC
 LIMIT 20
 `
 
@@ -1550,7 +1562,20 @@ type GetSongsWithLyricsLikeRow struct {
 	ReleaseDate pgtype.Text `json:"releaseDate"`
 }
 
-// The same term matching as GetSongsLike; see the note there.
+// Canonical rows only, which is the opposite of what GetSongsLike does and is
+// deliberate. A remix carries its own streaming links, so /links has to list it; a
+// remix's words are byte-identical to the original's, so listing it in /lyrics is
+// eighteen ways to read the same page.
+//
+// This became visible when the LRCLIB backfill fanned lyrics out to renditions:
+// searching "scared to be lonely" returned the song plus seventeen of its remixes and
+// pushed everything else past Discord's 20-choice limit. Before the fan-out only the
+// canonical row had lyrics, so the missing filter never showed.
+//
+// GetRandomSongNamesWithLyrics, which answers the same autocomplete on empty input,
+// has always filtered this way. The two now agree.
+//
+// Term matching is the same as GetSongsLike; see the note there.
 func (q *Queries) GetSongsWithLyricsLike(ctx context.Context, terms []string) ([]GetSongsWithLyricsLikeRow, error) {
 	rows, err := q.db.Query(ctx, getSongsWithLyricsLike, terms)
 	if err != nil {
