@@ -256,6 +256,86 @@ func (q *Queries) DashJoinLeaveTotals(ctx context.Context, arg DashJoinLeaveTota
 	return i, err
 }
 
+const dashLeaderboard = `-- name: DashLeaderboard :many
+SELECT
+    id,
+    messages_sent,
+    total_xp,
+    stmpd_coins,
+    in_hand,
+    (stmpd_coins + in_hand)::bigint AS net_worth
+FROM users
+WHERE guild_id = $1
+ORDER BY
+    CASE WHEN $2::text = 'messages' THEN messages_sent END DESC NULLS LAST,
+    CASE WHEN $2::text = 'xp'       THEN total_xp      END DESC NULLS LAST,
+    CASE WHEN $2::text = 'coins'
+         THEN stmpd_coins + in_hand                                  END DESC NULLS LAST,
+    id
+LIMIT $4 OFFSET $3
+`
+
+type DashLeaderboardParams struct {
+	GuildID int64  `json:"guildId"`
+	Sort    string `json:"sort"`
+	Offset  int32  `json:"offset"`
+	Limit   int32  `json:"limit"`
+}
+
+type DashLeaderboardRow struct {
+	ID           int64 `json:"id"`
+	MessagesSent int32 `json:"messagesSent"`
+	TotalXp      int32 `json:"totalXp"`
+	StmpdCoins   int64 `json:"stmpdCoins"`
+	InHand       int64 `json:"inHand"`
+	NetWorth     int64 `json:"netWorth"`
+}
+
+// The paginated, sortable form of DashTopMembers, which stays as-is because it
+// backs the overview's fixed top-ten panel and takes no offset.
+func (q *Queries) DashLeaderboard(ctx context.Context, arg DashLeaderboardParams) ([]DashLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, dashLeaderboard,
+		arg.GuildID,
+		arg.Sort,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DashLeaderboardRow
+	for rows.Next() {
+		var i DashLeaderboardRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MessagesSent,
+			&i.TotalXp,
+			&i.StmpdCoins,
+			&i.InHand,
+			&i.NetWorth,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const dashLeaderboardCount = `-- name: DashLeaderboardCount :one
+SELECT COUNT(*)::bigint FROM users WHERE guild_id = $1
+`
+
+func (q *Queries) DashLeaderboardCount(ctx context.Context, guildID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, dashLeaderboardCount, guildID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const dashMemberLogs = `-- name: DashMemberLogs :many
 SELECT member_id, action, time, id, guild_id FROM join_leave_logs
 WHERE guild_id = $1
@@ -719,12 +799,12 @@ type DashTopMembersParams struct {
 }
 
 type DashTopMembersRow struct {
-	ID           int64       `json:"id"`
-	MessagesSent pgtype.Int4 `json:"messagesSent"`
-	TotalXp      pgtype.Int4 `json:"totalXp"`
-	StmpdCoins   pgtype.Int8 `json:"stmpdCoins"`
-	InHand       pgtype.Int8 `json:"inHand"`
-	NetWorth     int64       `json:"netWorth"`
+	ID           int64 `json:"id"`
+	MessagesSent int32 `json:"messagesSent"`
+	TotalXp      int32 `json:"totalXp"`
+	StmpdCoins   int64 `json:"stmpdCoins"`
+	InHand       int64 `json:"inHand"`
+	NetWorth     int64 `json:"netWorth"`
 }
 
 // Economy and levels -------------------------------------------------------

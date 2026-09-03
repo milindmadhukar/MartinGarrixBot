@@ -89,14 +89,24 @@
           </div>
         {{end}}
 
-        {{if eq .ID "inert"}}
+        {{if eq .ID "levels"}}
+          <div class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+            <label for="{{$.Data.LevelUpKey}}" class="sm:w-64 sm:shrink-0">
+              <span class="block text-sm text-slate-200">Level-up role level</span>
+              <span class="block text-xs text-slate-500">The role above is granted at this level. 0 grants it immediately.</span>
+            </label>
+            <div class="min-w-0 flex-1">
+              <input type="number" step="1" min="{{$.Data.LevelUpMin}}" max="{{$.Data.LevelUpMax}}"
+                     id="{{$.Data.LevelUpKey}}" name="{{$.Data.LevelUpKey}}"
+                     value="{{$.Data.LevelUpLevel}}"
+                     class="w-32 field px-2 py-1.5 text-sm text-slate-200">
+            </div>
+          </div>
+
           <div class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
             <label for="{{$.Data.XPKey}}" class="sm:w-64 sm:shrink-0">
-              <span class="block text-sm text-slate-200">
-                XP multiplier
-                <span class="ml-1 rounded bg-white/10 px-1.5 py-0.5 stamp-muted">inactive</span>
-              </span>
-              <span class="block text-xs text-slate-500">Stored, but XP is awarded at a flat rate regardless.</span>
+              <span class="block text-sm text-slate-200">XP multiplier</span>
+              <span class="block text-xs text-slate-500">Scales every XP award in this server.</span>
             </label>
             <div class="min-w-0 flex-1">
               <input type="number" step="0.1" min="{{$.Data.XPMin}}" max="{{$.Data.XPMax}}"

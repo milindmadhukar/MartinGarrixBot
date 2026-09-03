@@ -69,7 +69,7 @@ func measureString(face font.Face, text string) fixed.Int26_6 {
 }
 
 func RankPicture(user db.GetUserLevelDataRow, memberName string, avatarUrl string) (image.Image, error) {
-	lvlData := GetUserLevelData(user.TotalXp.Int32)
+	lvlData := GetUserLevelData(user.TotalXp)
 	percentage := float64(lvlData.CurrentXp) / float64(lvlData.XpForNextLvl)
 
 	bgImgFile, err := os.Open("assets/grey_bg.png")

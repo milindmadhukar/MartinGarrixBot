@@ -1,0 +1,108 @@
+{{define "page"}}
+<p class="stamp-label">Activity</p>
+<h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">Leaderboard</h1>
+<p class="mt-1 text-sm text-slate-500">
+  Members earn 15–25 XP per message, at most once a minute. Levels follow the same
+  curve the bot's <code class="text-slate-400">/rank</code> card uses.
+</p>
+
+{{/* Sort is an ordinary query param on the fragment route, so every view is
+     linkable, back-button-correct and renders identically server-side. */}}
+<form class="mt-4 flex flex-wrap items-end gap-3"
+      hx-get="/g/{{.GuildID}}/leaderboard/table"
+      hx-target="#leaderboard-table"
+      hx-swap="outerHTML"
+      hx-push-url="true"
+      hx-trigger="change">
+
+  <label class="stamp-muted">
+    Sort by
+    <select name="sort" class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-auto">
+      <option value="xp"       {{if eq .Data.Sort "xp"}}selected{{end}}>Level &amp; XP</option>
+      <option value="messages" {{if eq .Data.Sort "messages"}}selected{{end}}>Messages</option>
+      <option value="coins"    {{if eq .Data.Sort "coins"}}selected{{end}}>Coins</option>
+    </select>
+  </label>
+</form>
+
+{{template "leaderboard-table" .}}
+{{end}}
+
+
+{{define "leaderboard-table"}}
+<div id="leaderboard-table" class="mt-5">
+  {{if .Data.Rows}}
+    {{/* Narrow screens get a card list and wide screens the table. Six columns
+         on a phone leaves every one of them unreadable. */}}
+    <ul class="space-y-2 md:hidden">
+      {{range .Data.Rows}}
+        <li class="panel p-3">
+          <div class="flex items-center gap-2">
+            <span class="w-8 shrink-0 text-sm tabular-nums text-slate-500">#{{.Rank}}</span>
+            <img src="{{.Avatar}}" alt="" class="h-6 w-6 shrink-0 rounded-full">
+            <span class="min-w-0 flex-1 truncate text-sm text-slate-200">{{.Name}}</span>
+            {{if .Left}}<span class="shrink-0 text-xs text-slate-600">(left)</span>{{end}}
+          </div>
+          <div class="mt-2 flex items-baseline gap-2">
+            <span class="text-sm font-semibold text-mint-200">Level {{.Level}}</span>
+            <span class="text-xs text-slate-500">{{comma .CurrentXP}} / {{comma .XPForNextLvl}} XP</span>
+          </div>
+          <div class="mt-2">{{template "bar" dict "Pct" (pct .CurrentXP .XPForNextLvl) "Color" "bg-mint-300"}}</div>
+          <div class="mt-2 flex flex-wrap gap-x-3 text-xs text-slate-500">
+            <span>{{comma .TotalXp}} total XP</span>
+            <span>{{comma .MessagesSent}} messages</span>
+            <span>{{comma .NetWorth}} coins</span>
+          </div>
+        </li>
+      {{end}}
+    </ul>
+
+    <div class="hidden panel overflow-x-auto md:block">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-white/[0.03] stamp-muted">
+          <tr>
+            <th class="px-3 py-2 font-medium">#</th>
+            <th class="px-3 py-2 font-medium">Member</th>
+            <th class="px-3 py-2 font-medium">Level</th>
+            <th class="px-3 py-2 font-medium">Progress</th>
+            <th class="px-3 py-2 font-medium">Total XP</th>
+            <th class="px-3 py-2 font-medium">Messages</th>
+            <th class="hidden px-3 py-2 font-medium lg:table-cell">Coins</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/10">
+          {{range .Data.Rows}}
+            <tr class="hover:bg-white/[0.03]">
+              <td class="px-3 py-2 tabular-nums text-slate-500">{{.Rank}}</td>
+              <td class="px-3 py-2">
+                <span class="flex items-center gap-2">
+                  <img src="{{.Avatar}}" alt="" class="h-5 w-5 rounded-full">
+                  <span class="text-slate-200">{{.Name}}</span>
+                  {{if .Left}}<span class="text-xs text-slate-600">(left)</span>{{end}}
+                </span>
+                <span class="text-xs text-slate-600">{{.ID}}</span>
+              </td>
+              <td class="px-3 py-2 font-semibold text-mint-200">{{.Level}}</td>
+              <td class="w-40 px-3 py-2">
+                {{template "bar" dict "Pct" (pct .CurrentXP .XPForNextLvl) "Color" "bg-mint-300"}}
+                <span class="mt-1 block text-xs text-slate-600">
+                  {{comma .CurrentXP}} / {{comma .XPForNextLvl}}
+                </span>
+              </td>
+              <td class="whitespace-nowrap px-3 py-2 tabular-nums text-slate-300">{{comma .TotalXp}}</td>
+              <td class="whitespace-nowrap px-3 py-2 tabular-nums text-slate-400">{{comma .MessagesSent}}</td>
+              <td class="hidden whitespace-nowrap px-3 py-2 tabular-nums text-slate-400 lg:table-cell">
+                {{comma .NetWorth}}
+              </td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+
+    {{template "pagination" .Data.Pagination}}
+  {{else}}
+    {{template "empty" "No members have earned XP in this server yet."}}
+  {{end}}
+</div>
+{{end}}

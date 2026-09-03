@@ -33,10 +33,12 @@ A community-built Discord bot for STMPD RCRDS — turning listeners into an acti
 
 ## Activeness & Levels
 
-- **Earn by taking part** — XP for messaging, sing-along wins and quiz answers
+- **Earn by taking part** — XP for messaging, at most once a minute so it cannot be farmed
+- **Per-server XP rate** — an XP multiplier that actually applies to every award
 - **Level-ups** — generated rank cards showing level, rank and progress
-- **Automatic roles** — members unlock roles as they level up
-- **Leaderboards** — levels, activity and points
+- **Level-up announcements** — posted to the channel you choose, on the message that crosses
+- **Automatic roles** — a role granted once a member reaches the level you set
+- **Leaderboards** — levels, messages, coins and in-hand coins, paged
 
 ## Points & Rewards (STMPD Coins)
 
@@ -65,6 +67,7 @@ A community-built Discord bot for STMPD RCRDS — turning listeners into an acti
 - **Server settings** — channels, roles, notifications and radio, without touching a config file
 - **Song catalogue** — the whole discography, searchable by artist and title in any order
 - **Every field visible** — links, artwork, lyrics, BPM, key, release, renditions and where each song has been announced
+- **Leaderboard** — every member ranked by level, messages or coins, with XP progress
 - **What's wrong** — the catalogue audited against every invariant, each finding naming its fix
 - **Fix it in place** — correct a field, re-file a rendition, promote the right version, merge a duplicate
 - **Corrections stick** — a hand-edited field is locked against the syncs until you release it

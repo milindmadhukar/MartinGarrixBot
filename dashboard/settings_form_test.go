@@ -36,6 +36,8 @@ func fixtureGuild() db.Guild {
 		AnniversaryHour:     9,
 		AnniversaryTimezone: "Asia/Kolkata",
 		XpMultiplier:        1.0,
+		LevelUpRole:         pgtype.Int8{Int64: 900, Valid: true},
+		LevelUpRoleLevel:    13,
 	}
 }
 
@@ -160,6 +162,11 @@ func TestBuildUpdateNumericFields(t *testing.T) {
 		{"xp too large", url.Values{"xp_multiplier": {"9"}}, true},
 		{"xp too small", url.Values{"xp_multiplier": {"0"}}, true},
 		{"xp not a number", url.Values{"xp_multiplier": {"lots"}}, true},
+		{"level in range", url.Values{"level_up_role_level": {"13"}}, false},
+		{"level zero grants immediately", url.Values{"level_up_role_level": {"0"}}, false},
+		{"level negative", url.Values{"level_up_role_level": {"-1"}}, true},
+		{"level too large", url.Values{"level_up_role_level": {"1001"}}, true},
+		{"level not a number", url.Values{"level_up_role_level": {"thirteen"}}, true},
 	}
 
 	for _, tc := range cases {
@@ -265,5 +272,51 @@ func TestOptionsForFiltersByKind(t *testing.T) {
 		if o.ID == testGuild.String() {
 			t.Error("@everyone was offered")
 		}
+	}
+}
+
+// UpdateGuildConfig is a full-row update, so a field the form does not submit
+// must still be carried forward. Leaving one at its zero value here is a silent
+// wipe of whatever was configured -- which is exactly what adding the two
+// level-up columns to the query would have caused.
+func TestBuildUpdateCarriesLevelUpConfigForward(t *testing.T) {
+	params, problems := build(t, url.Values{"modlogs_channel": {"101"}})
+	if len(problems) > 0 {
+		t.Fatalf("unexpected problems: %v", problems)
+	}
+
+	if !params.LevelUpRole.Valid || params.LevelUpRole.Int64 != 900 {
+		t.Errorf("LevelUpRole = %+v, want the stored role carried forward", params.LevelUpRole)
+	}
+	if params.LevelUpRoleLevel != 13 {
+		t.Errorf("LevelUpRoleLevel = %d, want 13 carried forward", params.LevelUpRoleLevel)
+	}
+}
+
+// A rejected level must not overwrite the stored one either.
+func TestBuildUpdateRejectedLevelLeavesStoredValue(t *testing.T) {
+	params, problems := build(t, url.Values{"level_up_role_level": {"5000"}})
+	if len(problems) == 0 {
+		t.Fatal("an out-of-range level was accepted")
+	}
+	if params.LevelUpRoleLevel != 13 {
+		t.Errorf("LevelUpRoleLevel = %d; a rejected value must leave the stored one alone", params.LevelUpRoleLevel)
+	}
+}
+
+// The level-up role goes through the same role rules as every other role field.
+func TestBuildUpdateLevelUpRoleRules(t *testing.T) {
+	if _, problems := build(t, url.Values{"level_up_role": {"901"}}); len(problems) == 0 {
+		t.Error("a managed role was accepted as the level-up role")
+	}
+	if _, problems := build(t, url.Values{"level_up_role": {testGuild.String()}}); len(problems) == 0 {
+		t.Error("@everyone was accepted as the level-up role")
+	}
+	params, problems := build(t, url.Values{"level_up_role": {""}})
+	if len(problems) > 0 {
+		t.Fatalf("clearing the level-up role was rejected: %v", problems)
+	}
+	if params.LevelUpRole.Valid {
+		t.Error("an empty submission must clear the level-up role")
 	}
 }

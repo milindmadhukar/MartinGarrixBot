@@ -13,13 +13,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 var userSuffix atomic.Int64
-
-func int8val(i int64) pgtype.Int8 { return pgtype.Int8{Int64: i, Valid: true} }
 
 // testUser creates a user with the given starting balances and removes it when
 // the test ends. Users are keyed on (id, guild_id).
@@ -33,6 +30,13 @@ func testUser(t *testing.T, q *db.Queries, guildID, inHand, safe int64) int64 {
 		t.Fatalf("CreateUser failed: %v", err)
 	}
 	t.Cleanup(func() {
+		// Messages first. The FK is ON DELETE SET NULL over (author_id,
+		// author_guild_id), but author_guild_id is NOT NULL, so deleting a user
+		// who has messages fails on the constraint rather than cascading.
+		if _, err := testPool.Exec(ctx,
+			"DELETE FROM messages WHERE author_id = $1 AND author_guild_id = $2", id, guildID); err != nil {
+			t.Errorf("failed to clean up messages for user %d: %v", id, err)
+		}
 		if _, err := testPool.Exec(ctx,
 			"DELETE FROM users WHERE id = $1 AND guild_id = $2", id, guildID); err != nil {
 			t.Errorf("failed to clean up user %d: %v", id, err)
@@ -59,7 +63,7 @@ func balance(t *testing.T, q *db.Queries, id, guildID int64) (inHand, safe int64
 	if err != nil {
 		t.Fatalf("GetBalance failed: %v", err)
 	}
-	return got.InHand.Int64, got.StmpdCoins.Int64
+	return got.InHand, got.StmpdCoins
 }
 
 func TestGetBalance(t *testing.T) {
@@ -86,7 +90,7 @@ func TestAddCoins(t *testing.T) {
 	id := testUser(t, q, guildID, 100, 0)
 
 	if err := q.AddCoins(context.Background(), db.AddCoinsParams{
-		ID: id, GuildID: guildID, InHand: int8val(50),
+		ID: id, GuildID: guildID, InHand: 50,
 	}); err != nil {
 		t.Fatalf("AddCoins failed: %v", err)
 	}
@@ -104,7 +108,7 @@ func TestWithdrawAmount_MovesFromSafeToHand(t *testing.T) {
 	id := testUser(t, q, guildID, 10, 500)
 
 	if err := q.WithdrawAmount(context.Background(), db.WithdrawAmountParams{
-		ID: id, GuildID: guildID, InHand: int8val(200),
+		ID: id, GuildID: guildID, InHand: 200,
 	}); err != nil {
 		t.Fatalf("WithdrawAmount failed: %v", err)
 	}
@@ -129,7 +133,7 @@ func TestDepositAmount_MovesFromHandToSafe(t *testing.T) {
 	id := testUser(t, q, guildID, 500, 10)
 
 	if err := q.DepositAmount(context.Background(), db.DepositAmountParams{
-		ID: id, GuildID: guildID, InHand: int8val(200),
+		ID: id, GuildID: guildID, InHand: 200,
 	}); err != nil {
 		t.Fatalf("DepositAmount failed: %v", err)
 	}
@@ -159,7 +163,7 @@ func TestGiveCoins_TransfersBetweenMembers(t *testing.T) {
 		ID:      sender,
 		ID_2:    receiver,
 		GuildID: guildID,
-		InHand:  int8val(200),
+		InHand:  200,
 	}); err != nil {
 		t.Fatalf("GiveCoins failed: %v", err)
 	}
@@ -192,7 +196,7 @@ func TestGiveCoins_RefusesWhenTheSenderIsShort(t *testing.T) {
 		ID:      sender,
 		ID_2:    receiver,
 		GuildID: guildID,
-		InHand:  int8val(500), // more than the sender holds
+		InHand:  500, // more than the sender holds
 	}); err != nil {
 		t.Fatalf("GiveCoins returned an error: %v", err)
 	}
@@ -218,7 +222,7 @@ func TestGiveCoins_GivingTheEntireBalanceIsAllowed(t *testing.T) {
 	receiver := testUser(t, q, guildID, 0, 0)
 
 	if err := q.GiveCoins(context.Background(), db.GiveCoinsParams{
-		ID: sender, ID_2: receiver, GuildID: guildID, InHand: int8val(500),
+		ID: sender, ID_2: receiver, GuildID: guildID, InHand: 500,
 	}); err != nil {
 		t.Fatalf("GiveCoins failed: %v", err)
 	}
@@ -264,7 +268,7 @@ func TestGiveCoins_IsScopedToOneGuild(t *testing.T) {
 	}
 
 	if err := q.GiveCoins(context.Background(), db.GiveCoinsParams{
-		ID: sender, ID_2: receiver, GuildID: guildA, InHand: int8val(200),
+		ID: sender, ID_2: receiver, GuildID: guildA, InHand: 200,
 	}); err != nil {
 		t.Fatalf("GiveCoins failed: %v", err)
 	}
@@ -289,7 +293,7 @@ func TestGiveCoins_ToAMissingReceiverLosesTheCoins(t *testing.T) {
 	const missingReceiver = int64(1)
 
 	if err := q.GiveCoins(context.Background(), db.GiveCoinsParams{
-		ID: sender, ID_2: missingReceiver, GuildID: guildID, InHand: int8val(200),
+		ID: sender, ID_2: missingReceiver, GuildID: guildID, InHand: 200,
 	}); err != nil {
 		t.Fatalf("GiveCoins failed: %v", err)
 	}

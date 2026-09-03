@@ -38,24 +38,37 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const getCoinsLeaderboard = `-- name: GetCoinsLeaderboard :many
+
 SELECT id, stmpd_coins, in_hand FROM users
 WHERE guild_id = $1
-ORDER BY stmpd_coins + in_hand DESC OFFSET $2 LIMIT 10
+ORDER BY stmpd_coins + in_hand DESC NULLS LAST, id
+OFFSET $2 LIMIT $3
 `
 
 type GetCoinsLeaderboardParams struct {
 	GuildID int64 `json:"guildId"`
 	Offset  int32 `json:"offset"`
+	Limit   int32 `json:"limit"`
 }
 
 type GetCoinsLeaderboardRow struct {
-	ID         int64       `json:"id"`
-	StmpdCoins pgtype.Int8 `json:"stmpdCoins"`
-	InHand     pgtype.Int8 `json:"inHand"`
+	ID         int64 `json:"id"`
+	StmpdCoins int64 `json:"stmpdCoins"`
+	InHand     int64 `json:"inHand"`
 }
 
+// The four leaderboards below back /leaderboard. Two things they all need:
+//
+//	NULLS LAST -- migration 000025 made these columns NOT NULL, so nothing can
+//	sort NULL-first any more, but saying it here means a future nullable column
+//	cannot quietly reintroduce the bug that put ten zero-XP members at the top
+//	of the levels board.
+//
+//	a trailing `id` -- a deterministic tiebreak. Without it members tied on the
+//	same value swap places between queries, so paging past the first page can
+//	repeat or skip rows.
 func (q *Queries) GetCoinsLeaderboard(ctx context.Context, arg GetCoinsLeaderboardParams) ([]GetCoinsLeaderboardRow, error) {
-	rows, err := q.db.Query(ctx, getCoinsLeaderboard, arg.GuildID, arg.Offset)
+	rows, err := q.db.Query(ctx, getCoinsLeaderboard, arg.GuildID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -77,21 +90,23 @@ func (q *Queries) GetCoinsLeaderboard(ctx context.Context, arg GetCoinsLeaderboa
 const getInHandLeaderboard = `-- name: GetInHandLeaderboard :many
 SELECT id, in_hand FROM users
 WHERE guild_id = $1
-ORDER BY in_hand DESC OFFSET $2 LIMIT 10
+ORDER BY in_hand DESC NULLS LAST, id
+OFFSET $2 LIMIT $3
 `
 
 type GetInHandLeaderboardParams struct {
 	GuildID int64 `json:"guildId"`
 	Offset  int32 `json:"offset"`
+	Limit   int32 `json:"limit"`
 }
 
 type GetInHandLeaderboardRow struct {
-	ID     int64       `json:"id"`
-	InHand pgtype.Int8 `json:"inHand"`
+	ID     int64 `json:"id"`
+	InHand int64 `json:"inHand"`
 }
 
 func (q *Queries) GetInHandLeaderboard(ctx context.Context, arg GetInHandLeaderboardParams) ([]GetInHandLeaderboardRow, error) {
-	rows, err := q.db.Query(ctx, getInHandLeaderboard, arg.GuildID, arg.Offset)
+	rows, err := q.db.Query(ctx, getInHandLeaderboard, arg.GuildID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -110,24 +125,38 @@ func (q *Queries) GetInHandLeaderboard(ctx context.Context, arg GetInHandLeaderb
 	return items, nil
 }
 
+const getLeaderboardCount = `-- name: GetLeaderboardCount :one
+SELECT COUNT(*)::bigint FROM users WHERE guild_id = $1
+`
+
+// Total rows behind any of the leaderboards above, for the page count.
+func (q *Queries) GetLeaderboardCount(ctx context.Context, guildID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, getLeaderboardCount, guildID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getLevelsLeaderboard = `-- name: GetLevelsLeaderboard :many
 SELECT id, total_xp FROM users
 WHERE guild_id = $1
-ORDER BY total_xp DESC OFFSET $2 LIMIT 10
+ORDER BY total_xp DESC NULLS LAST, id
+OFFSET $2 LIMIT $3
 `
 
 type GetLevelsLeaderboardParams struct {
 	GuildID int64 `json:"guildId"`
 	Offset  int32 `json:"offset"`
+	Limit   int32 `json:"limit"`
 }
 
 type GetLevelsLeaderboardRow struct {
-	ID      int64       `json:"id"`
-	TotalXp pgtype.Int4 `json:"totalXp"`
+	ID      int64 `json:"id"`
+	TotalXp int32 `json:"totalXp"`
 }
 
 func (q *Queries) GetLevelsLeaderboard(ctx context.Context, arg GetLevelsLeaderboardParams) ([]GetLevelsLeaderboardRow, error) {
-	rows, err := q.db.Query(ctx, getLevelsLeaderboard, arg.GuildID, arg.Offset)
+	rows, err := q.db.Query(ctx, getLevelsLeaderboard, arg.GuildID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -149,21 +178,23 @@ func (q *Queries) GetLevelsLeaderboard(ctx context.Context, arg GetLevelsLeaderb
 const getMessagesSentLeaderboard = `-- name: GetMessagesSentLeaderboard :many
 SELECT id, messages_sent FROM users
 WHERE guild_id = $1
-ORDER BY messages_sent DESC OFFSET $2 LIMIT 10
+ORDER BY messages_sent DESC NULLS LAST, id
+OFFSET $2 LIMIT $3
 `
 
 type GetMessagesSentLeaderboardParams struct {
 	GuildID int64 `json:"guildId"`
 	Offset  int32 `json:"offset"`
+	Limit   int32 `json:"limit"`
 }
 
 type GetMessagesSentLeaderboardRow struct {
-	ID           int64       `json:"id"`
-	MessagesSent pgtype.Int4 `json:"messagesSent"`
+	ID           int64 `json:"id"`
+	MessagesSent int32 `json:"messagesSent"`
 }
 
 func (q *Queries) GetMessagesSentLeaderboard(ctx context.Context, arg GetMessagesSentLeaderboardParams) ([]GetMessagesSentLeaderboardRow, error) {
-	rows, err := q.db.Query(ctx, getMessagesSentLeaderboard, arg.GuildID, arg.Offset)
+	rows, err := q.db.Query(ctx, getMessagesSentLeaderboard, arg.GuildID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +240,7 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (User, error) 
 const getUserLevelData = `-- name: GetUserLevelData :one
 WITH user_ranks AS (
   SELECT id, messages_sent, total_xp, last_xp_added, stmpd_coins, in_hand, guild_id,
-         RANK() OVER (PARTITION BY guild_id ORDER BY total_xp DESC) as rank
+         RANK() OVER (PARTITION BY guild_id ORDER BY total_xp DESC NULLS LAST) as rank
   FROM users
   WHERE guild_id = $2
 )
@@ -225,11 +256,11 @@ type GetUserLevelDataParams struct {
 
 type GetUserLevelDataRow struct {
 	ID           int64            `json:"id"`
-	MessagesSent pgtype.Int4      `json:"messagesSent"`
-	TotalXp      pgtype.Int4      `json:"totalXp"`
+	MessagesSent int32            `json:"messagesSent"`
+	TotalXp      int32            `json:"totalXp"`
 	LastXpAdded  pgtype.Timestamp `json:"lastXpAdded"`
-	StmpdCoins   pgtype.Int8      `json:"stmpdCoins"`
-	InHand       pgtype.Int8      `json:"inHand"`
+	StmpdCoins   int64            `json:"stmpdCoins"`
+	InHand       int64            `json:"inHand"`
 	GuildID      int64            `json:"guildId"`
 	Rank         int64            `json:"rank"`
 }

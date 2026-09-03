@@ -126,10 +126,14 @@ func (s *Server) buildUpdate(
 		AnniversaryNotificationsRole: roleField("anniversary_notifications_role", "Anniversaries role", guild.AnniversaryNotificationsRole),
 		ModeratorRole:                roleField("moderator_role", "Moderator role", guild.ModeratorRole),
 		NewsRole:                     roleField("news_role", "News role", guild.NewsRole),
+		LevelUpRole:                  roleField("level_up_role", "Level-up role", guild.LevelUpRole),
 
 		AnniversaryHour:     guild.AnniversaryHour,
 		AnniversaryTimezone: guild.AnniversaryTimezone,
 		XpMultiplier:        guild.XpMultiplier,
+		// Carried forward unless the form says otherwise. UpdateGuildConfig is a
+		// full-row update, so a field left at its zero value here is a silent wipe.
+		LevelUpRoleLevel: guild.LevelUpRoleLevel,
 	}
 
 	if raw, ok := form["anniversary_hour"]; ok {
@@ -149,6 +153,19 @@ func (s *Server) buildUpdate(
 			problems = append(problems, fmt.Sprintf("Anniversary timezone: %q is not a valid IANA zone.", tz))
 		} else {
 			params.AnniversaryTimezone = tz
+		}
+	}
+
+	if raw, ok := form[levelUpLevelKey]; ok {
+		level, err := strconv.Atoi(strings.TrimSpace(raw[0]))
+		switch {
+		case err != nil:
+			problems = append(problems, "Level-up level: must be a whole number.")
+		case level < minLevelUpLevel || level > maxLevelUpLevel:
+			problems = append(problems, fmt.Sprintf(
+				"Level-up level: must be between %d and %d.", minLevelUpLevel, maxLevelUpLevel))
+		default:
+			params.LevelUpRoleLevel = int32(level)
 		}
 	}
 
@@ -202,6 +219,7 @@ func changedFields(before db.Guild, after db.UpdateGuildConfigParams) []string {
 	compare("moderator_role", before.ModeratorRole, after.ModeratorRole)
 	compare("news_role", before.NewsRole, after.NewsRole)
 	compare("radio_voice_channel", before.RadioVoiceChannel, after.RadioVoiceChannel)
+	compare("level_up_role", before.LevelUpRole, after.LevelUpRole)
 
 	if before.AnniversaryHour != after.AnniversaryHour {
 		changed = append(changed, "anniversary_hour")
@@ -211,6 +229,9 @@ func changedFields(before db.Guild, after db.UpdateGuildConfigParams) []string {
 	}
 	if before.XpMultiplier != after.XpMultiplier {
 		changed = append(changed, xpMultiplierKey)
+	}
+	if before.LevelUpRoleLevel != after.LevelUpRoleLevel {
+		changed = append(changed, levelUpLevelKey)
 	}
 
 	sort.Strings(changed)

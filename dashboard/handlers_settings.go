@@ -67,6 +67,14 @@ type settingGroup struct {
 const xpMultiplierKey = "xp_multiplier"
 
 const (
+	// levelUpLevelKey is the level at which level_up_role is granted, handled
+	// alongside the multiplier for the same reason: it is a number, not a
+	// channel or role picker.
+	levelUpLevelKey = "level_up_role_level"
+
+	minLevelUpLevel = 0
+	maxLevelUpLevel = 1000
+
 	minXPMultiplier = 0.1
 	maxXPMultiplier = 5.0
 )
@@ -248,12 +256,20 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, p *pageD
 			},
 		},
 		{
+			ID:    "levels",
+			Title: "Levels & XP",
+			Help:  "Members earn XP for messaging, at most once a minute. Leave the channel unset to turn level-up announcements off, and the role unset to hand out nothing.",
+			Settings: []setting{
+				build("bot_channel", "Level-up channel", "Level-up announcements are posted here.", kindTextChannel, guild.BotChannel, false),
+				build("level_up_role", "Level-up role", "Granted once a member reaches the level below.", kindRole, guild.LevelUpRole, false),
+			},
+		},
+		{
 			ID:    "inert",
 			Title: "Not wired up yet",
 			Help:  "These are stored, but no bot feature reads them today. Setting one has no effect until the corresponding feature is built.",
 			Settings: []setting{
 				build("welcomes_channel", "Welcomes", "No welcome message is sent; joins go to the join & leave log instead.", kindTextChannel, guild.WelcomesChannel, true),
-				build("bot_channel", "Bot channel", "Nothing restricts commands to a channel.", kindTextChannel, guild.BotChannel, true),
 				build("news_role", "News role", "Never pinged.", kindRole, guild.NewsRole, true),
 			},
 		},
@@ -265,6 +281,10 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, p *pageD
 		"XPKey":        xpMultiplierKey,
 		"XPMin":        minXPMultiplier,
 		"XPMax":        maxXPMultiplier,
+		"LevelUpKey":   levelUpLevelKey,
+		"LevelUpLevel": guild.LevelUpRoleLevel,
+		"LevelUpMin":   minLevelUpLevel,
+		"LevelUpMax":   maxLevelUpLevel,
 		"Anniversary": map[string]any{
 			"Hour":     guild.AnniversaryHour,
 			"Timezone": guild.AnniversaryTimezone,

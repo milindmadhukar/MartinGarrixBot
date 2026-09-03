@@ -23,10 +23,8 @@ func MessageCreateListener(b *stmpdbot.STMPDBot) bot.EventListener {
 			return
 		}
 
-		// TODO: Update message in bots channel for level change
-		// True garrixer role add if crosses level 13 // check from config
-		// Handler to prompt users to do slash commands if they are not using prefix commands
-		// Handle the XP multiplier?
+		// TODO: Handler to prompt users to do slash commands if they are not
+		// using prefix commands
 
 		if strings.HasPrefix(strings.ToLower(e.Message.Content), "mg.") {
 			replyMessageContent := "Prefix commands are deprecated. Please use slash commands instead. Type `/` to see available commands."
@@ -63,31 +61,33 @@ func MessageCreateListener(b *stmpdbot.STMPDBot) bot.EventListener {
 			MessageID: int64(e.MessageID),
 			GuildID:   int64(*e.GuildID),
 			ChannelID: int64(e.ChannelID),
-			AuthorID: pgtype.Int8{
-				Int64: int64(e.Message.Author.ID),
-				Valid: true,
-			},
-			Content:     e.Message.Content,
-			TotalXp:     user.TotalXp,
-			LastXpAdded: user.LastXpAdded,
+			AuthorID:  int64(e.Message.Author.ID),
+			Content:   e.Message.Content,
 		}
 
-		if total, awarded := nextXP(
-			user.TotalXp.Int32,
+		// user.TotalXp is deliberately not read here. The award is a delta and
+		// the database adds it, so the listener never round-trips a total.
+		if award, awarded := xpAward(
 			user.LastXpAdded.Time,
 			user.LastXpAdded.Valid,
 			now,
 			rollXP(),
 		); awarded {
-			params.TotalXp.Int32 = total
-			params.TotalXp.Valid = true
-			params.LastXpAdded.Time = now
-			params.LastXpAdded.Valid = true
+			params.Roll = award
+			params.AwardedAt = pgtype.Timestamp{Time: now, Valid: true}
 		}
 
-		err = b.Queries.MessageSent(context.Background(), params)
+		row, err := b.Queries.MessageSent(context.Background(), params)
 		if err != nil {
 			slog.Error("Failed to log message", slog.Any("err", err))
+			return
+		}
+
+		// Announce only on an actual crossing, off totals the database returned.
+		if level, ok := crossedLevel(row.OldXp, row.NewXp); ok {
+			if guild, found := levelUpConfig(context.Background(), b, *e.GuildID); found {
+				announceLevelUp(b, e, guild, level)
+			}
 		}
 	})
 }

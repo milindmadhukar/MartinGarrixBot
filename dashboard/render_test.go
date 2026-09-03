@@ -234,3 +234,81 @@ func TestPanelErrorSuppressesData(t *testing.T) {
 		})
 	}
 }
+
+// TestLeaderboardTableExecutes runs the leaderboard fragment with real row
+// shapes. Parsing alone does not catch a wrong field name or a numeric type the
+// pct helper will not accept -- both only fail when the template executes, which
+// otherwise happens for the first time in a browser.
+func TestLeaderboardTableExecutes(t *testing.T) {
+	r, err := newRenderer(testOptions(t), false)
+	if err != nil {
+		t.Fatalf("newRenderer: %v", err)
+	}
+	page := r.pages["leaderboard"]
+
+	rows := []leaderboardRow{
+		{
+			DashLeaderboardRow: db.DashLeaderboardRow{
+				ID: 1, MessagesSent: 4200, TotalXp: 51000, StmpdCoins: 10, InHand: 5, NetWorth: 15,
+			},
+			Rank: 1, ID: "1", Name: "someone", Avatar: "/static/x.png",
+			Level: 30, CurrentXP: 120, XPForNextLvl: 5050,
+		},
+		{
+			// A member who has left still holds their place, and a level-0 row
+			// must not divide by zero in the progress bar.
+			DashLeaderboardRow: db.DashLeaderboardRow{ID: 2},
+			Rank:               2, ID: "2", Name: "departed", Avatar: "/static/x.png",
+			Left: true, Level: 0, CurrentXP: 0, XPForNextLvl: 100,
+		},
+	}
+
+	for _, tc := range []struct {
+		name string
+		data map[string]any
+	}{
+		{"with rows", map[string]any{
+			"Rows": rows, "Sort": "xp",
+			"Pagination": newPagination(1, 50, 2, ""),
+		}},
+		// A brand new guild has no members with XP at all.
+		{"empty", map[string]any{
+			"Rows": []leaderboardRow{}, "Sort": "xp",
+			"Pagination": newPagination(1, 50, 0, ""),
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &pageData{GuildID: "1", Data: tc.data}
+
+			var buf bytes.Buffer
+			if err := page.ExecuteTemplate(&buf, "leaderboard-table", p); err != nil {
+				t.Fatalf("leaderboard-table failed to execute: %v", err)
+			}
+			if buf.Len() == 0 {
+				t.Fatal("leaderboard-table rendered nothing")
+			}
+		})
+	}
+}
+
+// The page block is what a full (non-htmx) load renders, and it pulls in the
+// sort form the fragment does not.
+func TestLeaderboardPageExecutes(t *testing.T) {
+	r, err := newRenderer(testOptions(t), false)
+	if err != nil {
+		t.Fatalf("newRenderer: %v", err)
+	}
+
+	p := &pageData{GuildID: "1", Data: map[string]any{
+		"Rows": []leaderboardRow{}, "Sort": "messages",
+		"Pagination": newPagination(1, 50, 0, ""),
+	}}
+
+	var buf bytes.Buffer
+	if err := r.pages["leaderboard"].ExecuteTemplate(&buf, "page", p); err != nil {
+		t.Fatalf("leaderboard page failed to execute: %v", err)
+	}
+	if !strings.Contains(buf.String(), `name="sort"`) {
+		t.Error("the sort control is missing from the page")
+	}
+}

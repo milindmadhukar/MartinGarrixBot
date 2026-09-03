@@ -3,6 +3,8 @@ package commands
 import (
 	"errors"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
@@ -54,6 +56,15 @@ func RankHandler(b *stmpdbot.STMPDBot) handler.CommandHandler {
 			GuildID: int64(*e.GuildID()),
 		})
 		if err != nil {
+			// A member who has never sent a message has no users row. That is a
+			// normal state, not a failure; it used to surface as a generic
+			// "interaction failed".
+			if errors.Is(err, pgx.ErrNoRows) {
+				_, err = e.UpdateInteractionResponse(discord.NewMessageUpdate().
+					WithEmbeds(utils.FailureEmbed("No rank yet",
+						"They haven't sent a message yet, so they have no XP.")))
+				return err
+			}
 			return err
 		}
 

@@ -11,44 +11,101 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const messageSent = `-- name: MessageSent :exec
-WITH message_insert AS (
+const messageSent = `-- name: MessageSent :one
+WITH cfg AS (
+    SELECT COALESCE(g.xp_multiplier, 1.0) AS mult
+    FROM guilds g
+    WHERE g.guild_id = $1
+),
+prev AS (
+    SELECT p.total_xp AS old_xp
+    FROM users p
+    WHERE p.id = $2 AND p.guild_id = $1
+),
+message_insert AS (
     INSERT INTO messages (message_id, guild_id, channel_id, author_id, author_guild_id, content)
-    VALUES ($1, $2, $3, $4, $2, $5)
+    VALUES ($3, $1, $4, $2, $1, $5)
     ON CONFLICT DO NOTHING
-    RETURNING author_id
+    RETURNING message_id
 ),
 user_updates AS (
-    UPDATE users 
-    SET 
-        total_xp = $6,
-        last_xp_added = $7,
-        messages_sent = messages_sent + 1
-    WHERE id = $4 AND guild_id = $2
-    RETURNING id
+    UPDATE users u
+    SET
+        total_xp = u.total_xp + CASE
+            WHEN $6::int > 0 THEN GREATEST(
+                ROUND($6::numeric
+                      * COALESCE((SELECT mult FROM cfg), 1.0))::int, 1)
+            ELSE 0
+        END,
+        last_xp_added = CASE
+            WHEN $6::int > 0 THEN $7::timestamp
+            ELSE u.last_xp_added
+        END,
+        messages_sent = u.messages_sent + CASE
+            WHEN EXISTS (SELECT 1 FROM message_insert) THEN 1
+            ELSE 0
+        END
+    WHERE u.id = $2 AND u.guild_id = $1
+    RETURNING u.total_xp AS new_xp
 )
-SELECT 1
+SELECT
+    COALESCE((SELECT old_xp FROM prev), 0)::int         AS old_xp,
+    COALESCE((SELECT new_xp FROM user_updates), 0)::int AS new_xp
 `
 
 type MessageSentParams struct {
-	MessageID   int64            `json:"messageId"`
-	GuildID     int64            `json:"guildId"`
-	ChannelID   int64            `json:"channelId"`
-	AuthorID    pgtype.Int8      `json:"authorId"`
-	Content     string           `json:"content"`
-	TotalXp     pgtype.Int4      `json:"totalXp"`
-	LastXpAdded pgtype.Timestamp `json:"lastXpAdded"`
+	GuildID   int64            `json:"guildId"`
+	AuthorID  int64            `json:"authorId"`
+	MessageID int64            `json:"messageId"`
+	ChannelID int64            `json:"channelId"`
+	Content   string           `json:"content"`
+	Roll      int32            `json:"roll"`
+	AwardedAt pgtype.Timestamp `json:"awardedAt"`
 }
 
-func (q *Queries) MessageSent(ctx context.Context, arg MessageSentParams) error {
-	_, err := q.db.Exec(ctx, messageSent,
-		arg.MessageID,
+type MessageSentRow struct {
+	OldXp int32 `json:"oldXp"`
+	NewXp int32 `json:"newXp"`
+}
+
+// Logs the message and updates the author's counters in one statement.
+//
+// Three things here are deliberate:
+//
+//	The XP write is an INCREMENT, not `total_xp = $6`. The old absolute write
+//	took a value read by an earlier GetUser, so two messages processed close
+//	together could both read X and the second could write back a stale X over
+//	the first one's award. Adding to the stored value cannot lose a write; under
+//	a concurrent update Postgres re-evaluates the row against the new value. A
+//	caller with nothing to award passes roll = 0, which makes it a no-op.
+//
+//	The multiplier is applied here rather than in Go. guilds.xp_multiplier has
+//	been settable from the dashboard since it was added and has never once been
+//	read; reading it in the listener would have meant a third database round
+//	trip per message on the gateway's single event goroutine. As a CTE it costs
+//	nothing. GREATEST(..., 1) keeps the smallest allowed multiplier (0.1x) from
+//	rounding an award down to zero, which would stall a member forever.
+//
+//	messages_sent only moves when the message row actually inserted. The two
+//	CTEs are independent, so the old unconditional `+ 1` also counted redelivered
+//	gateway events that ON CONFLICT threw away.
+//
+// prev snapshots total_xp from the statement snapshot, before the update lands,
+// so the caller gets both sides of the write and can tell whether this message
+// crossed a level boundary without a second query. The COALESCEs cover the row
+// vanishing between the caller's GetUser and this statement: both sides then
+// read 0, which reports "no level change" rather than erroring on a NULL.
+func (q *Queries) MessageSent(ctx context.Context, arg MessageSentParams) (MessageSentRow, error) {
+	row := q.db.QueryRow(ctx, messageSent,
 		arg.GuildID,
-		arg.ChannelID,
 		arg.AuthorID,
+		arg.MessageID,
+		arg.ChannelID,
 		arg.Content,
-		arg.TotalXp,
-		arg.LastXpAdded,
+		arg.Roll,
+		arg.AwardedAt,
 	)
-	return err
+	var i MessageSentRow
+	err := row.Scan(&i.OldXp, &i.NewXp)
+	return i, err
 }

@@ -57,6 +57,7 @@
                 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {{if .GuildID}}
         {{template "navlink" dict "Href" (printf "/g/%s" .GuildID) "Label" "Overview" "Active" (eq .Nav "overview")}}
+        {{template "navlink" dict "Href" (printf "/g/%s/leaderboard" .GuildID) "Label" "Leaderboard" "Active" (eq .Nav "leaderboard")}}
         {{template "navlink" dict "Href" (printf "/g/%s/modlogs" .GuildID) "Label" "Moderation" "Active" (eq .Nav "modlogs")}}
         {{template "navlink" dict "Href" (printf "/g/%s/members" .GuildID) "Label" "Joins & leaves" "Active" (eq .Nav "members")}}
         {{template "navlink" dict "Href" (printf "/g/%s/settings" .GuildID) "Label" "Settings" "Active" (eq .Nav "settings")}}

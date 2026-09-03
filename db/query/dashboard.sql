@@ -281,3 +281,26 @@ WHERE guild_id = $1
   AND expires_at > (now() AT TIME ZONE 'UTC')
 ORDER BY expires_at ASC, id
 LIMIT $2;
+
+-- name: DashLeaderboard :many
+-- The paginated, sortable form of DashTopMembers, which stays as-is because it
+-- backs the overview's fixed top-ten panel and takes no offset.
+SELECT
+    id,
+    messages_sent,
+    total_xp,
+    stmpd_coins,
+    in_hand,
+    (stmpd_coins + in_hand)::bigint AS net_worth
+FROM users
+WHERE guild_id = $1
+ORDER BY
+    CASE WHEN sqlc.arg('sort')::text = 'messages' THEN messages_sent END DESC NULLS LAST,
+    CASE WHEN sqlc.arg('sort')::text = 'xp'       THEN total_xp      END DESC NULLS LAST,
+    CASE WHEN sqlc.arg('sort')::text = 'coins'
+         THEN stmpd_coins + in_hand                                  END DESC NULLS LAST,
+    id
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+
+-- name: DashLeaderboardCount :one
+SELECT COUNT(*)::bigint FROM users WHERE guild_id = $1;

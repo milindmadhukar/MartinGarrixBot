@@ -34,6 +34,7 @@ var pageFiles = []string{
 	"noaccess",
 	"guilds",
 	"overview",
+	"leaderboard",
 	"modlogs",
 	"members",
 	"settings",

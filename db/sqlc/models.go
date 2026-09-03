@@ -41,6 +41,8 @@ type Guild struct {
 	AnniversaryTimezone             string      `json:"anniversaryTimezone"`
 	VoiceLogsChannel                pgtype.Int8 `json:"voiceLogsChannel"`
 	MemberLogsChannel               pgtype.Int8 `json:"memberLogsChannel"`
+	LevelUpRole                     pgtype.Int8 `json:"levelUpRole"`
+	LevelUpRoleLevel                int32       `json:"levelUpRoleLevel"`
 }
 
 type JoinLeaveLog struct {
@@ -156,11 +158,11 @@ type TourShow struct {
 
 type User struct {
 	ID           int64            `json:"id"`
-	MessagesSent pgtype.Int4      `json:"messagesSent"`
-	TotalXp      pgtype.Int4      `json:"totalXp"`
+	MessagesSent int32            `json:"messagesSent"`
+	TotalXp      int32            `json:"totalXp"`
 	LastXpAdded  pgtype.Timestamp `json:"lastXpAdded"`
-	StmpdCoins   pgtype.Int8      `json:"stmpdCoins"`
-	InHand       pgtype.Int8      `json:"inHand"`
+	StmpdCoins   int64            `json:"stmpdCoins"`
+	InHand       int64            `json:"inHand"`
 	GuildID      int64            `json:"guildId"`
 }
 

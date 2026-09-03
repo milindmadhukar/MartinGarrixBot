@@ -5,70 +5,63 @@ import (
 	"time"
 )
 
-func TestNextXP(t *testing.T) {
+func TestXPAward(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name           string
-		currentXP      int32
 		lastAdded      time.Time
 		lastAddedValid bool
 		roll           int32
-		wantXP         int32
+		wantAward      int32
 		wantAwarded    bool
 	}{
 		{
 			name:        "a member who has never earned XP always earns",
-			currentXP:   0,
 			roll:        20,
-			wantXP:      20,
+			wantAward:   20,
 			wantAwarded: true,
 		},
 		{
 			name:           "a message inside the cooldown earns nothing",
-			currentXP:      100,
 			lastAdded:      now.Add(-30 * time.Second),
 			lastAddedValid: true,
 			roll:           20,
-			wantXP:         100,
+			wantAward:      0,
 		},
 		{
 			name:           "a message exactly on the cooldown boundary earns",
-			currentXP:      100,
 			lastAdded:      now.Add(-time.Minute),
 			lastAddedValid: true,
 			roll:           15,
-			wantXP:         115,
+			wantAward:      15,
 			wantAwarded:    true,
 		},
 		{
 			name:           "a message after the cooldown earns",
-			currentXP:      100,
 			lastAdded:      now.Add(-2 * time.Minute),
 			lastAddedValid: true,
 			roll:           25,
-			wantXP:         125,
+			wantAward:      25,
 			wantAwarded:    true,
 		},
 		{
 			name:           "one millisecond short of the cooldown earns nothing",
-			currentXP:      100,
 			lastAdded:      now.Add(-time.Minute + time.Millisecond),
 			lastAddedValid: true,
 			roll:           20,
-			wantXP:         100,
+			wantAward:      0,
 		},
 		{
 			// A row written in another zone must still compare correctly; the
 			// listener stamps UTC but the column carries no zone.
 			name:           "a timestamp in another zone is compared in UTC",
-			currentXP:      50,
 			lastAdded:      now.Add(-2 * time.Minute).In(time.FixedZone("IST", 5*3600+1800)),
 			lastAddedValid: true,
 			roll:           18,
-			wantXP:         68,
+			wantAward:      18,
 			wantAwarded:    true,
 		},
 	}
@@ -77,10 +70,10 @@ func TestNextXP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotXP, gotAwarded := nextXP(tt.currentXP, tt.lastAdded, tt.lastAddedValid, now, tt.roll)
+			gotAward, gotAwarded := xpAward(tt.lastAdded, tt.lastAddedValid, now, tt.roll)
 
-			if gotXP != tt.wantXP {
-				t.Errorf("XP = %d, want %d", gotXP, tt.wantXP)
+			if gotAward != tt.wantAward {
+				t.Errorf("award = %d, want %d", gotAward, tt.wantAward)
 			}
 			if gotAwarded != tt.wantAwarded {
 				t.Errorf("awarded = %v, want %v", gotAwarded, tt.wantAwarded)
@@ -90,7 +83,7 @@ func TestNextXP(t *testing.T) {
 }
 
 // A member who never stops talking must not out-earn the cooldown.
-func TestNextXP_CooldownLimitsFarming(t *testing.T) {
+func TestXPAward_CooldownLimitsFarming(t *testing.T) {
 	t.Parallel()
 
 	start := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
@@ -106,8 +99,8 @@ func TestNextXP_CooldownLimitsFarming(t *testing.T) {
 	for i := range 600 {
 		now := start.Add(time.Duration(i) * time.Second)
 
-		if next, awarded := nextXP(total, lastAdded, valid, now, xpMin); awarded {
-			total = next
+		if award, awarded := xpAward(lastAdded, valid, now, xpMin); awarded {
+			total += award
 			lastAdded = now
 			valid = true
 			awards++
@@ -141,14 +134,24 @@ func TestRollXP_StaysInRange(t *testing.T) {
 	}
 }
 
-func TestNextXP_AppliesMultiplier(t *testing.T) {
-	t.Skip("BUG: guilds.xp_multiplier is stored and shown by /config view, but " +
-		"nothing has ever applied it. Wiring it up means threading the guild " +
-		"config into the message listener and deciding how to round.")
+// The award is a delta, not a running total. If this regresses to returning a
+// total, MessageSent's `total_xp = total_xp + $roll` would double-count it.
+//
+// The guild xp_multiplier is applied in SQL rather than here; it is covered by
+// TestMessageSentAppliesMultiplier in the db integration tests.
+func TestXPAward_ReturnsDeltaNotTotal(t *testing.T) {
+	t.Parallel()
 
-	// A guild with a 2x multiplier should double the roll.
 	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
-	if got, _ := nextXP(0, time.Time{}, false, now, 20); got != 40 {
-		t.Errorf("XP = %d, want 40 with a 2x multiplier", got)
+
+	award, awarded := xpAward(now.Add(-2*time.Minute), true, now, 20)
+	if !awarded || award != 20 {
+		t.Errorf("xpAward() = (%d, %v), want (20, true)", award, awarded)
+	}
+
+	// On cooldown the delta must be zero, so the SQL adds nothing at all.
+	award, awarded = xpAward(now.Add(-time.Second), true, now, 20)
+	if awarded || award != 0 {
+		t.Errorf("xpAward() on cooldown = (%d, %v), want (0, false)", award, awarded)
 	}
 }

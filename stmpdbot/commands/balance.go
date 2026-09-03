@@ -41,8 +41,8 @@ func BalanceHandler(b *stmpdbot.STMPDBot) handler.CommandHandler {
 
 		eb := discord.NewEmbed().
 			WithTitle("STMPD Bank").
-			AddField("In Hand", strconv.Itoa(int(balanceInfo.InHand.Int64)), false).
-			AddField("In Safe", strconv.Itoa(int(balanceInfo.StmpdCoins.Int64)), false).
+			AddField("In Hand", strconv.Itoa(int(balanceInfo.InHand)), false).
+			AddField("In Safe", strconv.Itoa(int(balanceInfo.StmpdCoins)), false).
 			WithColor(utils.ColorSuccess).
 			WithThumbnail(*e.Member().User.AvatarURL(discord.WithFormat(discord.FileFormatJPEG), discord.WithSize(512)))
 

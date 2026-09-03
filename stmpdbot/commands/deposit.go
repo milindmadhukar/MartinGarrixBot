@@ -6,7 +6,6 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
-	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 	"github.com/milindmadhukar/STMPDBot/stmpdbot"
 	"github.com/milindmadhukar/STMPDBot/utils"
@@ -48,7 +47,7 @@ func DepositHandler(b *stmpdbot.STMPDBot) handler.CommandHandler {
 			return err
 		}
 
-		amtToDeposit, err := resolveAmount(balanceInfo.InHand.Int64, amt, amtOk, isAll, isHalf)
+		amtToDeposit, err := resolveAmount(balanceInfo.InHand, amt, amtOk, isAll, isHalf)
 		if err != nil {
 			message := "Please provide amount of coins to deposit."
 			switch {
@@ -69,10 +68,7 @@ func DepositHandler(b *stmpdbot.STMPDBot) handler.CommandHandler {
 		err = b.Queries.DepositAmount(e.Ctx, db.DepositAmountParams{
 			ID:      int64(e.Member().User.ID),
 			GuildID: int64(*e.GuildID()),
-			InHand: pgtype.Int8{
-				Int64: amtToDeposit,
-				Valid: true,
-			},
+			InHand:  amtToDeposit,
 		})
 		if err != nil {
 			return err

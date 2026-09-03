@@ -370,11 +370,11 @@ func handleViewConfig(b *stmpdbot.STMPDBot, e *handler.CommandEvent) error {
 		embed = embed.AddField("Moderation Logs Channel", "Not set", true)
 	}
 
-	// Bot Channel
+	// Bot Channel -- where level-up announcements go. Unset turns them off.
 	if config.BotChannel.Valid {
-		embed = embed.AddField("Bot Channel", fmt.Sprintf("<#%d>", config.BotChannel.Int64), true)
+		embed = embed.AddField("Level-up Channel", fmt.Sprintf("<#%d>", config.BotChannel.Int64), true)
 	} else {
-		embed = embed.AddField("Bot Channel", "Not set", true)
+		embed = embed.AddField("Level-up Channel", "Not set", true)
 	}
 
 	// Radio Voice Channel
@@ -386,6 +386,14 @@ func handleViewConfig(b *stmpdbot.STMPDBot, e *handler.CommandEvent) error {
 
 	// XP Multiplier
 	embed = embed.AddField("XP Multiplier", fmt.Sprintf("%.1fx", config.XpMultiplier), true)
+
+	// Level-up role, and the level it is granted at.
+	if config.LevelUpRole.Valid {
+		embed = embed.AddField("Level-up Role",
+			fmt.Sprintf("<@&%d> at level %d", config.LevelUpRole.Int64, config.LevelUpRoleLevel), true)
+	} else {
+		embed = embed.AddField("Level-up Role", "Not set", true)
+	}
 
 	// Notifications section
 	notificationsText := ""

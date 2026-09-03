@@ -9,6 +9,9 @@ import (
 
 const ModlogsPerPage = 5
 
+// LeaderboardPerPage is the page size for /leaderboard.
+const LeaderboardPerPage = 10
+
 // FormatModlogEntry formats a single modlog entry for display
 func FormatModlogEntry(log db.Modlog, index int) string {
 	reason := "No reason provided"

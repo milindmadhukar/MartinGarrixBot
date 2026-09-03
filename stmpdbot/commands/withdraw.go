@@ -6,7 +6,6 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
-	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 	"github.com/milindmadhukar/STMPDBot/stmpdbot"
 	"github.com/milindmadhukar/STMPDBot/utils"
@@ -50,7 +49,7 @@ func WithdrawHandler(b *stmpdbot.STMPDBot) handler.CommandHandler {
 			return err
 		}
 
-		amtToWithdraw, err = resolveAmount(balanceInfo.StmpdCoins.Int64, amt, amtOk, isAll, isHalf)
+		amtToWithdraw, err = resolveAmount(balanceInfo.StmpdCoins, amt, amtOk, isAll, isHalf)
 		if err != nil {
 			message := "Please provide amount of coins to withdraw."
 			switch {
@@ -70,7 +69,7 @@ func WithdrawHandler(b *stmpdbot.STMPDBot) handler.CommandHandler {
 		err = b.Queries.WithdrawAmount(e.Ctx, db.WithdrawAmountParams{
 			ID:      int64(e.Member().User.ID),
 			GuildID: int64(*e.GuildID()),
-			InHand:  pgtype.Int8{Int64: amtToWithdraw, Valid: true},
+			InHand:  amtToWithdraw,
 		})
 
 		if err != nil {

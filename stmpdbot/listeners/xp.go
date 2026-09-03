@@ -20,18 +20,24 @@ func rollXP() int32 {
 	return xpMin + rand.Int32N(xpMax-xpMin+1)
 }
 
-// nextXP decides whether a message earns XP and what the running total becomes.
+// xpAward decides what a message earns. It returns a DELTA, not a running
+// total: MessageSent adds it inside the UPDATE, so the database is the only
+// thing that ever decides a member's total. The old form read the total, added
+// to it in Go and wrote the result back, which is a read-modify-write across
+// two statements and can lose an award.
+//
 // It takes the roll and the clock as arguments so the cooldown can be tested
 // without waiting a minute or reaching into the global random source.
 //
-// lastAddedValid carries pgtype.Int8's Valid flag: a member who has never
+// lastAddedValid carries pgtype.Timestamp's Valid flag: a member who has never
 // earned XP always earns on their next message.
 //
-// Note: guilds have an xp_multiplier column, but nothing has ever applied it.
-// It is deliberately not a parameter here; see TestNextXP_AppliesMultiplier.
-func nextXP(currentXP int32, lastAdded time.Time, lastAddedValid bool, now time.Time, roll int32) (int32, bool) {
+// The guild's xp_multiplier is deliberately NOT applied here. It lives in
+// MessageSent's SQL, where reading it costs no extra round trip on the gateway's
+// single event goroutine; see the query's comment.
+func xpAward(lastAdded time.Time, lastAddedValid bool, now time.Time, roll int32) (int32, bool) {
 	if lastAddedValid && now.Sub(lastAdded.UTC()) < xpCooldown {
-		return currentXP, false
+		return 0, false
 	}
-	return currentXP + roll, true
+	return roll, true
 }

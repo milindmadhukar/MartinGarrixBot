@@ -50,6 +50,7 @@ func SetupHandlers(b *stmpdbot.STMPDBot) *handler.Mux {
 
 	rootHandler.Command("/moderation", ModerationHandler(b))
 	rootHandler.Component("/modlogs/{userID}/{action}/{page}", ModlogsPaginationHandler(b))
+	rootHandler.Component("/leaderboard/{category}/{action}/{page}", LeaderboardPaginationHandler(b))
 
 	rootHandler.Command("/config", ConfigHandler(b))
 	rootHandler.Autocomplete("/config", ConfigAutocompleteHandler(b))

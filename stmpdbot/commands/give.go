@@ -6,7 +6,6 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
-	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 	"github.com/milindmadhukar/STMPDBot/stmpdbot"
 	"github.com/milindmadhukar/STMPDBot/utils"
@@ -59,7 +58,7 @@ func GiveHandler(b *stmpdbot.STMPDBot) handler.CommandHandler {
 			return err
 		}
 
-		amtToGive, err := resolveAmount(balanceInfo.InHand.Int64, amt, amtOk, isAll, isHalf)
+		amtToGive, err := resolveAmount(balanceInfo.InHand, amt, amtOk, isAll, isHalf)
 		if err != nil {
 			message := "Please provide amount of coins to give."
 			switch {
@@ -82,10 +81,7 @@ func GiveHandler(b *stmpdbot.STMPDBot) handler.CommandHandler {
 			ID:      int64(e.Member().User.ID),
 			ID_2:    int64(member.User.ID),
 			GuildID: guildID,
-			InHand: pgtype.Int8{
-				Int64: amtToGive,
-				Valid: true,
-			},
+			InHand:  amtToGive,
 		})
 
 		if err != nil {

@@ -14,7 +14,6 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/handler"
-	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 	"github.com/milindmadhukar/STMPDBot/stmpdbot"
 	"github.com/milindmadhukar/STMPDBot/utils"
@@ -113,7 +112,7 @@ func QuizHandler(b *stmpdbot.STMPDBot) handler.CommandHandler {
 					err := b.Queries.AddCoins(e.Ctx, db.AddCoinsParams{
 						ID:      int64(e.Member().User.ID),
 						GuildID: int64(*e.GuildID()),
-						InHand:  pgtype.Int8{Int64: int64(earnings), Valid: true},
+						InHand:  int64(earnings),
 					})
 
 					if err != nil {

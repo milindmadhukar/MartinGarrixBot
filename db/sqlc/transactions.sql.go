@@ -7,8 +7,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addCoins = `-- name: AddCoins :exec
@@ -16,9 +14,9 @@ UPDATE users SET in_hand=in_hand + $3 WHERE id = $1 AND guild_id = $2
 `
 
 type AddCoinsParams struct {
-	ID      int64       `json:"id"`
-	GuildID int64       `json:"guildId"`
-	InHand  pgtype.Int8 `json:"inHand"`
+	ID      int64 `json:"id"`
+	GuildID int64 `json:"guildId"`
+	InHand  int64 `json:"inHand"`
 }
 
 func (q *Queries) AddCoins(ctx context.Context, arg AddCoinsParams) error {
@@ -31,9 +29,9 @@ UPDATE users SET in_hand = in_hand - $3, stmpd_coins = stmpd_coins + $3 WHERE id
 `
 
 type DepositAmountParams struct {
-	ID      int64       `json:"id"`
-	GuildID int64       `json:"guildId"`
-	InHand  pgtype.Int8 `json:"inHand"`
+	ID      int64 `json:"id"`
+	GuildID int64 `json:"guildId"`
+	InHand  int64 `json:"inHand"`
 }
 
 func (q *Queries) DepositAmount(ctx context.Context, arg DepositAmountParams) error {
@@ -51,8 +49,8 @@ type GetBalanceParams struct {
 }
 
 type GetBalanceRow struct {
-	StmpdCoins pgtype.Int8 `json:"stmpdCoins"`
-	InHand     pgtype.Int8 `json:"inHand"`
+	StmpdCoins int64 `json:"stmpdCoins"`
+	InHand     int64 `json:"inHand"`
 }
 
 func (q *Queries) GetBalance(ctx context.Context, arg GetBalanceParams) (GetBalanceRow, error) {
@@ -76,10 +74,10 @@ AND EXISTS (SELECT 1 FROM sender_update)
 `
 
 type GiveCoinsParams struct {
-	ID      int64       `json:"id"`
-	ID_2    int64       `json:"id2"`
-	GuildID int64       `json:"guildId"`
-	InHand  pgtype.Int8 `json:"inHand"`
+	ID      int64 `json:"id"`
+	ID_2    int64 `json:"id2"`
+	GuildID int64 `json:"guildId"`
+	InHand  int64 `json:"inHand"`
 }
 
 func (q *Queries) GiveCoins(ctx context.Context, arg GiveCoinsParams) error {
@@ -97,9 +95,9 @@ UPDATE users SET in_hand = in_hand + $3, stmpd_coins = stmpd_coins - $3 WHERE id
 `
 
 type WithdrawAmountParams struct {
-	ID      int64       `json:"id"`
-	GuildID int64       `json:"guildId"`
-	InHand  pgtype.Int8 `json:"inHand"`
+	ID      int64 `json:"id"`
+	GuildID int64 `json:"guildId"`
+	InHand  int64 `json:"inHand"`
 }
 
 func (q *Queries) WithdrawAmount(ctx context.Context, arg WithdrawAmountParams) error {

@@ -80,6 +80,8 @@ UPDATE guilds SET
     news_role                       = $22,
     bot_channel                     = $23,
     radio_voice_channel             = $24,
-    xp_multiplier                   = $25
+    xp_multiplier                   = $25,
+    level_up_role                   = $26,
+    level_up_role_level             = $27
 WHERE guild_id = $1
 RETURNING *;

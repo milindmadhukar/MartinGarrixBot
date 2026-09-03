@@ -92,6 +92,8 @@ func (s *Server) routes() http.Handler {
 	// /static or /login from an auth check that was never global.
 	mux.Handle("GET /g/{guildID}", s.guildScoped(s.handleOverview))
 	mux.Handle("GET /g/{guildID}/panels/{panel}", s.guildScoped(s.handlePanel))
+	mux.Handle("GET /g/{guildID}/leaderboard", s.guildScoped(s.handleLeaderboard))
+	mux.Handle("GET /g/{guildID}/leaderboard/table", s.guildScoped(s.handleLeaderboard))
 	mux.Handle("GET /g/{guildID}/modlogs", s.guildScoped(s.handleModlogs))
 	mux.Handle("GET /g/{guildID}/modlogs/table", s.guildScoped(s.handleModlogs))
 	mux.Handle("GET /g/{guildID}/members", s.guildScoped(s.handleMemberLogs))
