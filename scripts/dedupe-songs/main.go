@@ -161,12 +161,20 @@ func main() {
 
 	subsetMerged, subsetDeferred := dedupeBySubsetCredit(ctx, env)
 
+	// Last, because it is the only pass that does not reason about the credits at all.
+	// Whatever the first two can settle from the artist string they should settle
+	// first; this one exists for the rows they cannot see, where the act has been
+	// renamed and only the streaming link says the two rows are one record.
+	identityMerged, identityDeferred := dedupeBySharedIdentifier(ctx, env)
+
 	slog.Info("Dedupe complete",
 		slog.Int("groups", len(order)),
 		slog.Int("rows_merged_away", merged),
 		slog.Int("groups_left_for_review", deferred),
 		slog.Int("merged_by_subset_credit", subsetMerged),
 		slog.Int("subset_pairs_left_for_review", subsetDeferred),
+		slog.Int("merged_by_shared_identifier", identityMerged),
+		slog.Int("identifier_pairs_left_for_review", identityDeferred),
 		slog.Int("failed", failed))
 }
 
