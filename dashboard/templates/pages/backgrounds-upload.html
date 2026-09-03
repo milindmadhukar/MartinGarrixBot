@@ -1,0 +1,56 @@
+{{define "page"}}
+<p class="stamp-label">Configuration</p>
+<h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">Add a background</h1>
+<p class="mt-1 text-sm text-slate-500">
+  Added to the shared catalogue every server picks from. Pick an image, then drag and zoom
+  to choose what shows on the card before uploading.
+</p>
+
+{{if .Data.Problem}}
+  <div class="mt-6 rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+    {{.Data.Problem}}
+  </div>
+{{end}}
+
+{{if .Data.Saved}}
+  <div class="mt-6 rounded-lg border border-mint-300/30 bg-mint-300/10 px-4 py-3 text-sm text-mint-100">
+    Uploaded. It is available to every server now.
+  </div>
+{{end}}
+
+<form id="upload-form" class="panel mt-6" method="post" action="/backgrounds/upload" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+  <div class="p-4">
+    <label class="block text-sm text-slate-200">
+      Image file
+      <input type="file" id="source-file" accept="image/*"
+             class="mt-2 block w-full text-sm text-slate-300 file:mr-3 file:rounded-full file:border-0 file:bg-mint-300 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-black hover:file:bg-mint-100">
+    </label>
+
+    <div id="crop-stage" hidden class="mt-4">
+      <div id="crop-viewport"
+           class="relative mx-auto aspect-[10/3] w-full max-w-2xl touch-none select-none overflow-hidden rounded-lg border border-white/10 bg-black/40">
+        <img id="crop-img" alt="" draggable="false"
+             class="absolute left-0 top-0 max-w-none origin-top-left cursor-grab active:cursor-grabbing">
+      </div>
+
+      <label class="mt-3 flex max-w-2xl items-center gap-3 text-xs text-slate-400">
+        Zoom
+        <input type="range" id="crop-zoom" min="1" max="3" step="0.01" value="1" class="flex-1 accent-mint-300">
+      </label>
+
+      <input type="file" name="image" id="cropped-file" hidden required>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-end gap-3 border-t border-white/10 px-4 py-3">
+    <button type="submit" id="upload-submit" disabled
+            class="rounded-full bg-mint-300 px-4 py-1.5 text-sm font-semibold text-black transition hover:bg-mint-100 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-mint-300 focus-visible:ring-offset-2 focus-visible:ring-offset-black">
+      Upload
+    </button>
+  </div>
+</form>
+
+<script src="{{asset "/static/cropper.js"}}" defer></script>
+{{end}}

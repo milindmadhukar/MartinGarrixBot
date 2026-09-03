@@ -1,0 +1,85 @@
+{{define "page"}}
+<p class="stamp-label">Configuration</p>
+<h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">Backgrounds</h1>
+<p class="mt-1 text-sm text-slate-500">
+  Pick which backgrounds this server's /rank cards can use. Leave nothing checked to use
+  the whole catalogue.
+</p>
+{{template "backgrounds-form" .}}
+{{end}}
+
+{{define "backgrounds-form"}}
+<div id="backgrounds-form" class="mt-6 space-y-4">
+
+  {{if .Data.Problem}}
+    <div class="rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+      {{.Data.Problem}}
+    </div>
+  {{end}}
+
+  {{if .Data.Saved}}
+    <div class="rounded-lg border border-mint-300/30 bg-mint-300/10 px-4 py-3 text-sm text-mint-100">
+      Saved.
+    </div>
+  {{end}}
+
+  {{if not .Data.Any}}
+    <div class="panel px-4 py-6 text-sm text-slate-400">
+      No backgrounds in the catalogue yet.
+      {{if .IsSuperAdmin}}<a href="/backgrounds/upload" class="text-mint-300 hover:underline">Add one</a>.{{end}}
+    </div>
+  {{else}}
+    <form class="panel" hx-post="/g/{{.GuildID}}/backgrounds" hx-target="#backgrounds-form" hx-swap="outerHTML">
+      <div class="panel-head">
+        <h2 class="stamp-label">Selection</h2>
+        <p class="mt-0.5 text-xs text-slate-500">
+          Check one or more to restrict which backgrounds are eligible. None checked means
+          every background below is eligible.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
+        {{range .Data.Options}}
+          <label class="group relative block cursor-pointer overflow-hidden rounded-lg border border-white/10">
+            <input type="checkbox" name="background_ids" value="{{.ID}}" {{if .Selected}}checked{{end}}
+                   class="peer absolute right-2 top-2 z-10 h-4 w-4 rounded border-slate-500 bg-black/60 accent-mint-300">
+            <img src="{{.URL}}" alt="" loading="lazy"
+                 class="aspect-[10/3] w-full object-cover ring-inset ring-mint-300 transition peer-checked:ring-2 group-hover:opacity-90">
+          </label>
+        {{end}}
+      </div>
+
+      <div class="flex flex-col gap-2 border-t border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+        <span class="text-sm text-slate-200 sm:w-64 sm:shrink-0">Selection mode</span>
+        <div class="flex gap-4 text-sm text-slate-300">
+          <label class="flex items-center gap-1.5">
+            <input type="radio" name="mode" value="random" {{if eq .Data.Mode "random"}}checked{{end}}
+                   class="accent-mint-300">
+            Random
+          </label>
+          <label class="flex items-center gap-1.5">
+            <input type="radio" name="mode" value="cycle" {{if eq .Data.Mode "cycle"}}checked{{end}}
+                   class="accent-mint-300">
+            Cycle
+          </label>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 border-t border-white/10 px-4 py-3">
+        <span class="htmx-indicator text-xs text-slate-500">Saving…</span>
+        <button type="submit"
+                class="rounded-full bg-mint-300 px-4 py-1.5 text-sm font-semibold text-black transition hover:bg-mint-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-mint-300 focus-visible:ring-offset-2 focus-visible:ring-offset-black">
+          Save
+        </button>
+      </div>
+    </form>
+  {{end}}
+
+  {{if .IsSuperAdmin}}
+    <p class="text-xs text-slate-500">
+      <a href="/backgrounds/upload" class="text-mint-300 hover:underline">Add a new background</a>
+      to the shared catalogue.
+    </p>
+  {{end}}
+</div>
+{{end}}

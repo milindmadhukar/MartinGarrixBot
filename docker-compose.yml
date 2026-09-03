@@ -46,6 +46,11 @@ services:
       - ./config.docker.toml:/var/lib/config.toml
       - ./stmpd-google-service.json:/etc/secrets/stmpd-google-service.json
       - ./stmpdbot.log:/bot/stmpdbot.log
+      # Rank card backgrounds. Shared with the dashboard container below (same
+      # host path, same container path) so an upload through the dashboard is
+      # immediately usable here without a redeploy. Points at storage.backgrounds_dir
+      # in config.docker.toml. Seeded with the built-in images on first boot.
+      - ./backgrounds/:/data/backgrounds/
     command: -config=/var/lib/config.toml --sync-commands=true
     # The host clock is UTC and stays that way; every service on it declares its own
     # display timezone, which is how frappe, traefik, authelia and wud are set up.
@@ -70,6 +75,9 @@ services:
       # internal-API shared secret therefore exist exactly once; the dashboard
       # refuses to start if its copy of the secret disagrees with the bot's.
       - ./config.docker.toml:/var/lib/config.toml
+      # Same host path as the bot's mount above -- this is what makes an
+      # upload here show up on the bot's next /rank render.
+      - ./backgrounds/:/data/backgrounds/
     command: -config=/var/lib/config.toml
     environment:
       - TZ=Asia/Kolkata

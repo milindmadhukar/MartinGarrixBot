@@ -102,6 +102,17 @@ func (s *Server) routes() http.Handler {
 	// requireCSRF composes INSIDE guildScoped: it reads the session that
 	// authed installs on the request context.
 	mux.Handle("POST /g/{guildID}/settings", s.guildScoped(s.requireCSRF(s.handleSettingsSave)))
+	mux.Handle("GET /g/{guildID}/backgrounds", s.guildScoped(s.handleBackgrounds))
+	mux.Handle("POST /g/{guildID}/backgrounds", s.guildScoped(s.requireCSRF(s.handleBackgroundsSave)))
+
+	// The catalogue of background images is global -- uploading adds to the one
+	// pool every guild picks from -- so it lives outside /g/{guildID} the same
+	// way /songs does, and is gated the same way: superAdminOnly.
+	mux.Handle("GET /backgrounds/upload", s.superAdminOnly(s.handleBackgroundUpload))
+	mux.Handle("POST /backgrounds/upload", s.superAdminOnly(s.requireCSRF(s.handleBackgroundUploadSave)))
+	// Thumbnails are just gated behind a session, like everything else in the
+	// dashboard -- these are concert photos, not guild-private data.
+	mux.Handle("GET /backgrounds/file/{filename}", s.authed(s.handleBackgroundFile))
 
 	// The catalogue is global, not guild-scoped: every guild the bot is in reads one
 	// songs table. Browsing is open to any authenticated user; writing is owners only,
@@ -112,12 +123,12 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("GET /songs/problems/list", s.authed(s.handleSongProblems))
 	mux.Handle("GET /songs/{songID}", s.authed(s.handleSong))
 
-	mux.Handle("GET /songs/{songID}/merge", s.ownerOnly(s.handleSongMergePick))
-	mux.Handle("POST /songs/{songID}", s.ownerOnly(s.requireCSRF(s.handleSongSave)))
-	mux.Handle("POST /songs/{songID}/unlock", s.ownerOnly(s.requireCSRF(s.handleSongUnlock)))
-	mux.Handle("POST /songs/{songID}/parent", s.ownerOnly(s.requireCSRF(s.handleSongParent)))
-	mux.Handle("POST /songs/{songID}/promote", s.ownerOnly(s.requireCSRF(s.handleSongPromote)))
-	mux.Handle("POST /songs/{songID}/merge", s.ownerOnly(s.requireCSRF(s.handleSongMerge)))
+	mux.Handle("GET /songs/{songID}/merge", s.superAdminOnly(s.handleSongMergePick))
+	mux.Handle("POST /songs/{songID}", s.superAdminOnly(s.requireCSRF(s.handleSongSave)))
+	mux.Handle("POST /songs/{songID}/unlock", s.superAdminOnly(s.requireCSRF(s.handleSongUnlock)))
+	mux.Handle("POST /songs/{songID}/parent", s.superAdminOnly(s.requireCSRF(s.handleSongParent)))
+	mux.Handle("POST /songs/{songID}/promote", s.superAdminOnly(s.requireCSRF(s.handleSongPromote)))
+	mux.Handle("POST /songs/{songID}/merge", s.superAdminOnly(s.requireCSRF(s.handleSongMerge)))
 
 	return chain(mux,
 		s.recoverer,

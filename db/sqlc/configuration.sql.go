@@ -15,7 +15,7 @@ const createGuild = `-- name: CreateGuild :one
 INSERT INTO guilds(guild_id)
 VALUES ($1)
 ON CONFLICT (guild_id) DO NOTHING
-RETURNING guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone, voice_logs_channel, member_logs_channel, level_up_role, level_up_role_level
+RETURNING guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone, voice_logs_channel, member_logs_channel, level_up_role, level_up_role_level, background_mode, background_cycle_background_id
 `
 
 func (q *Queries) CreateGuild(ctx context.Context, guildID int64) (Guild, error) {
@@ -49,12 +49,14 @@ func (q *Queries) CreateGuild(ctx context.Context, guildID int64) (Guild, error)
 		&i.MemberLogsChannel,
 		&i.LevelUpRole,
 		&i.LevelUpRoleLevel,
+		&i.BackgroundMode,
+		&i.BackgroundCycleBackgroundID,
 	)
 	return i, err
 }
 
 const getGuild = `-- name: GetGuild :one
-SELECT guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone, voice_logs_channel, member_logs_channel, level_up_role, level_up_role_level FROM guilds WHERE guild_id = $1
+SELECT guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone, voice_logs_channel, member_logs_channel, level_up_role, level_up_role_level, background_mode, background_cycle_background_id FROM guilds WHERE guild_id = $1
 `
 
 func (q *Queries) GetGuild(ctx context.Context, guildID int64) (Guild, error) {
@@ -88,6 +90,8 @@ func (q *Queries) GetGuild(ctx context.Context, guildID int64) (Guild, error) {
 		&i.MemberLogsChannel,
 		&i.LevelUpRole,
 		&i.LevelUpRoleLevel,
+		&i.BackgroundMode,
+		&i.BackgroundCycleBackgroundID,
 	)
 	return i, err
 }
@@ -299,7 +303,7 @@ UPDATE guilds SET
     level_up_role                   = $26,
     level_up_role_level             = $27
 WHERE guild_id = $1
-RETURNING guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone, voice_logs_channel, member_logs_channel, level_up_role, level_up_role_level
+RETURNING guild_id, modlogs_channel, leave_join_logs_channel, youtube_notifications_channel, youtube_notifications_role, reddit_notifications_channel, reddit_notifications_role, stmpd_notifications_channel, stmpd_notifications_role, welcomes_channel, delete_logs_channel, edit_logs_channel, bot_channel, radio_voice_channel, news_role, xp_multiplier, tour_notifications_channel, tour_notifications_role, moderator_role, anniversary_notifications_channel, anniversary_notifications_role, anniversary_hour, anniversary_timezone, voice_logs_channel, member_logs_channel, level_up_role, level_up_role_level, background_mode, background_cycle_background_id
 `
 
 type UpdateGuildConfigParams struct {
@@ -401,6 +405,8 @@ func (q *Queries) UpdateGuildConfig(ctx context.Context, arg UpdateGuildConfigPa
 		&i.MemberLogsChannel,
 		&i.LevelUpRole,
 		&i.LevelUpRoleLevel,
+		&i.BackgroundMode,
+		&i.BackgroundCycleBackgroundID,
 	)
 	return i, err
 }

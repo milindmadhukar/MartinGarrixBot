@@ -68,7 +68,7 @@ func RankHandler(b *stmpdbot.STMPDBot) handler.CommandHandler {
 			return err
 		}
 
-		picture, err := utils.RankPicture(user, member.User.Username, *avatarURL)
+		picture, err := utils.RankPicture(e.Ctx, b.Queries, user, member.User.Username, *avatarURL)
 		if err != nil {
 			return err
 		}

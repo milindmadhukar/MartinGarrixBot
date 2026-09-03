@@ -73,6 +73,12 @@ func main() {
 		os.Exit(-1)
 	}
 
+	// Started after SetupDB because seeding writes through b.Queries.
+	if err = b.SetupBackgrounds(); err != nil {
+		slog.Error("Failed to setup rank card backgrounds", slog.Any("err", err))
+		os.Exit(-1)
+	}
+
 	// Started after SetupDB so the database check has a pool, but before the
 	// gateway opens so /health answers during startup (reporting unhealthy)
 	// rather than refusing connections.

@@ -38,6 +38,8 @@ var pageFiles = []string{
 	"modlogs",
 	"members",
 	"settings",
+	"backgrounds",
+	"backgrounds-upload",
 	"songs",
 	"song",
 	"songmerge",
@@ -134,11 +136,11 @@ type pageData struct {
 	AvatarURL string
 	CSRFToken string
 
-	// IsOwner gates the catalogue's edit controls in the templates. It hides
-	// buttons; ownerOnly is what actually refuses the request. Both are needed and
-	// neither is sufficient -- a hidden button is not a permission check, and a
+	// IsSuperAdmin gates the catalogue's edit controls in the templates. It hides
+	// buttons; superAdminOnly is what actually refuses the request. Both are needed
+	// and neither is sufficient -- a hidden button is not a permission check, and a
 	// refused POST with the button still showing is a broken-looking page.
-	IsOwner bool
+	IsSuperAdmin bool
 
 	GuildID   string
 	GuildName string
@@ -164,7 +166,7 @@ func (s *Server) newPage(r *http.Request, title string) *pageData {
 		p.Username = sess.Username
 		p.AvatarURL = avatarURL(sess.UserID.String(), sess.AvatarHash)
 		p.CSRFToken = sess.CSRF
-		p.IsOwner = sess.Owner
+		p.IsSuperAdmin = sess.SuperAdmin
 	}
 	return p
 }

@@ -8,11 +8,11 @@ import (
 
 // TestLoadConfigDashboardSections pins how the two new sections decode.
 //
-// owner_ids is []snowflake.ID, and snowflake.ID implements only MarshalJSON --
-// no encoding.TextUnmarshaler -- so go-toml decodes it from a bare TOML
-// integer, not a quoted string. Getting that wrong means the deployed config
-// fails to parse at startup, which is exactly the sort of thing worth pinning
-// once rather than discovering on the box.
+// super_admin_ids is []snowflake.ID, and snowflake.ID implements only
+// MarshalJSON -- no encoding.TextUnmarshaler -- so go-toml decodes it from a
+// bare TOML integer, not a quoted string. Getting that wrong means the
+// deployed config fails to parse at startup, which is exactly the sort of
+// thing worth pinning once rather than discovering on the box.
 func TestLoadConfigDashboardSections(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")
@@ -38,7 +38,7 @@ redirect_uri = "https://bot.milind.dev/auth/callback"
 session_secret = "0123456789abcdef0123456789abcdef"
 bot_api_url = "http://stmpdbot:8082"
 bot_api_secret = "internal-secret"
-owner_ids = [522436981913944096, 421608483629301772]
+super_admin_ids = [522436981913944096, 421608483629301772]
 `
 
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
@@ -60,14 +60,14 @@ owner_ids = [522436981913944096, 421608483629301772]
 		t.Error("the two halves of the shared secret should match in this fixture")
 	}
 
-	if len(cfg.Dashboard.OwnerIDs) != 2 {
-		t.Fatalf("owner_ids decoded to %d entries: %v", len(cfg.Dashboard.OwnerIDs), cfg.Dashboard.OwnerIDs)
+	if len(cfg.Dashboard.SuperAdminIDs) != 2 {
+		t.Fatalf("super_admin_ids decoded to %d entries: %v", len(cfg.Dashboard.SuperAdminIDs), cfg.Dashboard.SuperAdminIDs)
 	}
-	if got := cfg.Dashboard.OwnerIDs[0].String(); got != "522436981913944096" {
-		t.Errorf("owner_ids[0] = %s", got)
+	if got := cfg.Dashboard.SuperAdminIDs[0].String(); got != "522436981913944096" {
+		t.Errorf("super_admin_ids[0] = %s", got)
 	}
-	if got := cfg.Dashboard.OwnerIDs[1].String(); got != "421608483629301772" {
-		t.Errorf("owner_ids[1] = %s", got)
+	if got := cfg.Dashboard.SuperAdminIDs[1].String(); got != "421608483629301772" {
+		t.Errorf("super_admin_ids[1] = %s", got)
 	}
 }
 
@@ -88,7 +88,7 @@ func TestLoadConfigWithoutDashboardSections(t *testing.T) {
 	if cfg.Internal.Secret != "" {
 		t.Error("an absent [internal] section should leave the secret empty, disabling the API")
 	}
-	if len(cfg.Dashboard.OwnerIDs) != 0 {
-		t.Error("an absent [dashboard] section should leave owner_ids empty")
+	if len(cfg.Dashboard.SuperAdminIDs) != 0 {
+		t.Error("an absent [dashboard] section should leave super_admin_ids empty")
 	}
 }

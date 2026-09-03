@@ -34,6 +34,19 @@ type Config struct {
 	// LoadConfig; each process simply ignores the section it does not own.
 	Internal  InternalConfig  `toml:"internal"`
 	Dashboard DashboardConfig `toml:"dashboard"`
+	// Storage is read by both binaries: the bot renders rank cards from it,
+	// the dashboard serves thumbnails and writes new uploads into it.
+	Storage StorageConfig `toml:"storage"`
+}
+
+type StorageConfig struct {
+	// BackgroundsDir is where rank card background images live. Defaults to
+	// "assets/backgrounds" (the images baked into the bot's own image) when
+	// empty, which is what makes local/dev runs work without configuring
+	// this at all. In production this points at a volume shared between the
+	// bot and dashboard containers, so an upload through the dashboard is
+	// immediately usable by the bot without a redeploy.
+	BackgroundsDir string `toml:"backgrounds_dir"`
 }
 
 type BotConfig struct {

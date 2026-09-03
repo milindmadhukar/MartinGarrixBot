@@ -103,7 +103,17 @@ session_secret = ""
 bot_api_url = "http://127.0.0.1:8082"
 bot_api_secret = ""
 
-# Discord user IDs that may administer every server the bot is in, regardless
-# of their permissions there. Everyone else needs Administrator in a server the
-# bot is already a member of.
-owner_ids = []
+# Discord user IDs of app-level super admins, who may administer every server
+# the bot is in regardless of their permissions there. Distinct from a
+# server's own Discord owner. Everyone else needs Administrator in a server
+# the bot is already a member of.
+super_admin_ids = []
+
+[storage]
+# Where rank card background images live. Read by both the bot and the
+# dashboard. Empty defaults to "assets/backgrounds" -- the images baked into
+# the bot's own image -- which is what makes local/dev work unconfigured. In
+# production this should point at a directory mounted into both the bot and
+# dashboard containers, so an upload through the dashboard is immediately
+# usable by the bot.
+backgrounds_dir = ""

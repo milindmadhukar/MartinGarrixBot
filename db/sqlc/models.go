@@ -15,6 +15,13 @@ type AnniversaryPost struct {
 	PostedAt  pgtype.Timestamptz `json:"postedAt"`
 }
 
+type Background struct {
+	ID         int64              `json:"id"`
+	Filename   string             `json:"filename"`
+	UploadedBy pgtype.Int8        `json:"uploadedBy"`
+	CreatedAt  pgtype.Timestamptz `json:"createdAt"`
+}
+
 type Guild struct {
 	GuildID                         int64       `json:"guildId"`
 	ModlogsChannel                  pgtype.Int8 `json:"modlogsChannel"`
@@ -43,6 +50,13 @@ type Guild struct {
 	MemberLogsChannel               pgtype.Int8 `json:"memberLogsChannel"`
 	LevelUpRole                     pgtype.Int8 `json:"levelUpRole"`
 	LevelUpRoleLevel                int32       `json:"levelUpRoleLevel"`
+	BackgroundMode                  string      `json:"backgroundMode"`
+	BackgroundCycleBackgroundID     pgtype.Int8 `json:"backgroundCycleBackgroundId"`
+}
+
+type GuildBackground struct {
+	GuildID      int64 `json:"guildId"`
+	BackgroundID int64 `json:"backgroundId"`
 }
 
 type JoinLeaveLog struct {

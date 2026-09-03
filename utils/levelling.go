@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"image/color"
@@ -16,13 +17,26 @@ import (
 	"strings"
 
 	"github.com/fogleman/gg"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/nfnt/resize"
 
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
 
 const rankCardFontPath = "assets/font.ttf"
-const rankCardBackgroundsDir = "assets/backgrounds"
+
+// rankCardBackgroundsDir defaults to the images baked into the bot's own
+// image, and is overridden by SetBackgroundsDir at startup when
+// storage.backgrounds_dir points at a shared, writable volume instead.
+var rankCardBackgroundsDir = "assets/backgrounds"
+
+// SetBackgroundsDir points the rank card generator at a different backgrounds
+// directory. Called once at startup; a blank dir leaves the default in place.
+func SetBackgroundsDir(dir string) {
+	if dir != "" {
+		rankCardBackgroundsDir = dir
+	}
+}
 
 func FXpForNextLevel(lvl int) int32 {
 	return int32(5*lvl*lvl + 50*lvl + 100)
@@ -83,6 +97,57 @@ func pickRandomBackground() (string, error) {
 	return candidates[rand.Intn(len(candidates))], nil
 }
 
+// pickBackgroundForGuild picks a background from the guild's selection in the
+// backgrounds catalogue (or the whole catalogue, if the guild hasn't picked
+// any), honouring the guild's random/cycle mode. Falls back to a directory
+// scan if the catalogue itself is empty, which should only happen before the
+// startup seed has ever run.
+func pickBackgroundForGuild(ctx context.Context, queries *db.Queries, guildID int64) (string, error) {
+	rows, err := queries.ListGuildBackgrounds(ctx, guildID)
+	if err != nil {
+		return "", err
+	}
+	if len(rows) == 0 {
+		if rows, err = queries.ListBackgrounds(ctx); err != nil {
+			return "", err
+		}
+	}
+	if len(rows) == 0 {
+		return pickRandomBackground()
+	}
+
+	settings, err := queries.GetGuildBackgroundSettings(ctx, guildID)
+	if err != nil || settings.BackgroundMode != "cycle" {
+		// No guild row yet, or plain random mode: random needs no persisted
+		// state either way.
+		return filepath.Join(rankCardBackgroundsDir, rows[rand.Intn(len(rows))].Filename), nil
+	}
+
+	next := nextInCycle(rows, settings.BackgroundCycleBackgroundID)
+	// Best-effort: if this write fails the next render just repeats the same
+	// pick, which is not worth failing the whole rank card over.
+	_ = queries.SetGuildBackgroundCyclePosition(ctx, db.SetGuildBackgroundCyclePositionParams{
+		GuildID:                     guildID,
+		BackgroundCycleBackgroundID: pgtype.Int8{Int64: next.ID, Valid: true},
+	})
+
+	return filepath.Join(rankCardBackgroundsDir, next.Filename), nil
+}
+
+// nextInCycle advances to the background after `current` in id order,
+// wrapping around. A missing or fallen-out-of-selection current starts over
+// from the first background.
+func nextInCycle(rows []db.Background, current pgtype.Int8) db.Background {
+	if current.Valid {
+		for i, row := range rows {
+			if row.ID == current.Int64 {
+				return rows[(i+1)%len(rows)]
+			}
+		}
+	}
+	return rows[0]
+}
+
 func loadImage(path string) (image.Image, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -115,8 +180,7 @@ func coverResizeCrop(img image.Image, targetW, targetH int) image.Image {
 	return cropped
 }
 
-// averageColor returns the mean RGB colour of every pixel in img, used as
-// the progress-bar fill colour so it always matches the chosen background.
+// averageColor returns the mean RGB colour of every pixel in img.
 func averageColor(img image.Image) color.RGBA {
 	bounds := img.Bounds()
 	var rSum, gSum, bSum, count uint64
@@ -143,6 +207,90 @@ func averageColor(img image.Image) color.RGBA {
 	}
 }
 
+// Floors applied to the average colour's saturation/value so the progress
+// fill always reads as a bright, neon accent instead of a muddy average.
+const (
+	neonMinSaturation = 0.75
+	neonMinValue      = 0.9
+)
+
+func rgbToHSV(r, g, b uint8) (h, s, v float64) {
+	rf, gf, bf := float64(r)/255, float64(g)/255, float64(b)/255
+	max := math.Max(rf, math.Max(gf, bf))
+	min := math.Min(rf, math.Min(gf, bf))
+	v = max
+	d := max - min
+
+	if max == 0 {
+		return 0, 0, v
+	}
+	s = d / max
+
+	if d == 0 {
+		return 0, s, v
+	}
+	switch max {
+	case rf:
+		h = math.Mod((gf-bf)/d, 6)
+	case gf:
+		h = (bf-rf)/d + 2
+	default:
+		h = (rf-gf)/d + 4
+	}
+	h *= 60
+	if h < 0 {
+		h += 360
+	}
+	return h, s, v
+}
+
+func hsvToRGB(h, s, v float64) color.RGBA {
+	c := v * s
+	x := c * (1 - math.Abs(math.Mod(h/60, 2)-1))
+	m := v - c
+
+	var rf, gf, bf float64
+	switch {
+	case h < 60:
+		rf, gf, bf = c, x, 0
+	case h < 120:
+		rf, gf, bf = x, c, 0
+	case h < 180:
+		rf, gf, bf = 0, c, x
+	case h < 240:
+		rf, gf, bf = 0, x, c
+	case h < 300:
+		rf, gf, bf = x, 0, c
+	default:
+		rf, gf, bf = c, 0, x
+	}
+
+	return color.RGBA{
+		R: uint8((rf + m) * 255),
+		G: uint8((gf + m) * 255),
+		B: uint8((bf + m) * 255),
+		A: 255,
+	}
+}
+
+// neonAccentColor takes the background's average colour and pushes its
+// saturation/brightness up to a neon floor while keeping its hue, so the
+// progress fill always looks vivid and "of" the background rather than a
+// dull, muddy average.
+func neonAccentColor(img image.Image) color.RGBA {
+	avg := averageColor(img)
+	h, s, v := rgbToHSV(avg.R, avg.G, avg.B)
+
+	if s < neonMinSaturation {
+		s = neonMinSaturation
+	}
+	if v < neonMinValue {
+		v = neonMinValue
+	}
+
+	return hsvToRGB(h, s, v)
+}
+
 // dynamicFontSize shrinks text down from maxSize until it fits within
 // imgFraction of the card width, mirroring the previous shrink-long-usernames
 // behaviour.
@@ -164,11 +312,11 @@ func dynamicFontSize(ctx *gg.Context, text string, maxSize int, imgFraction floa
 	return fontSize - 1, nil
 }
 
-func RankPicture(user db.GetUserLevelDataRow, memberName string, avatarUrl string) (image.Image, error) {
+func RankPicture(ctx context.Context, queries *db.Queries, user db.GetUserLevelDataRow, memberName string, avatarUrl string) (image.Image, error) {
 	lvlData := GetUserLevelData(user.TotalXp)
 	percentage := float64(lvlData.CurrentXp) / float64(lvlData.XpForNextLvl)
 
-	bgPath, err := pickRandomBackground()
+	bgPath, err := pickBackgroundForGuild(ctx, queries, user.GuildID)
 	if err != nil {
 		return nil, err
 	}
@@ -178,42 +326,42 @@ func RankPicture(user db.GetUserLevelDataRow, memberName string, avatarUrl strin
 		return nil, err
 	}
 	background := coverResizeCrop(bgImg, RankCardWidth, RankCardHeight)
-	fillColor := averageColor(background)
+	fillColor := neonAccentColor(background)
 
-	ctx := gg.NewContext(RankCardWidth, RankCardHeight)
-	ctx.DrawImage(background, 0, 0)
+	dc := gg.NewContext(RankCardWidth, RankCardHeight)
+	dc.DrawImage(background, 0, 0)
 
 	// Translucent rounded panel, inset from the canvas edges.
 	panelX := float64(RankPanelInset)
 	panelY := float64(RankPanelInset)
 	panelW := float64(RankCardWidth - 2*RankPanelInset)
 	panelH := float64(RankCardHeight - 2*RankPanelInset)
-	ctx.DrawRoundedRectangle(panelX, panelY, panelW, panelH, RankPanelRadius)
-	ctx.SetRGBA255(18, 18, 18, 145)
-	ctx.Fill()
+	dc.DrawRoundedRectangle(panelX, panelY, panelW, panelH, RankPanelRadius)
+	dc.SetRGBA255(18, 18, 18, 145)
+	dc.Fill()
 
 	// Progress bar track (grey stadium/pill).
 	barX := float64(RankBarX)
 	barY := float64(RankBarY)
 	barW := float64(RANK_PICTURE_WIDTH)
 	barH := float64(RankBarHeight)
-	ctx.DrawRoundedRectangle(barX, barY, barW, barH, barH/2)
-	ctx.SetRGBA255(93, 93, 93, 255)
-	ctx.Fill()
+	dc.DrawRoundedRectangle(barX, barY, barW, barH, barH/2)
+	dc.SetRGBA255(93, 93, 93, 255)
+	dc.Fill()
 
 	// Progress fill, clipped to the same pill shape so only its left cap is
 	// rounded (matching how much of the bar is actually filled).
 	fillWidth := barW * percentage
 	if fillWidth > 0 {
-		ctx.Push()
-		ctx.DrawRoundedRectangle(barX, barY, barW, barH, barH/2)
-		ctx.Clip()
-		ctx.SetColor(fillColor)
-		ctx.DrawRectangle(barX, barY, fillWidth, barH)
-		ctx.Fill()
-		ctx.Pop()
+		dc.Push()
+		dc.DrawRoundedRectangle(barX, barY, barW, barH, barH/2)
+		dc.Clip()
+		dc.SetColor(fillColor)
+		dc.DrawRectangle(barX, barY, fillWidth, barH)
+		dc.Fill()
+		dc.Pop()
 		// See the matching comment above the avatar's ResetClip() call.
-		ctx.ResetClip()
+		dc.ResetClip()
 	}
 
 	// Avatar, circular-masked.
@@ -233,37 +381,37 @@ func RankPicture(user db.GetUserLevelDataRow, memberName string, avatarUrl strin
 	avatarCenterX := float64(RankAvatarX) + avatarRadius
 	avatarCenterY := float64(RankAvatarY) + avatarRadius
 
-	ctx.Push()
-	ctx.DrawCircle(avatarCenterX, avatarCenterY, avatarRadius)
-	ctx.Clip()
-	ctx.DrawImage(resizedAvatar, RankAvatarX, RankAvatarY)
-	ctx.Pop()
+	dc.Push()
+	dc.DrawCircle(avatarCenterX, avatarCenterY, avatarRadius)
+	dc.Clip()
+	dc.DrawImage(resizedAvatar, RankAvatarX, RankAvatarY)
+	dc.Pop()
 	// gg's Pop() intentionally does not restore the clip mask, so it must be
 	// cleared explicitly or every draw after this point stays clipped to the
 	// avatar circle.
-	ctx.ResetClip()
+	dc.ResetClip()
 
 	// Text.
-	ctx.SetColor(color.White)
+	dc.SetColor(color.White)
 
 	fontSize := RankUsernameMaxSize
 	if len(memberName) > 20 {
-		fontSize, err = dynamicFontSize(ctx, memberName, RankUsernameMaxSize, 0.6)
+		fontSize, err = dynamicFontSize(dc, memberName, RankUsernameMaxSize, 0.6)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if err := ctx.LoadFontFace(rankCardFontPath, float64(fontSize)); err != nil {
+	if err := dc.LoadFontFace(rankCardFontPath, float64(fontSize)); err != nil {
 		return nil, err
 	}
-	ctx.SetColor(color.White)
-	ctx.DrawStringAnchored(memberName, RankUsernameX, RankUsernameY, 0, 1)
+	dc.SetColor(color.White)
+	dc.DrawStringAnchored(memberName, RankUsernameX, RankUsernameY, 0, 1)
 
 	xpProgress := fmt.Sprintf("%s/%s", Humanize(lvlData.CurrentXp), Humanize(lvlData.XpForNextLvl))
-	if err := ctx.LoadFontFace(rankCardFontPath, 32); err != nil {
+	if err := dc.LoadFontFace(rankCardFontPath, 32); err != nil {
 		return nil, err
 	}
-	ctx.DrawStringAnchored(xpProgress, RankXpTextX, RankXpTextY, 1, 1)
+	dc.DrawStringAnchored(xpProgress, RankXpTextX, RankXpTextY, 1, 1)
 
 	// RANK and LEVEL: both the label and the number of a block are
 	// right-aligned to the *same* x-anchor, so they can never drift apart
@@ -271,32 +419,32 @@ func RankPicture(user db.GetUserLevelDataRow, memberName string, avatarUrl strin
 	// spaced apart using the actually-measured LEVEL block width.
 	levelX := float64(RankBlockRightX)
 
-	if err := ctx.LoadFontFace(rankCardFontPath, RankLabelFontSize); err != nil {
+	if err := dc.LoadFontFace(rankCardFontPath, RankLabelFontSize); err != nil {
 		return nil, err
 	}
-	ctx.DrawStringAnchored("LEVEL", levelX, RankLabelY, 1, 1)
-	levelLabelW, _ := ctx.MeasureString("LEVEL")
+	dc.DrawStringAnchored("LEVEL", levelX, RankLabelY, 1, 1)
+	levelLabelW, _ := dc.MeasureString("LEVEL")
 
 	levelStr := strconv.Itoa(lvlData.Lvl)
-	if err := ctx.LoadFontFace(rankCardFontPath, RankNumberFontSize); err != nil {
+	if err := dc.LoadFontFace(rankCardFontPath, RankNumberFontSize); err != nil {
 		return nil, err
 	}
-	ctx.DrawStringAnchored(levelStr, levelX, RankNumberY, 1, 1)
-	levelNumW, _ := ctx.MeasureString(levelStr)
+	dc.DrawStringAnchored(levelStr, levelX, RankNumberY, 1, 1)
+	levelNumW, _ := dc.MeasureString(levelStr)
 
 	levelBlockWidth := math.Max(levelLabelW, levelNumW)
 	rankX := levelX - levelBlockWidth - RankBlockGap
 
 	rankStr := fmt.Sprintf("#%d", user.Rank)
-	if err := ctx.LoadFontFace(rankCardFontPath, RankNumberFontSize); err != nil {
+	if err := dc.LoadFontFace(rankCardFontPath, RankNumberFontSize); err != nil {
 		return nil, err
 	}
-	ctx.DrawStringAnchored(rankStr, rankX, RankNumberY, 1, 1)
+	dc.DrawStringAnchored(rankStr, rankX, RankNumberY, 1, 1)
 
-	if err := ctx.LoadFontFace(rankCardFontPath, RankLabelFontSize); err != nil {
+	if err := dc.LoadFontFace(rankCardFontPath, RankLabelFontSize); err != nil {
 		return nil, err
 	}
-	ctx.DrawStringAnchored("RANK", rankX, RankLabelY, 1, 1)
+	dc.DrawStringAnchored("RANK", rankX, RankLabelY, 1, 1)
 
-	return ctx.Image(), nil
+	return dc.Image(), nil
 }

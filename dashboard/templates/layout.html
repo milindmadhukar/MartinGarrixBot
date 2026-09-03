@@ -61,8 +61,12 @@
         {{template "navlink" dict "Href" (printf "/g/%s/modlogs" .GuildID) "Label" "Moderation" "Active" (eq .Nav "modlogs")}}
         {{template "navlink" dict "Href" (printf "/g/%s/members" .GuildID) "Label" "Joins & leaves" "Active" (eq .Nav "members")}}
         {{template "navlink" dict "Href" (printf "/g/%s/settings" .GuildID) "Label" "Settings" "Active" (eq .Nav "settings")}}
+        {{template "navlink" dict "Href" (printf "/g/%s/backgrounds" .GuildID) "Label" "Backgrounds" "Active" (eq .Nav "backgrounds")}}
       {{end}}
       {{template "navlink" dict "Href" "/songs" "Label" "Catalogue" "Active" (eq .Nav "songs")}}
+      {{if .IsSuperAdmin}}
+        {{template "navlink" dict "Href" "/backgrounds/upload" "Label" "Add background" "Active" (eq .Nav "backgrounds-upload")}}
+      {{end}}
     </nav>
   </header>
   {{end}}

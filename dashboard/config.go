@@ -37,7 +37,11 @@ type Options struct {
 	SessionSecret string
 	BotAPIURL     string
 	BotAPISecret  string
-	OwnerIDs      map[string]bool
+	SuperAdminIDs map[string]bool
+
+	// BackgroundsDir is where rank card background images live, shared with
+	// the bot via storage.backgrounds_dir. Defaults to "assets/backgrounds".
+	BackgroundsDir string
 
 	SessionTTL    time.Duration
 	GuildCacheTTL time.Duration
@@ -91,9 +95,9 @@ func NewOptions(cfg *stmpdbot.Config) (*Options, error) {
 		return nil, fmt.Errorf("invalid configuration:\n  - %s", strings.Join(problems, "\n  - "))
 	}
 
-	owners := make(map[string]bool, len(d.OwnerIDs))
-	for _, id := range d.OwnerIDs {
-		owners[id.String()] = true
+	superAdmins := make(map[string]bool, len(d.SuperAdminIDs))
+	for _, id := range d.SuperAdminIDs {
+		superAdmins[id.String()] = true
 	}
 
 	tz := cfg.Log.TimeZone
@@ -108,20 +112,21 @@ func NewOptions(cfg *stmpdbot.Config) (*Options, error) {
 	}
 
 	opts := &Options{
-		Address:       or(d.Address, defaultAddress),
-		PublicBaseURL: strings.TrimRight(d.PublicBaseURL, "/"),
-		ClientID:      d.ClientID,
-		ClientSecret:  d.ClientSecret,
-		RedirectURI:   d.RedirectURI,
-		SessionSecret: d.SessionSecret,
-		BotAPIURL:     d.BotAPIURL,
-		BotAPISecret:  d.BotAPISecret,
-		OwnerIDs:      owners,
-		SessionTTL:    defaultSessionTTL,
-		GuildCacheTTL: defaultGuildCacheTTL,
-		BotCacheTTL:   defaultBotCacheTTL,
-		TimeZone:      tz,
-		Location:      loc,
+		Address:        or(d.Address, defaultAddress),
+		PublicBaseURL:  strings.TrimRight(d.PublicBaseURL, "/"),
+		ClientID:       d.ClientID,
+		ClientSecret:   d.ClientSecret,
+		RedirectURI:    d.RedirectURI,
+		SessionSecret:  d.SessionSecret,
+		BotAPIURL:      d.BotAPIURL,
+		BotAPISecret:   d.BotAPISecret,
+		SuperAdminIDs:  superAdmins,
+		BackgroundsDir: or(cfg.Storage.BackgroundsDir, "assets/backgrounds"),
+		SessionTTL:     defaultSessionTTL,
+		GuildCacheTTL:  defaultGuildCacheTTL,
+		BotCacheTTL:    defaultBotCacheTTL,
+		TimeZone:       tz,
+		Location:       loc,
 	}
 	opts.Secure = strings.HasPrefix(opts.PublicBaseURL, "https://")
 	return opts, nil

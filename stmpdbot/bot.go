@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -138,6 +139,83 @@ func (b *STMPDBot) SetupDB() error {
 		return nil
 	}
 	return errors.New("could not make a connection to the database")
+}
+
+// SetupBackgrounds points the rank card generator at the configured
+// backgrounds directory and makes sure the built-in images are present on
+// disk and in the catalogue. That is what makes a fresh deploy work: an empty
+// volume and an empty backgrounds table still have something to render with,
+// with no manual seeding step.
+func (b *STMPDBot) SetupBackgrounds() error {
+	dir := b.Cfg.Storage.BackgroundsDir
+	if dir == "" {
+		dir = "assets/backgrounds"
+	}
+	utils.SetBackgroundsDir(dir)
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("creating backgrounds dir: %w", err)
+	}
+
+	// The bundled images baked into the bot's own image are always the seed
+	// source, regardless of where the configured dir points.
+	const seedDir = "assets/backgrounds"
+	entries, err := os.ReadDir(seedDir)
+	if err != nil {
+		return fmt.Errorf("reading bundled backgrounds: %w", err)
+	}
+
+	// In local/dev, dir defaults to seedDir itself, so there is nothing to
+	// copy -- only a production deploy pointing dir at a separate mounted
+	// volume needs the files copied in.
+	sameDir := filepath.Clean(dir) == filepath.Clean(seedDir)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	seeded := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+
+		if !sameDir {
+			dest := filepath.Join(dir, name)
+			if _, err := os.Stat(dest); os.IsNotExist(err) {
+				if err := copyFile(filepath.Join(seedDir, name), dest); err != nil {
+					return fmt.Errorf("seeding background %s: %w", name, err)
+				}
+			}
+		}
+
+		// ON CONFLICT (filename) DO UPDATE makes this idempotent -- safe to
+		// run on every startup, not just the first one.
+		if _, err := b.Queries.CreateBackground(ctx, db.CreateBackgroundParams{Filename: name}); err != nil {
+			return fmt.Errorf("cataloguing background %s: %w", name, err)
+		}
+		seeded++
+	}
+
+	slog.Info("Backgrounds ready", slog.String("dir", dir), slog.Int("seeded", seeded))
+	return nil
+}
+
+func copyFile(src, dest string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	return err
 }
 
 // SetupBeatport initializes the Beatport API client
