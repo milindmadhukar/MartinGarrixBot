@@ -107,6 +107,29 @@ func TestMatchKeyPairsAcrossSources(t *testing.T) {
 	}
 }
 
+func TestMatchKeyPairsADefaultRenditionWithNone(t *testing.T) {
+	// The real pair out of the catalogue: beatport files "All We Got" as an Extended
+	// Mix and a Mix Cut, the STMPD dataset names no version at all. All three are the
+	// same recording, and while the key disagreed the dedupe pass never compared them.
+	none := MatchKey("All We Got", "", "", "Shy Baboon & Maejor")
+	for _, mix := range []string{"Extended Mix", "Mix Cut", "Original Mix", "Extended Version"} {
+		if got := MatchKey("All We Got", "", mix, "Maejor, Shy Baboon"); got != none {
+			t.Errorf("MatchKey with mix %q = %q; want %q", mix, got, none)
+		}
+	}
+}
+
+func TestMatchKeyStillSeparatesANamedRendition(t *testing.T) {
+	// Collapsing the defaults must not collapse a rendition that names something.
+	plain := MatchKey("Catharina", "", "", "Martin Garrix")
+	if MatchKey("Catharina", "", "Acoustic Version", "Martin Garrix") == plain {
+		t.Error("an acoustic version must not key as the plain release")
+	}
+	if MatchKey("Catharina (Surf Mesa Remix)", "", "", "Martin Garrix") == plain {
+		t.Error("a remix must not key as the plain release")
+	}
+}
+
 func TestBaseKeyPairsOriginalWithExtendedMix(t *testing.T) {
 	// STMPD publishes the original; beatport lists the extended mix. Tier 5 of the
 	// matcher relies on these sharing a base key.

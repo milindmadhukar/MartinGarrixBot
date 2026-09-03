@@ -276,9 +276,17 @@ func creditKey(title, artists string) string {
 
 // MatchKey identifies one specific recording: this song, in this rendition, by this
 // set of artists.
+//
+// The rendition is canonicalised first, which is the difference between a key that
+// groups duplicates and one that hides them. Beatport files nearly every plain release
+// as an "Extended Mix" or a "Mix Cut" while the STMPD catalogue names no version for
+// the same release, so the two rows for one recording keyed as
+// "...|allwegot|extendedmix" and "...|allwegot|" and no dedupe pass ever compared
+// them. RenditionsAgree has always known those mean the same thing; the key did not,
+// and 105 pairs of rows sharing a YouTube video sat in the catalogue because of it.
 func MatchKey(title, version, mixName, artists string) string {
 	base, variant := SplitVariant(title, version, mixName)
-	return creditKey(title, artists) + "|" + base + "|" + variant
+	return creditKey(title, artists) + "|" + base + "|" + CanonicalRendition(variant)
 }
 
 // BaseKey identifies a song irrespective of rendition, so that every remix of
@@ -389,6 +397,20 @@ var defaultRenditions = map[string]struct{}{
 func IsDefaultRendition(variant string) bool {
 	_, ok := defaultRenditions[variant]
 	return ok
+}
+
+// CanonicalRendition collapses every spelling of "the release itself" onto one empty
+// token, so that two rows describing the same recording produce the same key whether
+// their source named a default rendition or named none.
+//
+// It is deliberately not part of SplitVariant: callers that ask what rendition a row
+// carries -- link-remix-parents deciding whether a row is a remix, newsong deciding
+// whether an arrival is an original -- need the answer the row actually gives.
+func CanonicalRendition(variant string) string {
+	if IsDefaultRendition(variant) {
+		return ""
+	}
+	return variant
 }
 
 // RenditionsAgree reports whether two renditions describe the same version of a song,

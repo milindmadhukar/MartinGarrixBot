@@ -37,6 +37,10 @@ func dedupeBySubsetCredit(ctx context.Context, env *script.Env) (merged, deferre
 		if title == "" {
 			continue
 		}
+		// Same reason MatchKey canonicalises it: grouping on the raw token puts
+		// beatport's "All We Got (Extended Mix)" and the catalogue's "All We Got" in
+		// different buckets, so the pass never gets as far as comparing their credits.
+		rendition = utils.CanonicalRendition(rendition)
 		k := key{title, rendition}
 		if _, seen := groups[k]; !seen {
 			order = append(order, k)
