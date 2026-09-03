@@ -32,3 +32,17 @@ dashboard edits, and the only copy that accumulates hand corrections.
 - The `scripts/` passes take `-config config.prod.toml` for the same reason, and every
   one of them supports `-dry-run`. Run the dry run against the VPS and read it before
   running the real pass.
+- To refresh local after a change lands on the VPS — dump there, restore here:
+
+  ```
+  docker exec -e PGPASSWORD='<prod>' postgres-db-1 \
+    pg_dump -h 100.74.136.119 -U postgres -d garrixbot -Fc -f /tmp/garrixbot.dump
+  docker exec -e PGPASSWORD='<local>' postgres-db-1 \
+    pg_restore -U postgres -d garrixbot --clean --if-exists --no-owner /tmp/garrixbot.dump
+  ```
+
+  Both run in the *local* container; the first reaches the VPS over Tailscale. Compare
+  `select count(*) from songs` on each side afterwards — they should be equal, give or
+  take rows the bot inserted while the dump was running.
+- Never point the integration tests at either database. They apply migrations and write
+  rows: `createdb garrixbot_itest` and set `STMPD_TEST_DATABASE_URL` at it instead.
