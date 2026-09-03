@@ -323,9 +323,5 @@ func mergeRows(ctx context.Context, env *script.Env, winnerID, loserID int64,
 		slog.Error("failed to merge", slog.Int64("song_id", loserID), slog.Any("err", err))
 		return false
 	}
-	if err := env.Queries.DeleteSong(ctx, loserID); err != nil {
-		slog.Error("failed to delete merged row", slog.Int64("song_id", loserID), slog.Any("err", err))
-		return false
-	}
 	return true
 }
