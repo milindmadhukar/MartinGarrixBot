@@ -63,6 +63,34 @@ func (q *Queries) CreateBackground(ctx context.Context, arg CreateBackgroundPara
 	return i, err
 }
 
+const deleteBackground = `-- name: DeleteBackground :exec
+DELETE FROM backgrounds WHERE id = $1
+`
+
+// guild_backgrounds.background_id cascades (ON DELETE CASCADE) and
+// guilds.background_cycle_background_id is nulled out (ON DELETE SET NULL),
+// so a delete here can never leave either dangling.
+func (q *Queries) DeleteBackground(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteBackground, id)
+	return err
+}
+
+const getBackground = `-- name: GetBackground :one
+SELECT id, filename, uploaded_by, created_at FROM backgrounds WHERE id = $1
+`
+
+func (q *Queries) GetBackground(ctx context.Context, id int64) (Background, error) {
+	row := q.db.QueryRow(ctx, getBackground, id)
+	var i Background
+	err := row.Scan(
+		&i.ID,
+		&i.Filename,
+		&i.UploadedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getGuildBackgroundSettings = `-- name: GetGuildBackgroundSettings :one
 SELECT background_mode, background_cycle_background_id
 FROM guilds

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"image"
 	_ "image/jpeg"
 	"image/png"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 
 	"github.com/disgoorg/snowflake/v2"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 )
@@ -32,6 +34,19 @@ type backgroundOption struct {
 	Filename string
 	URL      string
 	Selected bool
+}
+
+func backgroundOptions(all []db.Background, selected map[int64]bool) []backgroundOption {
+	options := make([]backgroundOption, 0, len(all))
+	for _, b := range all {
+		options = append(options, backgroundOption{
+			ID:       b.ID,
+			Filename: b.Filename,
+			URL:      "/backgrounds/file/" + b.Filename,
+			Selected: selected[b.ID],
+		})
+	}
+	return options
 }
 
 // handleBackgrounds shows the catalogue as a checkbox grid plus a
@@ -142,15 +157,7 @@ func (s *Server) renderBackgrounds(w http.ResponseWriter, r *http.Request, guild
 		mode = settings.BackgroundMode
 	}
 
-	options := make([]backgroundOption, 0, len(all))
-	for _, b := range all {
-		options = append(options, backgroundOption{
-			ID:       b.ID,
-			Filename: b.Filename,
-			URL:      "/backgrounds/file/" + b.Filename,
-			Selected: selectedSet[b.ID],
-		})
-	}
+	options := backgroundOptions(all, selectedSet)
 
 	p := s.newPage(r, "Backgrounds")
 	p.Nav = "backgrounds"
@@ -165,13 +172,27 @@ func (s *Server) renderBackgrounds(w http.ResponseWriter, r *http.Request, guild
 	s.render(w, r, "backgrounds", "backgrounds-form", p)
 }
 
-// handleBackgroundUpload shows the upload form and its client-side cropper.
+// handleBackgroundUpload shows the upload form, its client-side cropper, and
+// the existing catalogue with delete controls.
 func (s *Server) handleBackgroundUpload(w http.ResponseWriter, r *http.Request) {
+	s.renderUploadPage(w, r, "", r.URL.Query().Get("saved") == "1")
+}
+
+func (s *Server) renderUploadPage(w http.ResponseWriter, r *http.Request, problem string, saved bool) {
+	ctx := r.Context()
+
+	all, err := s.queries.ListBackgrounds(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
 	p := s.newPage(r, "Add a background")
 	p.Nav = "backgrounds-upload"
 	p.Data = map[string]any{
-		"Problem": "",
-		"Saved":   r.URL.Query().Get("saved") == "1",
+		"Problem":     problem,
+		"Saved":       saved,
+		"Backgrounds": backgroundOptions(all, nil),
 	}
 	s.render(w, r, "backgrounds-upload", "", p)
 }
@@ -240,11 +261,60 @@ func (s *Server) handleBackgroundUploadSave(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) renderUploadError(w http.ResponseWriter, r *http.Request, problem string) {
-	p := s.newPage(r, "Add a background")
-	p.Nav = "backgrounds-upload"
 	w.WriteHeader(http.StatusUnprocessableEntity)
-	p.Data = map[string]any{"Problem": problem}
-	s.render(w, r, "backgrounds-upload", "", p)
+	s.renderUploadPage(w, r, problem, false)
+}
+
+// handleBackgroundDelete removes a background from the catalogue: the row
+// (cascading out of every guild's selection and clearing it from anyone
+// mid-cycle on it), then its file. Global and permanent -- there is no
+// per-guild "hide" short of this.
+func (s *Server) handleBackgroundDelete(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess, _ := sessionFrom(ctx)
+
+	id, err := strconv.ParseInt(r.PathValue("backgroundID"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	bg, err := s.queries.GetBackground(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		s.serverError(w, r, err)
+		return
+	}
+
+	if err := s.queries.DeleteBackground(ctx, id); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	// Best-effort: the catalogue row is already gone either way, and a file
+	// that fails to remove (already missing, permissions) is not worth
+	// failing the whole request over.
+	if err := os.Remove(filepath.Join(s.opts.BackgroundsDir, bg.Filename)); err != nil && !os.IsNotExist(err) {
+		slog.Warn("Could not remove background file from disk",
+			slog.String("filename", bg.Filename), slog.Any("err", err))
+	}
+
+	slog.Info("Dashboard background deleted",
+		slog.String("user_id", sess.UserID.String()),
+		slog.Int64("background_id", id),
+		slog.String("filename", bg.Filename))
+
+	all, err := s.queries.ListBackgrounds(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	p := s.newPage(r, "Add a background")
+	p.Data = map[string]any{"Backgrounds": backgroundOptions(all, nil)}
+	s.render(w, r, "backgrounds-upload", "backgrounds-list", p)
 }
 
 // handleBackgroundFile serves one catalogue image. filename is looked up

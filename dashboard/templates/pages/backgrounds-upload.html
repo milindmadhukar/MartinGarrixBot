@@ -57,5 +57,38 @@
   </div>
 </form>
 
+{{template "backgrounds-list" .}}
+
 <script src="{{asset "/static/cropper.js"}}" defer></script>
+{{end}}
+
+{{define "backgrounds-list"}}
+<div id="backgrounds-list" class="panel mt-6">
+  <div class="panel-head">
+    <h2 class="stamp-label">Catalogue</h2>
+    <p class="mt-0.5 text-xs text-slate-500">
+      Deleting removes a background from every server's selection and cannot be undone.
+    </p>
+  </div>
+
+  {{if not .Data.Backgrounds}}
+    <p class="px-4 py-6 text-sm text-slate-400">No backgrounds yet.</p>
+  {{else}}
+    <div class="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
+      {{range .Data.Backgrounds}}
+        <div class="group relative overflow-hidden rounded-lg border border-white/10">
+          <img src="{{.URL}}" alt="" loading="lazy" class="aspect-[10/3] w-full object-cover">
+          <form hx-post="/backgrounds/{{.ID}}/delete" hx-target="#backgrounds-list" hx-swap="outerHTML"
+                hx-confirm="Delete this background? It will be removed from every server's selection."
+                class="absolute right-2 top-2">
+            <button type="submit"
+                    class="rounded-full bg-black/70 px-2 py-1 text-xs text-red-300 opacity-0 transition hover:bg-red-950 hover:text-red-200 focus:opacity-100 group-hover:opacity-100">
+              Delete
+            </button>
+          </form>
+        </div>
+      {{end}}
+    </div>
+  {{end}}
+</div>
 {{end}}

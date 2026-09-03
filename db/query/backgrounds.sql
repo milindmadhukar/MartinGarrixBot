@@ -10,6 +10,15 @@ RETURNING *;
 -- name: ListBackgrounds :many
 SELECT * FROM backgrounds ORDER BY id;
 
+-- name: GetBackground :one
+SELECT * FROM backgrounds WHERE id = $1;
+
+-- name: DeleteBackground :exec
+-- guild_backgrounds.background_id cascades (ON DELETE CASCADE) and
+-- guilds.background_cycle_background_id is nulled out (ON DELETE SET NULL),
+-- so a delete here can never leave either dangling.
+DELETE FROM backgrounds WHERE id = $1;
+
 -- name: ListGuildBackgrounds :many
 SELECT b.* FROM backgrounds b
 JOIN guild_backgrounds gb ON gb.background_id = b.id

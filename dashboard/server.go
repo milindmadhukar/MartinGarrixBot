@@ -110,6 +110,7 @@ func (s *Server) routes() http.Handler {
 	// way /songs does, and is gated the same way: superAdminOnly.
 	mux.Handle("GET /backgrounds/upload", s.superAdminOnly(s.handleBackgroundUpload))
 	mux.Handle("POST /backgrounds/upload", s.superAdminOnly(s.requireCSRF(s.handleBackgroundUploadSave)))
+	mux.Handle("POST /backgrounds/{backgroundID}/delete", s.superAdminOnly(s.requireCSRF(s.handleBackgroundDelete)))
 	// Thumbnails are just gated behind a session, like everything else in the
 	// dashboard -- these are concert photos, not guild-private data.
 	mux.Handle("GET /backgrounds/file/{filename}", s.authed(s.handleBackgroundFile))
