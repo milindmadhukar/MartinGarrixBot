@@ -2072,6 +2072,13 @@ UPDATE songs w SET
     amazon_music_url    = COALESCE(w.amazon_music_url,    l.amazon_music_url),
     beatport_url        = COALESCE(w.beatport_url,        l.beatport_url),
     beatport_release_id = COALESCE(w.beatport_release_id, l.beatport_release_id),
+    -- beatport_slug travels with beatport_id, and leaving it behind is not cosmetic: a
+    -- track page is /track/<slug>/<id>, so a winner that adopts the loser's id without
+    -- its slug ends up with a Beatport button that 404s. It was omitted here because
+    -- the two uniquely-indexed identifiers next to it need the release/adopt dance;
+    -- this one has no unique index and can simply be copied. A dedupe run that folded
+    -- 108 beatport rows into STMPD winners broke 99 buttons that way.
+    beatport_slug       = COALESCE(w.beatport_slug,       l.beatport_slug),
     -- A real date always beats the 1970-01-01 placeholder, whichever row holds it.
     release_date    = CASE WHEN w.release_date = '1970-01-01' AND l.release_date <> '1970-01-01'
                            THEN l.release_date ELSE w.release_date END,

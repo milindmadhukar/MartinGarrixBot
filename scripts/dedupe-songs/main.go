@@ -278,6 +278,21 @@ func pgInt8(v int64) pgtype.Int8 {
 // while another row still holds them.
 func mergeRows(ctx context.Context, env *script.Env, winnerID, loserID int64,
 	winnerSlug, loserSlug pgtype.Text, winnerBP, loserBP pgtype.Int4) bool {
+	// Announcements move first, because this function ends in DeleteSong and
+	// song_announcements.song_id has been ON DELETE CASCADE since 000023. Without this
+	// the merge takes the record of every message already posted for the losing row
+	// with it, and the refresh loop then has no idea those messages exist -- so their
+	// buttons are never updated again and nothing reports that they were lost.
+	//
+	// The table is empty today, which is exactly why this is easy to miss: the defect
+	// only becomes visible once the announcer has been running for a while, by which
+	// point the merge that destroyed the history is long past.
+	if _, err := env.Queries.DashRepointAnnouncements(ctx, db.DashRepointAnnouncementsParams{
+		OldSong: loserID, NewSong: winnerID,
+	}); err != nil {
+		slog.Error("failed to repoint announcements", slog.Int64("song_id", loserID), slog.Any("err", err))
+		return false
+	}
 	if _, err := env.Queries.RepointChildren(ctx, db.RepointChildrenParams{
 		NewParent: pgInt8(winnerID), OldParent: pgInt8(loserID),
 	}); err != nil {
