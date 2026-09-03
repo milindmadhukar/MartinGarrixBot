@@ -126,12 +126,12 @@
   {{if eq . "stmpd"}}bg-mint-300/15 text-mint-200{{else}}bg-slate-800 text-slate-300{{end}}">{{.}}</span>
 {{end}}
 
-{{/* lockBadge shows whether a field is pinned against the syncs, and for an owner is
-     the control that releases it. Not a button when the viewer cannot act on it -- a
+{{/* lockBadge shows whether a field is pinned against the syncs, and for a super admin
+     is the control that releases it. Not a button when the viewer cannot act on it -- a
      control that does nothing is worse than a label. */}}
 {{define "lockBadge"}}
 {{if .Locked}}
-  {{if .IsOwner}}
+  {{if .IsSuperAdmin}}
     <form hx-post="/songs/{{.Song}}/unlock" hx-target="#song-detail" hx-swap="outerHTML"
           class="inline">
       <input type="hidden" name="field" value="{{.Field}}">

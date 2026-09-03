@@ -13,8 +13,8 @@ import (
 // session cookie so the authenticated pages can be exercised with curl against
 // a local instance. It is skipped unless STMPD_MINT_COOKIE is set.
 //
-// Set STMPD_MINT_OWNER to mint an owner session, which is what the catalogue's edit
-// controls are gated on.
+// Set STMPD_MINT_SUPER_ADMIN to mint a super-admin session, which is what the
+// catalogue's edit controls are gated on.
 //
 //	STMPD_MINT_COOKIE=1 STMPD_MINT_SECRET=... STMPD_MINT_GUILD=... go test ./dashboard -run MintSmokeCookie -v
 func TestMintSmokeCookie(t *testing.T) {
@@ -37,7 +37,7 @@ func TestMintSmokeCookie(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Eligible = []snowflake.ID{guild}
-	s.Owner = os.Getenv("STMPD_MINT_OWNER") != ""
+	s.SuperAdmin = os.Getenv("STMPD_MINT_SUPER_ADMIN") != ""
 
 	value, err := c.Encode(s)
 	if err != nil {

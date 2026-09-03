@@ -71,9 +71,10 @@ type Session struct {
 	// Eligible is sorted, so an unchanged set encodes to identical bytes.
 	Eligible []snowflake.ID `json:"g"`
 	Missing  []MissingGuild `json:"m,omitempty"`
-	// Owner marks a user listed in dashboard.owner_ids, who may administer
-	// every guild the bot is in.
-	Owner bool `json:"o,omitempty"`
+	// SuperAdmin marks a user listed in dashboard.super_admin_ids, who may
+	// administer every guild the bot is in. Distinct from a Discord guild's
+	// own owner.
+	SuperAdmin bool `json:"sa,omitempty"`
 	// CSRF is the double-submit token, mirrored into a readable cookie.
 	CSRF string `json:"c"`
 

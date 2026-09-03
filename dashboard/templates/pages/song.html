@@ -3,7 +3,7 @@
 {{end}}
 
 {{define "song-detail"}}
-{{$owner := .IsOwner}}
+{{$superAdmin := .IsSuperAdmin}}
 {{$d := .Data.Detail}}
 {{$song := $d.Song}}
 <div id="song-detail">
@@ -72,7 +72,7 @@
             <a href="/songs/{{$d.Parent.ID}}" class="font-medium text-white hover:text-mint-200">{{$d.Parent.Name}}</a>
             <p class="truncate text-sm text-slate-400">{{$d.Parent.Artists}} · the song people see</p>
           </div>
-          {{if $owner}}
+          {{if $superAdmin}}
             <form hx-post="/songs/{{$song.ID}}/promote" hx-target="#song-detail" hx-swap="outerHTML">
               <button type="submit" class="rounded btn-mint"
                       title="Make this row the one listeners see, and file the current song underneath it">
@@ -112,7 +112,7 @@
     </section>
   {{end}}
 
-  {{if $owner}}
+  {{if $superAdmin}}
     {{template "song-edit" .}}
   {{else}}
     <section class="panel mt-5 p-4">
@@ -204,26 +204,26 @@
   <form hx-post="/songs/{{$song.ID}}" hx-target="#song-detail" hx-swap="outerHTML"
         class="grid gap-4 sm:grid-cols-2">
 
-    {{template "songField" dict "Song" $song.ID "Field" "name" "Label" "Name" "Value" $song.Name "Locked" (has $locked "name") "IsOwner" true}}
-    {{template "songField" dict "Song" $song.ID "Field" "artists" "Label" "Artists" "Value" $song.Artists "Locked" (has $locked "artists") "IsOwner" true}}
-    {{template "songField" dict "Song" $song.ID "Field" "mix_name" "Label" "Mix name" "Value" $song.MixName.String "Locked" (has $locked "mix_name") "IsOwner" true}}
-    {{template "songField" dict "Song" $song.ID "Field" "release_date" "Label" "Release date (YYYY-MM-DD)" "Value" $song.ReleaseDate.String "Locked" (has $locked "release_date") "IsOwner" true}}
-    {{template "songField" dict "Song" $song.ID "Field" "release_name" "Label" "Release / EP name" "Value" $song.ReleaseName.String "Locked" (has $locked "release_name") "IsOwner" true}}
-    {{template "songField" dict "Song" $song.ID "Field" "thumbnail_url" "Label" "Artwork URL" "Value" $song.ThumbnailUrl.String "Locked" (has $locked "thumbnail_url") "IsOwner" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "name" "Label" "Name" "Value" $song.Name "Locked" (has $locked "name") "IsSuperAdmin" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "artists" "Label" "Artists" "Value" $song.Artists "Locked" (has $locked "artists") "IsSuperAdmin" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "mix_name" "Label" "Mix name" "Value" $song.MixName.String "Locked" (has $locked "mix_name") "IsSuperAdmin" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "release_date" "Label" "Release date (YYYY-MM-DD)" "Value" $song.ReleaseDate.String "Locked" (has $locked "release_date") "IsSuperAdmin" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "release_name" "Label" "Release / EP name" "Value" $song.ReleaseName.String "Locked" (has $locked "release_name") "IsSuperAdmin" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "thumbnail_url" "Label" "Artwork URL" "Value" $song.ThumbnailUrl.String "Locked" (has $locked "thumbnail_url") "IsSuperAdmin" true}}
 
     <div class="sm:col-span-2"><p class="stamp-label mt-2">Streaming links</p></div>
     {{range $d.Links}}
-      {{template "songField" dict "Song" $song.ID "Field" .Field "Label" .Label "Value" .URL "Locked" (has $locked .Field) "IsOwner" true}}
+      {{template "songField" dict "Song" $song.ID "Field" .Field "Label" .Label "Value" .URL "Locked" (has $locked .Field) "IsSuperAdmin" true}}
     {{end}}
 
     <div class="sm:col-span-2"><p class="stamp-label mt-2">Metadata</p></div>
-    {{template "songField" dict "Song" $song.ID "Field" "genre" "Label" "Genre" "Value" $song.Genre.String "Locked" (has $locked "genre") "IsOwner" true}}
-    {{template "songField" dict "Song" $song.ID "Field" "sub_genre" "Label" "Sub-genre" "Value" $song.SubGenre.String "Locked" (has $locked "sub_genre") "IsOwner" true}}
-    {{template "songField" dict "Song" $song.ID "Field" "bpm" "Label" "BPM" "Value" (int32str $song.Bpm) "Locked" (has $locked "bpm") "IsOwner" true}}
-    {{template "songField" dict "Song" $song.ID "Field" "musical_key" "Label" "Key" "Value" $song.MusicalKey.String "Locked" (has $locked "musical_key") "IsOwner" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "genre" "Label" "Genre" "Value" $song.Genre.String "Locked" (has $locked "genre") "IsSuperAdmin" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "sub_genre" "Label" "Sub-genre" "Value" $song.SubGenre.String "Locked" (has $locked "sub_genre") "IsSuperAdmin" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "bpm" "Label" "BPM" "Value" (int32str $song.Bpm) "Locked" (has $locked "bpm") "IsSuperAdmin" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "musical_key" "Label" "Key" "Value" $song.MusicalKey.String "Locked" (has $locked "musical_key") "IsSuperAdmin" true}}
 
     <label class="stamp-muted sm:col-span-2">
-      <span class="flex items-center gap-2">Lyrics {{template "lockBadge" dict "Song" $song.ID "Field" "lyrics" "Locked" (has $locked "lyrics") "IsOwner" true}}</span>
+      <span class="flex items-center gap-2">Lyrics {{template "lockBadge" dict "Song" $song.ID "Field" "lyrics" "Locked" (has $locked "lyrics") "IsSuperAdmin" true}}</span>
       <textarea name="lyrics" rows="8"
                 class="mt-1 block w-full field px-2 py-1.5 font-mono text-xs text-slate-200">{{$song.Lyrics.String}}</textarea>
     </label>
@@ -248,7 +248,7 @@
     <label class="stamp-muted">
       <span class="flex items-center gap-2">
         File under song id
-        {{template "lockBadge" dict "Song" $song.ID "Field" "parent_song_id" "Locked" (has $locked "parent_song_id") "IsOwner" true}}
+        {{template "lockBadge" dict "Song" $song.ID "Field" "parent_song_id" "Locked" (has $locked "parent_song_id") "IsSuperAdmin" true}}
       </span>
       <input type="text" inputmode="numeric" name="parent_song_id"
              value="{{if $song.ParentSongID.Valid}}{{$song.ParentSongID.Int64}}{{end}}"
@@ -290,6 +290,6 @@
   <input type="checkbox" name="{{.Field}}" value="1" {{if .On}}checked{{end}}
          class="h-4 w-4 rounded border-white/20 bg-white/5">
   {{.Label}}
-  {{template "lockBadge" dict "Song" .Song "Field" .Field "Locked" .Locked "IsOwner" true}}
+  {{template "lockBadge" dict "Song" .Song "Field" .Field "Locked" .Locked "IsSuperAdmin" true}}
 </label>
 {{end}}

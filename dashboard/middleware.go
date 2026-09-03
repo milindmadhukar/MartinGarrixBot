@@ -159,7 +159,7 @@ func (s *Server) guildScoped(next http.HandlerFunc) http.Handler {
 	})
 }
 
-// ownerOnly gates the catalogue's write routes.
+// superAdminOnly gates the catalogue's write routes.
 //
 // Browsing the catalogue is open to any authenticated user; editing it is not. A song
 // row is global -- every guild the bot is in reads the same table -- so unlike a guild
@@ -167,10 +167,10 @@ func (s *Server) guildScoped(next http.HandlerFunc) http.Handler {
 //
 // 404 rather than 403, for the same reason guildScoped uses 404: a 403 confirms the
 // route is there and that someone else may use it.
-func (s *Server) ownerOnly(next http.HandlerFunc) http.Handler {
+func (s *Server) superAdminOnly(next http.HandlerFunc) http.Handler {
 	return s.authed(func(w http.ResponseWriter, r *http.Request) {
 		sess, ok := sessionFrom(r.Context())
-		if !ok || !sess.Owner {
+		if !ok || !sess.SuperAdmin {
 			s.renderError(w, r, http.StatusNotFound, "Not found", "No such page.")
 			return
 		}

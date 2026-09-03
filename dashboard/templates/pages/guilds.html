@@ -1,9 +1,9 @@
 {{define "page"}}
 <p class="stamp-label">Select</p>
 <h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">Your servers</h1>
-{{if .Data.Owner}}
+{{if .Data.SuperAdmin}}
   <p class="mt-1 text-sm text-slate-500">
-    You are a bot owner, so every server the bot is in is listed here.
+    You are a bot super admin, so every server the bot is in is listed here.
   </p>
 {{end}}
 

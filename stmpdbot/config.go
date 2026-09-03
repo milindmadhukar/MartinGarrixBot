@@ -132,7 +132,8 @@ type DashboardConfig struct {
 	BotAPIURL    string `toml:"bot_api_url"`
 	BotAPISecret string `toml:"bot_api_secret"`
 
-	// OwnerIDs may administer every guild the bot is in, regardless of their
-	// Discord permissions there.
-	OwnerIDs []snowflake.ID `toml:"owner_ids"`
+	// SuperAdminIDs may administer every guild the bot is in, regardless of
+	// their Discord permissions there. Distinct from a Discord guild's own
+	// owner -- this is an app-level allowlist of the bot operator's IDs.
+	SuperAdminIDs []snowflake.ID `toml:"super_admin_ids"`
 }

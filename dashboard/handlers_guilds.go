@@ -86,9 +86,9 @@ func (s *Server) handleGuildList(w http.ResponseWriter, r *http.Request) {
 	p.Nav = "guilds"
 	p.Degraded = degraded
 	p.Data = map[string]any{
-		"Guilds":    choices,
-		"Invitable": invitable,
-		"Owner":     sess.Owner,
+		"Guilds":     choices,
+		"Invitable":  invitable,
+		"SuperAdmin": sess.SuperAdmin,
 	}
 	s.render(w, r, "guilds", "", p)
 }

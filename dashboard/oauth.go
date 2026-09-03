@@ -132,7 +132,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	sess.Owner = s.opts.OwnerIDs[user.ID.String()]
+	sess.SuperAdmin = s.opts.SuperAdminIDs[user.ID.String()]
 
 	if err := s.applyEligibility(r, &sess, userGuilds); err != nil {
 		slog.Error("Could not determine guild eligibility", slog.Any("err", err))
@@ -146,8 +146,8 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	// This is the only gate on the dashboard now that Authelia no longer fronts
 	// it, so "signed in but with nothing to administer" is not a state worth
 	// having: it would hand a session cookie to anyone with a Discord account.
-	// Owners are exempt by definition -- applyEligibility gives them every guild
-	// the bot is in.
+	// Super admins are exempt by definition -- applyEligibility gives them
+	// every guild the bot is in.
 	if len(sess.Eligible) == 0 {
 		slog.Warn("Dashboard login refused: no administered guilds",
 			slog.String("user_id", user.ID.String()),
@@ -166,7 +166,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Dashboard login",
 		slog.String("user_id", user.ID.String()),
 		slog.Int("eligible_guilds", len(sess.Eligible)),
-		slog.Bool("owner", sess.Owner))
+		slog.Bool("super_admin", sess.SuperAdmin))
 
 	// A single administered guild has no choice to offer, so skip the picker.
 	if len(sess.Eligible) == 1 {
@@ -179,7 +179,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 // applyEligibility intersects the guilds the user administers with the guilds
 // the bot is actually in:
 //
-//	eligible = administered AND bot-present   (or every bot guild, for an owner)
+//	eligible = administered AND bot-present   (or every bot guild, for a super admin)
 //
 // The guilds the user administers but the bot is missing from are kept
 // separately so the picker can offer an invite link for each.
@@ -194,9 +194,9 @@ func (s *Server) applyEligibility(r *http.Request, sess *session.Session, userGu
 		present[g.ID] = struct{}{}
 	}
 
-	// An owner administers everything the bot is in, whatever Discord says
-	// about their permissions there.
-	if sess.Owner {
+	// A super admin administers everything the bot is in, whatever Discord
+	// says about their permissions there.
+	if sess.SuperAdmin {
 		eligible := make([]snowflake.ID, 0, len(botGuilds))
 		for _, g := range botGuilds {
 			if id, err := snowflake.Parse(g.ID); err == nil {

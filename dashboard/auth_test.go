@@ -119,24 +119,25 @@ func TestApplyEligibility(t *testing.T) {
 	}
 }
 
-// TestApplyEligibilityOwnerSeesEverything covers the owner_ids escape hatch.
-func TestApplyEligibilityOwnerSeesEverything(t *testing.T) {
+// TestApplyEligibilitySuperAdminSeesEverything covers the super_admin_ids escape
+// hatch.
+func TestApplyEligibilitySuperAdminSeesEverything(t *testing.T) {
 	botGuilds := []BotGuild{{ID: "100"}, {ID: "200"}, {ID: "300"}}
 
 	s := &Server{opts: &Options{}, bots: botAPIStub(t, botGuilds)}
-	sess := session.Session{Owner: true}
+	sess := session.Session{SuperAdmin: true}
 	r := httptest.NewRequest(http.MethodGet, "/auth/callback", nil)
 
-	// The owner administers nothing according to Discord.
+	// The super admin administers nothing according to Discord.
 	if err := s.applyEligibility(r, &sess, nil); err != nil {
 		t.Fatalf("applyEligibility: %v", err)
 	}
 
 	if len(sess.Eligible) != 3 {
-		t.Errorf("an owner should reach all 3 bot guilds, got %v", sess.Eligible)
+		t.Errorf("a super admin should reach all 3 bot guilds, got %v", sess.Eligible)
 	}
 	if sess.Missing != nil {
-		t.Error("an owner has no invitable guilds to show")
+		t.Error("a super admin has no invitable guilds to show")
 	}
 }
 
