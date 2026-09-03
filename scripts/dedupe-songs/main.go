@@ -134,17 +134,13 @@ func main() {
 				continue
 			}
 
-			if env.DryRun {
-				slog.Info("would merge",
-					slog.String("match_key", key),
-					slog.Int64("keep", winner.ID), slog.String("keep_name", winner.Name),
-					slog.String("keep_date", dateOf(winner.ReleaseDate)),
-					slog.Int64("drop", r.ID), slog.String("drop_name", r.Name),
-					slog.String("drop_date", dateOf(r.ReleaseDate)))
-				merged++
-				continue
-			}
-
+			// Nothing branches on DryRun here, for the reason rekey-songs learned
+			// the same way: the whole run is already inside a transaction that is
+			// rolled back, so the dry run should exercise the code the real one
+			// does. The branch that used to sit here logged "would merge" and
+			// skipped mergeRows entirely, which meant a dry run could not fail --
+			// and a merge that dies on unique_release reported a clean success
+			// minutes before the real run broke on it.
 			if !mergeRows(ctx, env, winner.ID, r.ID, winner.StmpdSlug, r.StmpdSlug,
 				winner.BeatportID, r.BeatportID) {
 				failed++
