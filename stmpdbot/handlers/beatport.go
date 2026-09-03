@@ -121,6 +121,16 @@ func GetBeatportReleases(b *stmpdbot.STMPDBot, ticker *time.Ticker) {
 				Valid: true,
 			})
 			if err == nil { // Song exists with this beatport_id
+				// The slug is stored before either skip below, because both of them
+				// return and this is the only place the authoritative value is ever in
+				// hand. A track page is /track/<slug>/<id>, so a row holding the id
+				// without the slug has a Beatport button that 404s -- and a row marked
+				// beatport_updated before slugs were captured would otherwise be
+				// skipped here forever and never acquire one. Filling it on the way
+				// past is what makes that class self-healing instead of a standing
+				// import-beatport chore.
+				fillBeatportSlug(b, existingSong, track.Slug)
+
 				if existingSong.BeatportUpdated {
 					skippedCount++
 					continue
@@ -469,5 +479,31 @@ func GetBeatportReleases(b *stmpdbot.STMPDBot, ticker *time.Ticker) {
 		if err := notifier.Send(); err != nil {
 			slog.Error("Failed to send batched beatport notifications", slog.Any("err", err))
 		}
+	}
+}
+
+// fillBeatportSlug stores the track slug on a row that has the beatport id but not the
+// slug to build a URL from.
+//
+// Guarded on absence rather than written unconditionally: the slug is half of an
+// editable link, and SetBeatportSlug's :execrows guard plus the locked_fields check make
+// a no-op cost nothing, but there is no reason to offer a write at all when the row is
+// already correct.
+func fillBeatportSlug(b *stmpdbot.STMPDBot, song db.Song, slug string) {
+	if slug == "" || song.BeatportSlug.Valid {
+		return
+	}
+	n, err := b.Queries.SetBeatportSlug(context.Background(), db.SetBeatportSlugParams{
+		ID: song.ID, BeatportSlug: utils.Text(slug),
+	})
+	if err != nil {
+		slog.Error("Failed to store a beatport slug",
+			slog.Int64("song_id", song.ID), slog.Any("err", err))
+		return
+	}
+	if n > 0 {
+		slog.Info("Filled in a missing beatport slug",
+			slog.Int64("song_id", song.ID), slog.String("name", song.Name),
+			slog.String("slug", slug))
 	}
 }

@@ -58,13 +58,13 @@ var checks = []Check{
 	{"shared-thumbnail", "artwork belongs to a different song", "fix-shared-artwork",
 		"One cover on rows that are not the same song. Beatport has no per-track image, only a per-release one, so every track on a compilation comes back wearing the compilation's cover."},
 	{"no-artwork", "song has no artwork", "backfill-artwork",
-		"A track with no cover to put on its card."},
+		"A released track with no cover to put on its card. Unreleased rows are not counted -- there is no cover yet because there is no release yet."},
 	{"beatport-no-slug", "beatport id with no slug, so no link can be built", "import-beatport",
 		"A track page is /track/<slug>/<id>; without the slug every Beatport button leads to a 404."},
 	{"tracking-params", "streaming link carries tracking parameters", "backfill-stmpd",
 		"A link still carrying ?si= or utm_."},
 	{"no-links", "song has no link of any kind", "backfill-stmpd",
-		"A card with no buttons on it."},
+		"A released song with nothing to link to, so its card has no buttons. Unreleased rows are not counted."},
 }
 
 // Checks returns every invariant, in display order.
@@ -170,8 +170,14 @@ func checkKeys(add addFunc, rows []db.GetSongsForAuditRow) {
 
 		// Absent is a legitimate state meaning "derive it on read", the same contract
 		// normalized_name has; only a stored value that disagrees is a fault.
-		if want := utils.SearchText(r.Artists, r.Name, r.MixName.String, ""); r.SearchText.Valid &&
-			!strings.HasPrefix(r.SearchText.String, want) {
+		//
+		// Compared exactly, against the same four columns rekey-songs and the self-heal
+		// pass build it from. It was briefly a prefix test, because release_name was not
+		// selected here and so could not be reproduced -- which let a haystack missing
+		// its release name pass as current, and that is precisely the row that cannot be
+		// found by the EP it came on.
+		if want := utils.SearchText(r.Artists, r.Name, r.MixName.String, r.ReleaseName.String); r.SearchText.Valid &&
+			r.SearchText.String != want {
 			add("stale-search-text", r.ID, "%s -- stored %q, want %q", r.Name, r.SearchText.String, want)
 		}
 	}
@@ -405,7 +411,9 @@ func checkArtwork(add addFunc, rows []db.GetSongsForAuditRow) {
 
 	for _, r := range rows {
 		if !r.ThumbnailUrl.Valid || r.ThumbnailUrl.String == "" {
-			if !r.IsCollection && !r.ParentSongID.Valid {
+			// Unreleased for the same reason as no-links: there is no cover yet because
+			// there is no release yet.
+			if !r.IsCollection && !r.ParentSongID.Valid && !r.IsUnreleased {
 				add("no-artwork", r.ID, "%s by %s", r.Name, r.Artists)
 			}
 			continue
@@ -499,7 +507,10 @@ func checkLinks(add addFunc, rows []db.GetSongsForAuditRow) {
 			}
 		}
 
-		if r.IsCollection || r.ParentSongID.Valid {
+		// A release that has not come out yet has nothing to link to and nothing to
+		// picture, so neither absence is a defect. Flagging them anyway put six rows on
+		// a to-do list where the only possible action was to wait.
+		if r.IsCollection || r.ParentSongID.Valid || r.IsUnreleased {
 			continue
 		}
 		if !r.SpotifyUrl.Valid && !r.YoutubeUrl.Valid && !r.AppleMusicUrl.Valid &&

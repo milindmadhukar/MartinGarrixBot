@@ -187,6 +187,19 @@ func main() {
 				// also what lets a restart pick up a window it slept through.
 				go handlers.GetSongAnniversaries(b, time.NewTicker(5*time.Minute))
 
+				// Repairs derived state that has drifted from what the current rules
+				// produce -- rekey-songs and link-remix-parents, as a ticker.
+				//
+				// Six hourly because it is a whole-table read and the drift it fixes
+				// arrives either one row at a time from the fetchers or all at once
+				// when a normalisation rule changes, and neither is urgent. A cycle
+				// with nothing stale writes nothing.
+				//
+				// It never deletes a row. Merging duplicates needs judgement about
+				// which credit and which date survive, so that stays with dedupe-songs
+				// and the dashboard.
+				go handlers.SelfHealCatalogue(b, time.NewTicker(6*time.Hour))
+
 				// Auto-start radio in all configured guilds (only if Lavalink is connected)
 				go func() {
 					time.Sleep(5 * time.Second) // Wait for everything to be ready

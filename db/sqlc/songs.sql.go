@@ -896,7 +896,7 @@ SELECT id, name, artists, mix_name, length_ms, is_collection, parent_song_id,
        apple_music_url, spotify_url, youtube_url, stmpd_slug,
        beatport_id, beatport_slug, beatport_url, deezer_url, tidal_url,
        amazon_music_url, youtube_music_url, source,
-       thumbnail_url, is_instrumental, is_unreleased, locked_fields,
+       thumbnail_url, is_instrumental, is_unreleased, locked_fields, release_name,
        (lyrics IS NOT NULL)::boolean AS has_lyrics
 FROM songs ORDER BY id
 `
@@ -930,6 +930,7 @@ type GetSongsForAuditRow struct {
 	IsInstrumental  bool        `json:"isInstrumental"`
 	IsUnreleased    bool        `json:"isUnreleased"`
 	LockedFields    []string    `json:"lockedFields"`
+	ReleaseName     pgtype.Text `json:"releaseName"`
 	HasLyrics       bool        `json:"hasLyrics"`
 }
 
@@ -973,6 +974,7 @@ func (q *Queries) GetSongsForAudit(ctx context.Context) ([]GetSongsForAuditRow, 
 			&i.IsInstrumental,
 			&i.IsUnreleased,
 			&i.LockedFields,
+			&i.ReleaseName,
 			&i.HasLyrics,
 		); err != nil {
 			return nil, err
