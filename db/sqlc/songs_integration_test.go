@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
+	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
 // uniqueSuffix keeps rows from different tests apart, so they can run in
@@ -440,8 +441,8 @@ func TestGetSongsLike(t *testing.T) {
 	}
 	t.Cleanup(func() { deleteSong(t, song.ID) })
 
-	// The handlers wrap the member's input exactly like this.
-	rows, err := q.GetSongsLike(ctx, "%"+name+"%")
+	// The handlers fold the member's input exactly like this.
+	rows, err := q.GetSongsLike(ctx, utils.SearchTerms(name))
 	if err != nil {
 		t.Fatalf("GetSongsLike failed: %v", err)
 	}
@@ -458,20 +459,37 @@ func TestGetSongsLike(t *testing.T) {
 		t.Errorf("%q did not match itself", name)
 	}
 
-	// The search is on "artists - name", lowercased on both sides.
-	rows, err = q.GetSongsLike(ctx, "%findable artist - searchable%")
-	if err != nil {
-		t.Fatalf("GetSongsLike failed: %v", err)
-	}
-	if len(rows) == 0 {
-		t.Error("the combined 'artists - name' form did not match")
+	// Terms are matched one at a time against a folded haystack, so a searcher can
+	// name the artist and part of the title in whichever order they remember them.
+	// The old form was one contiguous LIKE and only the exact "artists - name" phrase
+	// matched, which is why a song credited to three acts read as missing.
+	for _, query := range []string{
+		"findable artist searchable",
+		"searchable findable",
+		"FINDABLE   anthem",
+	} {
+		rows, err = q.GetSongsLike(ctx, utils.SearchTerms(query))
+		if err != nil {
+			t.Fatalf("GetSongsLike(%q) failed: %v", query, err)
+		}
+		found := false
+		for _, row := range rows {
+			if row.Name == song.Name {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%q did not find the song", query)
+		}
 	}
 }
 
-// BUG: the handlers build the pattern as "%"+input+"%" without escaping, so a
-// member typing % or _ gets LIKE wildcards. Harmless for a read-only search,
-// but "%" alone matches the whole catalogue.
-func TestGetSongsLike_MemberInputIsNotEscaped(t *testing.T) {
+// Member input used to reach LIKE unescaped, so typing "_" got the
+// single-character wildcard and "%" alone matched the whole catalogue. Folding the
+// query through utils.SearchTerms fixes that as a side effect rather than by escaping:
+// NormalizeToken keeps only letters and digits, so a wildcard cannot survive into the
+// pattern at all.
+func TestGetSongsLike_MemberInputCannotSmuggleWildcards(t *testing.T) {
 	t.Parallel()
 
 	q := queries(t)
@@ -487,20 +505,31 @@ func TestGetSongsLike_MemberInputIsNotEscaped(t *testing.T) {
 	}
 	t.Cleanup(func() { deleteSong(t, song.ID) })
 
-	// A member typing "_" gets LIKE's single-character wildcard, so this matches
-	// despite there being no literal underscore in the stored title.
-	rows, err := q.GetSongsLike(ctx, "%escaping_artist%")
+	// "_" is dropped by the folding rather than passed through as a wildcard, so this
+	// is now a search for the two words either side of it -- which does still find the
+	// song, correctly and for the right reason.
+	rows, err := q.GetSongsLike(ctx, utils.SearchTerms("escaping_artist"))
 	if err != nil {
 		t.Fatalf("GetSongsLike failed: %v", err)
 	}
-
+	found := false
 	for _, row := range rows {
 		if row.Name == name {
-			return // the wildcard matched, which is the behaviour being pinned
+			found = true
 		}
 	}
-	t.Error("the underscore no longer acts as a wildcard; if member input is " +
-		"now escaped, delete this test")
+	if !found {
+		t.Error("folding the query lost the song entirely")
+	}
+
+	// A bare "%" used to match the whole catalogue. It now folds to no terms at all,
+	// which the query treats as "no restriction" -- so it still returns rows, but as
+	// an unfiltered listing rather than as an injected wildcard.
+	for _, hostile := range []string{"%", "_", "%%%", "\\"} {
+		if terms := utils.SearchTerms(hostile); len(terms) != 0 {
+			t.Errorf("SearchTerms(%q) = %v; a wildcard reached the LIKE pattern", hostile, terms)
+		}
+	}
 }
 
 func TestGetSongByBeatportID_NotFound(t *testing.T) {
@@ -598,5 +627,292 @@ func TestSongChoiceValue_FitsDiscordsOptionValueLimit(t *testing.T) {
 		song.Name, song.Artists, song.ReleaseDate.String)
 	if len(legacy) <= 100 {
 		t.Skip("this title is no longer long enough to have tripped the old limit")
+	}
+}
+
+// locked_fields is what makes hand-correcting the catalogue worth doing.
+//
+// Four automated writers rewrite these same columns forever -- the STMPD and Beatport
+// syncs every fifteen minutes, the Apple enrichment hourly, the LRCLIB sweep daily --
+// so before this column existed a correction typed into the dashboard survived until
+// whichever of them ran next. These tests pin that a locked column is skipped, that the
+// row still reports zero writes (a guard on the SET list alone would leave the WHERE
+// matching and reintroduce the write churn the IS DISTINCT FROM guards exist to kill),
+// and that unlocking hands the column back.
+func TestLockedFieldsBlockAutomatedWrites(t *testing.T) {
+	t.Parallel()
+
+	q := queries(t)
+	ctx := context.Background()
+
+	name := testSongName(t, "Locked Row")
+	song, err := q.InsertRelease(ctx, db.InsertReleaseParams{
+		Name: name, Artists: "Locking Artist", ReleaseDate: text("2026-01-01"),
+	})
+	if err != nil {
+		t.Fatalf("InsertRelease failed: %v", err)
+	}
+	t.Cleanup(func() { deleteSong(t, song.ID) })
+
+	const handSet = "https://cdn.sanity.io/hand-corrected.jpg"
+	locked, err := q.DashUpdateSong(ctx, db.DashUpdateSongParams{
+		ID: song.ID, Name: name, Artists: "Locking Artist",
+		ReleaseDate:  text("2026-01-01"),
+		ThumbnailUrl: text(handSet),
+		LockedFields: []string{"thumbnail_url", "release_date"},
+	})
+	if err != nil {
+		t.Fatalf("DashUpdateSong failed: %v", err)
+	}
+	if locked.ThumbnailUrl.String != handSet {
+		t.Fatalf("artwork = %q, want the hand-set value", locked.ThumbnailUrl.String)
+	}
+
+	// The hourly Apple enrichment. Its own guard is "only fill an empty cover", so
+	// give it an empty one to prove the lock is what stops it rather than that guard.
+	if _, err = q.ClearSongArtwork(ctx, song.ID); err != nil {
+		t.Fatalf("ClearSongArtwork failed: %v", err)
+	}
+	if got, gErr := q.GetSongByID(ctx, song.ID); gErr != nil {
+		t.Fatal(gErr)
+	} else if got.ThumbnailUrl.String != handSet {
+		t.Error("fix-shared-artwork cleared a locked cover")
+	}
+
+	rows, err := q.SetSongArtwork(ctx, db.SetSongArtworkParams{
+		ID: song.ID, ThumbnailUrl: text("https://example.invalid/robot.jpg"),
+	})
+	if err != nil {
+		t.Fatalf("SetSongArtwork failed: %v", err)
+	}
+	if rows != 0 {
+		t.Errorf("SetSongArtwork wrote %d rows over a locked cover, want 0", rows)
+	}
+
+	// The date backfill.
+	if rows, err = q.SetSongReleaseDate(ctx, db.SetSongReleaseDateParams{
+		ID: song.ID, ReleaseDate: text("1999-12-31"),
+	}); err != nil {
+		t.Fatalf("SetSongReleaseDate failed: %v", err)
+	} else if rows != 0 {
+		t.Errorf("SetSongReleaseDate wrote %d rows over a locked date, want 0", rows)
+	}
+
+	// The fifteen-minute Beatport sync, which rewrites a dozen columns at once. It must
+	// skip the two locked ones and still apply the rest.
+	if _, err = q.UpdateSongWithBeatportData(ctx, db.UpdateSongWithBeatportDataParams{
+		ID: song.ID, Name: name, Artists: "Locking Artist",
+		ReleaseDate:  text("1999-12-31"),
+		ThumbnailUrl: text("https://example.invalid/robot.jpg"),
+		BeatportID:   int4(beatportID()),
+		Bpm:          int4(128),
+	}); err != nil {
+		t.Fatalf("UpdateSongWithBeatportData failed: %v", err)
+	}
+
+	got, err := q.GetSongByID(ctx, song.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ThumbnailUrl.String != handSet {
+		t.Errorf("the Beatport sync overwrote a locked cover: %q", got.ThumbnailUrl.String)
+	}
+	if got.ReleaseDate.String != "2026-01-01" {
+		t.Errorf("the Beatport sync overwrote a locked date: %q", got.ReleaseDate.String)
+	}
+	if got.Bpm.Int32 != 128 {
+		t.Errorf("the Beatport sync skipped an UNLOCKED column: bpm = %d, want 128", got.Bpm.Int32)
+	}
+
+	// A second identical cycle must report no writes at all. Guarding only the SET
+	// list would leave the WHERE matching every time, and the churn the :execrows
+	// guards exist to prevent would be back.
+	rows, err = q.UpdateSongWithBeatportData(ctx, db.UpdateSongWithBeatportDataParams{
+		ID: song.ID, Name: name, Artists: "Locking Artist",
+		ReleaseDate:  text("1999-12-31"),
+		ThumbnailUrl: text("https://example.invalid/robot.jpg"),
+		BeatportID:   got.BeatportID,
+		Bpm:          int4(128),
+	})
+	if err != nil {
+		t.Fatalf("UpdateSongWithBeatportData failed: %v", err)
+	}
+	if rows != 0 {
+		t.Errorf("a repeat cycle over a locked row wrote %d rows, want 0 -- the lock "+
+			"guard is missing from the WHERE clause", rows)
+	}
+
+	// The fifteen-minute STMPD sync, which is the writer that would otherwise re-arm
+	// an announcement: correcting a locked release_date must not make an old row look
+	// like news and post it to every server again.
+	if _, err = q.UpdateSongWithStmpdRelease(ctx, db.UpdateSongWithStmpdReleaseParams{
+		ID:           song.ID,
+		ReleaseDate:  text("1999-12-31"),
+		Title:        text("Renamed By The Sync"),
+		ThumbnailUrl: text("https://example.invalid/robot.jpg"),
+		SpotifyUrl:   text("https://open.spotify.com/track/synced"),
+	}); err != nil {
+		t.Fatalf("UpdateSongWithStmpdRelease failed: %v", err)
+	}
+	if got, gErr := q.GetSongByID(ctx, song.ID); gErr != nil {
+		t.Fatal(gErr)
+	} else {
+		if got.ReleaseDate.String != "2026-01-01" {
+			t.Errorf("the STMPD sync overwrote a locked date: %q", got.ReleaseDate.String)
+		}
+		if got.ThumbnailUrl.String != handSet {
+			t.Errorf("the STMPD sync overwrote a locked cover: %q", got.ThumbnailUrl.String)
+		}
+		if got.SpotifyUrl.String != "https://open.spotify.com/track/synced" {
+			t.Error("the STMPD sync skipped an UNLOCKED link")
+		}
+		if got.Name != "Renamed By The Sync" {
+			t.Errorf("the STMPD sync skipped the UNLOCKED name: %q", got.Name)
+		}
+	}
+
+	// Unlocking hands the column straight back to automation.
+	if _, err = q.DashUnlockSongField(ctx, db.DashUnlockSongFieldParams{
+		ID: song.ID, Field: "thumbnail_url",
+	}); err != nil {
+		t.Fatalf("DashUnlockSongField failed: %v", err)
+	}
+	if rows, err = q.ClearSongArtwork(ctx, song.ID); err != nil {
+		t.Fatalf("ClearSongArtwork failed: %v", err)
+	} else if rows != 1 {
+		t.Errorf("ClearSongArtwork wrote %d rows after unlocking, want 1", rows)
+	}
+}
+
+// Lyrics are the one column that exists nowhere else -- they are hand-entered or
+// verified against a duration, and nothing can re-derive them. A lock has to survive a
+// merge, or folding a duplicate away silently hands its hand-corrected columns back to
+// the next sync to overwrite.
+func TestLockedFieldsSurviveAMerge(t *testing.T) {
+	t.Parallel()
+
+	q := queries(t)
+	ctx := context.Background()
+
+	winnerName := testSongName(t, "Merge Winner")
+	winner, err := q.InsertRelease(ctx, db.InsertReleaseParams{
+		Name: winnerName, Artists: "Merge Artist", ReleaseDate: text("2026-02-01"),
+	})
+	if err != nil {
+		t.Fatalf("InsertRelease failed: %v", err)
+	}
+	t.Cleanup(func() { deleteSong(t, winner.ID) })
+
+	loserName := testSongName(t, "Merge Loser")
+	loser, err := q.InsertRelease(ctx, db.InsertReleaseParams{
+		Name: loserName, Artists: "Merge Artist", ReleaseDate: text("2026-02-02"),
+	})
+	if err != nil {
+		t.Fatalf("InsertRelease failed: %v", err)
+	}
+
+	if _, err = q.DashUpdateSong(ctx, db.DashUpdateSongParams{
+		ID: winner.ID, Name: winnerName, Artists: "Merge Artist",
+		ReleaseDate: text("2026-02-01"), LockedFields: []string{"release_date"},
+	}); err != nil {
+		t.Fatalf("DashUpdateSong failed: %v", err)
+	}
+	if _, err = q.DashUpdateSong(ctx, db.DashUpdateSongParams{
+		ID: loser.ID, Name: loserName, Artists: "Merge Artist",
+		ReleaseDate: text("2026-02-02"), Lyrics: text("hand entered words"),
+		LockedFields: []string{"lyrics"},
+	}); err != nil {
+		t.Fatalf("DashUpdateSong failed: %v", err)
+	}
+
+	if err = q.MergeSongRows(ctx, db.MergeSongRowsParams{
+		WinnerID: winner.ID, LoserID: loser.ID,
+	}); err != nil {
+		t.Fatalf("MergeSongRows failed: %v", err)
+	}
+	if err = q.DeleteSong(ctx, loser.ID); err != nil {
+		t.Fatalf("DeleteSong failed: %v", err)
+	}
+
+	got, err := q.GetSongByID(ctx, winner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Lyrics.String != "hand entered words" {
+		t.Errorf("the merge lost the loser's lyrics: %q", got.Lyrics.String)
+	}
+
+	want := map[string]bool{"release_date": true, "lyrics": true}
+	for _, f := range got.LockedFields {
+		delete(want, f)
+	}
+	if len(want) > 0 {
+		t.Errorf("the merge dropped locks %v; locked_fields = %v", want, got.LockedFields)
+	}
+}
+
+// Deleting a merged-away row used to delete its announcement history with it:
+// song_announcements.song_id is ON DELETE CASCADE, and the merge ends in DeleteSong.
+// Repointing first is what keeps the record of already-posted messages, without which
+// the refresh loop has no idea they exist.
+func TestMergeKeepsAnnouncements(t *testing.T) {
+	t.Parallel()
+
+	q := queries(t)
+	ctx := context.Background()
+
+	winner, err := q.InsertRelease(ctx, db.InsertReleaseParams{
+		Name: testSongName(t, "Announce Winner"), Artists: "Announce Artist",
+		ReleaseDate: text("2026-03-01"),
+	})
+	if err != nil {
+		t.Fatalf("InsertRelease failed: %v", err)
+	}
+	t.Cleanup(func() { deleteSong(t, winner.ID) })
+
+	loser, err := q.InsertRelease(ctx, db.InsertReleaseParams{
+		Name: testSongName(t, "Announce Loser"), Artists: "Announce Artist",
+		ReleaseDate: text("2026-03-02"),
+	})
+	if err != nil {
+		t.Fatalf("InsertRelease failed: %v", err)
+	}
+
+	guildID := int64(690950056202731521)
+	messageID := int64(900000000000000000) + loser.ID
+	if err = q.InsertSongAnnouncement(ctx, db.InsertSongAnnouncementParams{
+		SongID: loser.ID, GuildID: guildID, ChannelID: 1, MessageID: messageID,
+		ButtonsKey: "probe",
+	}); err != nil {
+		t.Fatalf("InsertSongAnnouncement failed: %v", err)
+	}
+
+	if _, err = q.DashRepointAnnouncements(ctx, db.DashRepointAnnouncementsParams{
+		OldSong: loser.ID, NewSong: winner.ID,
+	}); err != nil {
+		t.Fatalf("DashRepointAnnouncements failed: %v", err)
+	}
+	if err = q.MergeSongRows(ctx, db.MergeSongRowsParams{
+		WinnerID: winner.ID, LoserID: loser.ID,
+	}); err != nil {
+		t.Fatalf("MergeSongRows failed: %v", err)
+	}
+	if err = q.DeleteSong(ctx, loser.ID); err != nil {
+		t.Fatalf("DeleteSong failed: %v", err)
+	}
+
+	posted, err := q.DashSongAnnouncements(ctx, winner.ID)
+	if err != nil {
+		t.Fatalf("DashSongAnnouncements failed: %v", err)
+	}
+	found := false
+	for _, a := range posted {
+		if a.MessageID == messageID {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the merge lost the announcement the deleted row had posted; " +
+			"song_announcements cascades on delete, so it must be repointed first")
 	}
 }

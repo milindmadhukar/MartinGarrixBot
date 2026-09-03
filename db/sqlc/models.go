@@ -119,6 +119,8 @@ type Song struct {
 	LrclibID          pgtype.Int8        `json:"lrclibId"`
 	LrclibCheckedAt   pgtype.Timestamptz `json:"lrclibCheckedAt"`
 	LrclibMisses      int16              `json:"lrclibMisses"`
+	LockedFields      []string           `json:"lockedFields"`
+	SearchText        pgtype.Text        `json:"searchText"`
 }
 
 type SongAnnouncement struct {

@@ -34,7 +34,7 @@ func LyricsAutocompleteHandler(b *stmpdbot.STMPDBot) handler.AutocompleteHandler
 			}), err
 		}
 
-		rows, err := b.Queries.GetSongsWithLyricsLike(ctx, searchPattern(input))
+		rows, err := b.Queries.GetSongsWithLyricsLike(ctx, utils.SearchTerms(input))
 		return songChoicesFrom(rows, func(r db.GetSongsWithLyricsLikeRow) utils.SongChoice {
 			return utils.SongChoice{ID: r.ID, Name: r.Name, Artists: r.Artists, Mix: r.MixName.String}
 		}), err

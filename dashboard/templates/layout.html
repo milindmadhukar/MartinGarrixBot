@@ -47,17 +47,22 @@
       </div>
     </div>
 
-    {{if .GuildID}}
-      {{/* Scrolls sideways rather than wrapping on a phone: four tabs stacked
-           two-high pushes the content below the fold on a small screen. */}}
-      <nav class="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-3 sm:px-4
-                  [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    {{/* Scrolls sideways rather than wrapping on a phone: tabs stacked two-high
+         push the content below the fold on a small screen.
+
+         The guild tabs only appear inside a guild, but the catalogue tab is always
+         there: the songs table is global, so it is reachable without picking a
+         server first. */}}
+    <nav class="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-3 sm:px-4
+                [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {{if .GuildID}}
         {{template "navlink" dict "Href" (printf "/g/%s" .GuildID) "Label" "Overview" "Active" (eq .Nav "overview")}}
         {{template "navlink" dict "Href" (printf "/g/%s/modlogs" .GuildID) "Label" "Moderation" "Active" (eq .Nav "modlogs")}}
         {{template "navlink" dict "Href" (printf "/g/%s/members" .GuildID) "Label" "Joins & leaves" "Active" (eq .Nav "members")}}
         {{template "navlink" dict "Href" (printf "/g/%s/settings" .GuildID) "Label" "Settings" "Active" (eq .Nav "settings")}}
-      </nav>
-    {{end}}
+      {{end}}
+      {{template "navlink" dict "Href" "/songs" "Label" "Catalogue" "Active" (eq .Nav "songs")}}
+    </nav>
   </header>
   {{end}}
 

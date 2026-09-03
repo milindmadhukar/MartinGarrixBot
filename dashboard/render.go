@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +37,10 @@ var pageFiles = []string{
 	"modlogs",
 	"members",
 	"settings",
+	"songs",
+	"song",
+	"songmerge",
+	"songproblems",
 	"error",
 }
 
@@ -127,6 +133,12 @@ type pageData struct {
 	AvatarURL string
 	CSRFToken string
 
+	// IsOwner gates the catalogue's edit controls in the templates. It hides
+	// buttons; ownerOnly is what actually refuses the request. Both are needed and
+	// neither is sufficient -- a hidden button is not a permission check, and a
+	// refused POST with the button still showing is a broken-looking page.
+	IsOwner bool
+
 	GuildID   string
 	GuildName string
 	GuildIcon string
@@ -151,6 +163,7 @@ func (s *Server) newPage(r *http.Request, title string) *pageData {
 		p.Username = sess.Username
 		p.AvatarURL = avatarURL(sess.UserID.String(), sess.AvatarHash)
 		p.CSRFToken = sess.CSRF
+		p.IsOwner = sess.Owner
 	}
 	return p
 }
@@ -241,6 +254,19 @@ func (r *renderer) funcs() template.FuncMap {
 		// list builds an ordered slice, which map-based dict cannot do:
 		// ranging a map in a template sorts by key.
 		"list": func(values ...any) []any { return values },
+		// has tests membership in songs.locked_fields, which is a text[] rather than a
+		// column per field, so a template cannot reach a lock with a field selector.
+		"has": func(haystack []string, needle string) bool {
+			return slices.Contains(haystack, needle)
+		},
+		// int32str renders a nullable integer as the empty string when it is unset, so
+		// a text input shows blank rather than the zero the struct actually holds.
+		"int32str": func(v pgtype.Int4) string {
+			if !v.Valid {
+				return ""
+			}
+			return strconv.FormatInt(int64(v.Int32), 10)
+		},
 		"seq": func(n int) []int {
 			out := make([]int, n)
 			for i := range out {

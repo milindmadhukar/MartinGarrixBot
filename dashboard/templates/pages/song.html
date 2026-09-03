@@ -1,0 +1,295 @@
+{{define "page"}}
+{{template "song-detail" .}}
+{{end}}
+
+{{define "song-detail"}}
+{{$owner := .IsOwner}}
+{{$d := .Data.Detail}}
+{{$song := $d.Song}}
+<div id="song-detail">
+
+  <a href="/songs" class="stamp-muted hover:text-slate-300">&larr; Catalogue</a>
+
+  <div class="mt-2 flex flex-wrap items-start gap-4">
+    {{template "songThumb" dict "URL" $song.ThumbnailUrl.String "Size" "h-24 w-24"}}
+    <div class="min-w-0 flex-1">
+      <h1 class="text-2xl font-semibold tracking-tight text-white">
+        {{$song.Name}}{{if $song.MixName.String}} <span class="text-slate-500">({{$song.MixName.String}})</span>{{end}}
+      </h1>
+      <p class="mt-0.5 text-slate-300">{{$song.Artists}}</p>
+      <div class="mt-2 flex flex-wrap items-center gap-1">
+        <span class="stamp-muted">#{{$song.ID}}</span>
+        {{template "sourceBadge" $song.Source}}
+        {{if $song.IsCollection}}<span class="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">release</span>{{end}}
+        {{if $song.IsInstrumental}}<span class="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">instrumental</span>{{end}}
+        {{if $song.IsUnreleased}}<span class="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">unreleased</span>{{end}}
+        {{if $song.ParentSongID.Valid}}
+          <a href="/songs/{{$song.ParentSongID.Int64}}" class="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200">rendition of #{{$song.ParentSongID.Int64}}</a>
+        {{end}}
+      </div>
+    </div>
+  </div>
+
+  {{if .Data.Problem}}
+    <div class="mt-4 rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+      {{.Data.Problem}}
+    </div>
+  {{end}}
+  {{if .Data.Note}}
+    <div class="mt-4 rounded-lg border border-mint-300/30 bg-mint-300/5 px-4 py-3 text-sm text-mint-200">
+      {{.Data.Note}}
+    </div>
+  {{end}}
+
+  {{if $d.Problems}}
+    <section class="panel mt-5 p-4">
+      <h2 class="stamp-label mb-3">Problems on this row</h2>
+      <ul class="space-y-2 text-sm">
+        {{range $d.Problems}}
+          <li>
+            <span class="font-medium text-red-300">{{.Title}}</span>
+            <p class="text-slate-400">{{.Explain}}</p>
+            <p class="stamp-muted mt-0.5">Fix: <code>make {{.Remedy}}</code></p>
+          </li>
+        {{end}}
+      </ul>
+    </section>
+  {{end}}
+
+  {{/* The rendition family. Showing what a sibling has that this row does not is the
+       whole point: that is the shape of the defect where the row everyone sees had no
+       streaming links and the row that did was filed underneath it. */}}
+  {{if or $d.Renditions $d.Parent}}
+    <section class="panel mt-5 p-4">
+      <h2 class="stamp-label mb-3">
+        {{if $d.Parent}}This is a rendition{{else}}Renditions{{end}}
+      </h2>
+
+      {{if $d.Parent}}
+        <div class="mb-3 flex items-center gap-3 rounded-lg border border-white/10 p-2">
+          {{template "songThumb" dict "URL" $d.Parent.ThumbnailUrl.String "Size" "h-10 w-10"}}
+          <div class="min-w-0 flex-1">
+            <a href="/songs/{{$d.Parent.ID}}" class="font-medium text-white hover:text-mint-200">{{$d.Parent.Name}}</a>
+            <p class="truncate text-sm text-slate-400">{{$d.Parent.Artists}} · the song people see</p>
+          </div>
+          {{if $owner}}
+            <form hx-post="/songs/{{$song.ID}}/promote" hx-target="#song-detail" hx-swap="outerHTML">
+              <button type="submit" class="rounded btn-mint"
+                      title="Make this row the one listeners see, and file the current song underneath it">
+                Promote this row
+              </button>
+            </form>
+          {{end}}
+        </div>
+        {{range $d.Siblings}}
+          <div class="flex items-center gap-3 border-t border-white/5 py-2">
+            {{template "songThumb" dict "URL" .ThumbnailUrl.String "Size" "h-8 w-8"}}
+            <a href="/songs/{{.ID}}" class="min-w-0 flex-1 truncate text-sm text-slate-300 hover:text-white">
+              {{.Name}}{{if .MixName.String}} ({{.MixName.String}}){{end}}
+            </a>
+            <span class="stamp-muted">{{.Source}}</span>
+          </div>
+        {{end}}
+      {{else}}
+        {{range $d.Renditions}}
+          <div class="flex items-center gap-3 border-t border-white/5 py-2 first:border-t-0">
+            {{template "songThumb" dict "URL" .ThumbnailUrl.String "Size" "h-8 w-8"}}
+            <div class="min-w-0 flex-1">
+              <a href="/songs/{{.ID}}" class="truncate text-sm text-slate-200 hover:text-white">
+                {{.Name}}{{if .MixName.String}} ({{.MixName.String}}){{end}}
+              </a>
+              <p class="truncate text-xs text-slate-500">{{.Artists}}</p>
+            </div>
+            <div class="flex shrink-0 gap-1">
+              {{if and .SpotifyUrl.Valid (not $song.SpotifyUrl.Valid)}}<span class="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-300" title="This rendition has a Spotify link the song does not">spotify</span>{{end}}
+              {{if and .YoutubeUrl.Valid (not $song.YoutubeUrl.Valid)}}<span class="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-300" title="This rendition has a YouTube link the song does not">youtube</span>{{end}}
+              {{if and .HasLyrics (not $song.Lyrics.Valid)}}<span class="rounded bg-amber-950 px-1.5 py-0.5 text-xs text-amber-300" title="This rendition has lyrics the song does not">lyrics</span>{{end}}
+              <span class="stamp-muted">{{.Source}}</span>
+            </div>
+          </div>
+        {{end}}
+      {{end}}
+    </section>
+  {{end}}
+
+  {{if $owner}}
+    {{template "song-edit" .}}
+  {{else}}
+    <section class="panel mt-5 p-4">
+      <h2 class="stamp-label mb-3">Details</h2>
+      <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+        {{range $d.Links}}
+          {{if .URL}}
+            <div><dt class="stamp-muted">{{.Label}}</dt>
+            <dd class="truncate"><a href="{{.URL}}" rel="noreferrer noopener" target="_blank" class="text-mint-200 hover:underline">{{.URL}}</a></dd></div>
+          {{end}}
+        {{end}}
+        <div><dt class="stamp-muted">Released</dt><dd class="text-slate-300">{{if $song.ReleaseDate.Valid}}{{$song.ReleaseDate.String}}{{else}}—{{end}}</dd></div>
+        <div><dt class="stamp-muted">Release</dt><dd class="text-slate-300">{{if $song.ReleaseName.Valid}}{{$song.ReleaseName.String}}{{else}}—{{end}}</dd></div>
+      </dl>
+      <p class="stamp-muted mt-4">Sign in as an owner to edit this row.</p>
+    </section>
+  {{end}}
+
+  {{/* Derived columns are shown but never editable: rekey-songs owns them, and a value
+       typed here would be overwritten by its next run without anything saying so. */}}
+  <section class="panel mt-5 p-4">
+    <h2 class="stamp-label mb-3">Derived</h2>
+    <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+      <div><dt class="stamp-muted">match_key</dt><dd class="break-all font-mono text-xs text-slate-400">{{$song.MatchKey.String}}</dd></div>
+      <div><dt class="stamp-muted">base_key</dt><dd class="break-all font-mono text-xs text-slate-400">{{$song.BaseKey.String}}</dd></div>
+      <div><dt class="stamp-muted">normalized_name</dt><dd class="break-all font-mono text-xs text-slate-400">{{$song.NormalizedName.String}}</dd></div>
+      <div><dt class="stamp-muted">search_text</dt><dd class="break-all font-mono text-xs text-slate-400">{{$song.SearchText.String}}</dd></div>
+      <div><dt class="stamp-muted">stmpd_slug</dt><dd class="break-all font-mono text-xs text-slate-400">{{if $song.StmpdSlug.Valid}}{{$song.StmpdSlug.String}}{{else}}—{{end}}</dd></div>
+      <div><dt class="stamp-muted">beatport_id</dt><dd class="font-mono text-xs text-slate-400">{{if $song.BeatportID.Valid}}{{$song.BeatportID.Int32}}{{else}}—{{end}}</dd></div>
+    </dl>
+    <p class="stamp-muted mt-3">
+      These are recomputed from the title and credits by <code>rekey-songs</code>, and by
+      this page whenever you save a name or artist change.
+    </p>
+  </section>
+
+  {{if $d.Announcements}}
+    <section class="panel mt-5 p-4">
+      <h2 class="stamp-label mb-3">Posted announcements</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="stamp-muted border-b border-white/10">
+            <tr><th class="py-2 pr-3 font-normal">Server</th><th class="py-2 pr-3 font-normal">Posted</th>
+                <th class="py-2 pr-3 font-normal">Edited</th><th class="py-2 pr-3 font-normal">Message</th></tr>
+          </thead>
+          <tbody class="divide-y divide-white/5">
+            {{range $d.Announcements}}
+              <tr>
+                <td class="py-2 pr-3 font-mono text-xs text-slate-400">{{.GuildID}}</td>
+                <td class="py-2 pr-3 text-slate-400">{{fmtTime .PostedAt.Time}}</td>
+                <td class="py-2 pr-3 text-slate-400">
+                  {{if .EditedAt.Valid}}{{fmtTime .EditedAt.Time}} ({{.EditCount}}){{else}}—{{end}}
+                  {{if .FailedAt.Valid}}<span class="ml-1 rounded bg-red-950 px-1.5 py-0.5 text-xs text-red-300">failed</span>{{end}}
+                </td>
+                <td class="py-2 pr-3">
+                  <a class="text-mint-200 hover:underline" rel="noreferrer noopener" target="_blank"
+                     href="https://discord.com/channels/{{.GuildID}}/{{.ChannelID}}/{{.MessageID}}">open</a>
+                </td>
+              </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {{end}}
+</div>
+{{end}}
+
+{{/* The edit form.
+     One form for the whole row rather than one per group: unlike guild settings, where
+     the groups are independent, a song's fields are validated against each other --
+     is_unreleased against release_date, and the four identity columns against the
+     unique_release constraint -- so a partial submission could pass while the row it
+     would produce does not.
+
+     Every field carries a hidden "present:" marker where it is a checkbox, because an
+     unticked checkbox is simply absent from a submission; without the marker "unticked"
+     and "not on the page" are the same bytes and a flag could never be cleared. */}}
+{{define "song-edit"}}
+{{$d := .Data.Detail}}
+{{$song := $d.Song}}
+{{$locked := $song.LockedFields}}
+<section class="panel mt-5 p-4">
+  <div class="panel-head mb-3 flex items-center justify-between">
+    <h2 class="stamp-label">Edit</h2>
+    <span class="stamp-muted">Saving a field locks it against the sync</span>
+  </div>
+
+  <form hx-post="/songs/{{$song.ID}}" hx-target="#song-detail" hx-swap="outerHTML"
+        class="grid gap-4 sm:grid-cols-2">
+
+    {{template "songField" dict "Song" $song.ID "Field" "name" "Label" "Name" "Value" $song.Name "Locked" (has $locked "name") "IsOwner" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "artists" "Label" "Artists" "Value" $song.Artists "Locked" (has $locked "artists") "IsOwner" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "mix_name" "Label" "Mix name" "Value" $song.MixName.String "Locked" (has $locked "mix_name") "IsOwner" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "release_date" "Label" "Release date (YYYY-MM-DD)" "Value" $song.ReleaseDate.String "Locked" (has $locked "release_date") "IsOwner" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "release_name" "Label" "Release / EP name" "Value" $song.ReleaseName.String "Locked" (has $locked "release_name") "IsOwner" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "thumbnail_url" "Label" "Artwork URL" "Value" $song.ThumbnailUrl.String "Locked" (has $locked "thumbnail_url") "IsOwner" true}}
+
+    <div class="sm:col-span-2"><p class="stamp-label mt-2">Streaming links</p></div>
+    {{range $d.Links}}
+      {{template "songField" dict "Song" $song.ID "Field" .Field "Label" .Label "Value" .URL "Locked" (has $locked .Field) "IsOwner" true}}
+    {{end}}
+
+    <div class="sm:col-span-2"><p class="stamp-label mt-2">Metadata</p></div>
+    {{template "songField" dict "Song" $song.ID "Field" "genre" "Label" "Genre" "Value" $song.Genre.String "Locked" (has $locked "genre") "IsOwner" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "sub_genre" "Label" "Sub-genre" "Value" $song.SubGenre.String "Locked" (has $locked "sub_genre") "IsOwner" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "bpm" "Label" "BPM" "Value" (int32str $song.Bpm) "Locked" (has $locked "bpm") "IsOwner" true}}
+    {{template "songField" dict "Song" $song.ID "Field" "musical_key" "Label" "Key" "Value" $song.MusicalKey.String "Locked" (has $locked "musical_key") "IsOwner" true}}
+
+    <label class="stamp-muted sm:col-span-2">
+      <span class="flex items-center gap-2">Lyrics {{template "lockBadge" dict "Song" $song.ID "Field" "lyrics" "Locked" (has $locked "lyrics") "IsOwner" true}}</span>
+      <textarea name="lyrics" rows="8"
+                class="mt-1 block w-full field px-2 py-1.5 font-mono text-xs text-slate-200">{{$song.Lyrics.String}}</textarea>
+    </label>
+
+    <div class="flex flex-wrap gap-4 sm:col-span-2">
+      {{template "songFlag" dict "Song" $song.ID "Field" "is_collection" "Label" "This is a release, not a track" "On" $song.IsCollection "Locked" (has $locked "is_collection")}}
+      {{template "songFlag" dict "Song" $song.ID "Field" "is_instrumental" "Label" "Instrumental" "On" $song.IsInstrumental "Locked" (has $locked "is_instrumental")}}
+      {{template "songFlag" dict "Song" $song.ID "Field" "is_unreleased" "Label" "Unreleased" "On" $song.IsUnreleased "Locked" (has $locked "is_unreleased")}}
+    </div>
+
+    <div class="sm:col-span-2">
+      <button type="submit" class="rounded btn-mint">Save</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel mt-5 p-4">
+  <h2 class="stamp-label mb-3">Structure</h2>
+
+  <form hx-post="/songs/{{$song.ID}}/parent" hx-target="#song-detail" hx-swap="outerHTML"
+        class="flex flex-wrap items-end gap-3">
+    <label class="stamp-muted">
+      <span class="flex items-center gap-2">
+        File under song id
+        {{template "lockBadge" dict "Song" $song.ID "Field" "parent_song_id" "Locked" (has $locked "parent_song_id") "IsOwner" true}}
+      </span>
+      <input type="text" inputmode="numeric" name="parent_song_id"
+             value="{{if $song.ParentSongID.Valid}}{{$song.ParentSongID.Int64}}{{end}}"
+             placeholder="empty = a song in its own right"
+             class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200 sm:w-72">
+    </label>
+    <button type="submit" class="rounded btn-ghost">Re-file</button>
+  </form>
+
+  <p class="stamp-muted mt-3">
+    A rendition's credits must contain its song's, the song must not itself be a
+    rendition, and a release is never a song's parent — the same rules the audit checks.
+  </p>
+
+  <div class="mt-4 border-t border-white/10 pt-4">
+    <a href="/songs/{{$song.ID}}/merge" class="rounded btn-ghost">Merge another row into this one</a>
+    <p class="stamp-muted mt-2">
+      Folds a duplicate into this row, keeping the first non-null of every field and
+      moving its renditions, identifiers and posted announcements across. The other row
+      is then deleted.
+    </p>
+  </div>
+</section>
+{{end}}
+
+{{define "songField"}}
+<label class="stamp-muted">
+  <span class="flex items-center gap-2">{{.Label}} {{template "lockBadge" .}}</span>
+  <input type="text" name="{{.Field}}" value="{{.Value}}"
+         class="mt-1 block w-full field px-2 py-1.5 text-sm text-slate-200">
+</label>
+{{end}}
+
+{{define "songFlag"}}
+<label class="flex items-center gap-2 text-sm text-slate-300">
+  {{/* The marker is what tells an unticked box from a field that was not on the page.
+       Without it a flag could be set but never cleared. */}}
+  <input type="hidden" name="present:{{.Field}}" value="1">
+  <input type="checkbox" name="{{.Field}}" value="1" {{if .On}}checked{{end}}
+         class="h-4 w-4 rounded border-white/20 bg-white/5">
+  {{.Label}}
+  {{template "lockBadge" dict "Song" .Song "Field" .Field "Locked" .Locked "IsOwner" true}}
+</label>
+{{end}}

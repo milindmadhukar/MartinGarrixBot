@@ -637,11 +637,58 @@ func (bc *BeatportClient) GetAllArtistTracks(artistID string, maxTracks int) ([]
 	return allTracks, nil
 }
 
+// BeatportReleaseIsThisTrack reports whether a Beatport release is the track's own --
+// a single, or the extended-mixes listing of one -- rather than a compilation the track
+// merely appears on.
+//
+// It exists because Beatport exposes no per-track image, only a per-release one. Taking
+// it unconditionally meant every track on a label mixtape came back wearing the
+// mixtape's cover: in production one image sat on twelve unrelated songs, and 295 rows
+// carried artwork belonging to a different song. A listener asking for "Dragon" got a
+// card showing the Tomorrowland 2016 compilation.
+//
+// The test is equality against the release's own title, not containment, and that
+// matters: "Late Night & Walkaway - Extended Mixes" contains "Walkaway" as a whole word
+// while being a two-track release whose cover belongs to neither track alone. Only a
+// release named after exactly this track has a cover that is this track's.
+//
+// A trailing " - <clause>" is stripped as well as a parenthesised one, because Beatport
+// writes the same thing both ways: "What Is It (Extended Mixes)" and "PSYCHO - Extended
+// Mixes".
+func BeatportReleaseIsThisTrack(trackName, releaseName string) bool {
+	if trackName == "" || releaseName == "" {
+		return false
+	}
+	want := NormalizeToken(trackName)
+	if want == "" {
+		return false
+	}
+
+	candidates := []string{releaseName}
+	if i := strings.LastIndex(releaseName, " - "); i > 0 {
+		candidates = append(candidates, releaseName[:i])
+	}
+	for _, c := range candidates {
+		if base, _ := SplitVariant(c, "", ""); base == want {
+			return true
+		}
+	}
+	return false
+}
+
 // ProcessBeatportTrack converts an API track to our internal format
 func ProcessBeatportTrack(apiTrack BeatportAPITrack) BeatportTrack {
-	// Use release image URI as thumbnail (square album artwork)
+	// The release image is only this track's artwork when the release is this track's
+	// own. On a compilation it is the compilation's cover, which is how one image ended
+	// up on twelve unrelated songs -- see BeatportReleaseIsThisTrack.
+	//
+	// Leaving it empty is the right outcome, not a loss: the hourly Apple enrichment
+	// then reaches the row and resolves the artwork of the recording the row itself
+	// links to. A missing cover shows an honest placeholder; a wrong one is a lie, and
+	// it is what the announcement embed puts in front of the whole server.
 	thumbnailURL := ""
-	if apiTrack.Release.Image.URI != "" {
+	if apiTrack.Release.Image.URI != "" &&
+		BeatportReleaseIsThisTrack(apiTrack.Name, apiTrack.Release.Name) {
 		thumbnailURL = apiTrack.Release.Image.URI
 	}
 

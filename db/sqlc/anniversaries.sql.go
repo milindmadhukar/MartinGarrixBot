@@ -90,7 +90,7 @@ func (q *Queries) GetAnniversaryGuilds(ctx context.Context) ([]GetAnniversaryGui
 }
 
 const getSongAnniversaries = `-- name: GetSongAnniversaries :many
-SELECT songs.id, songs.name, songs.artists, songs.thumbnail_url, songs.spotify_url, songs.apple_music_url, songs.youtube_url, songs.lyrics, songs.is_unreleased, songs.beatport_id, songs.mix_name, songs.release_date, songs.release_name, songs.genre, songs.sub_genre, songs.bpm, songs.musical_key, songs.length_ms, songs.beatport_updated, songs.source, songs.first_seen_at, songs.announced_at, songs.stmpd_synced_at, songs.deezer_url, songs.tidal_url, songs.amazon_music_url, songs.youtube_music_url, songs.beatport_url, songs.beatport_release_id, songs.stmpd_slug, songs.match_key, songs.base_key, songs.parent_song_id, songs.is_instrumental, songs.is_collection, songs.beatport_slug, songs.normalized_name, songs.lrclib_id, songs.lrclib_checked_at, songs.lrclib_misses,
+SELECT songs.id, songs.name, songs.artists, songs.thumbnail_url, songs.spotify_url, songs.apple_music_url, songs.youtube_url, songs.lyrics, songs.is_unreleased, songs.beatport_id, songs.mix_name, songs.release_date, songs.release_name, songs.genre, songs.sub_genre, songs.bpm, songs.musical_key, songs.length_ms, songs.beatport_updated, songs.source, songs.first_seen_at, songs.announced_at, songs.stmpd_synced_at, songs.deezer_url, songs.tidal_url, songs.amazon_music_url, songs.youtube_music_url, songs.beatport_url, songs.beatport_release_id, songs.stmpd_slug, songs.match_key, songs.base_key, songs.parent_song_id, songs.is_instrumental, songs.is_collection, songs.beatport_slug, songs.normalized_name, songs.lrclib_id, songs.lrclib_checked_at, songs.lrclib_misses, songs.locked_fields, songs.search_text,
        (EXTRACT(YEAR FROM $1::date)
         - EXTRACT(YEAR FROM to_date(release_date, 'YYYY-MM-DD')))::int AS years_old
 FROM songs
@@ -168,6 +168,8 @@ func (q *Queries) GetSongAnniversaries(ctx context.Context, arg GetSongAnniversa
 			&i.Song.LrclibID,
 			&i.Song.LrclibCheckedAt,
 			&i.Song.LrclibMisses,
+			&i.Song.LockedFields,
+			&i.Song.SearchText,
 			&i.YearsOld,
 		); err != nil {
 			return nil, err

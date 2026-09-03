@@ -144,9 +144,10 @@ func main() {
 		}
 
 		n, err := env.Queries.SetSongKeys(ctx, db.SetSongKeysParams{
-			ID:       row.ID,
-			MatchKey: utils.Text(matchKey),
-			BaseKey:  utils.Text(baseKey),
+			ID:         row.ID,
+			MatchKey:   utils.Text(matchKey),
+			BaseKey:    utils.Text(baseKey),
+			SearchText: utils.Text(utils.SearchText(row.Artists, row.Name, row.MixName.String, row.ReleaseName.String)),
 		})
 		if err != nil {
 			script.Fatal("failed to write song keys", err)

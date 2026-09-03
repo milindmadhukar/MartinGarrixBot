@@ -26,6 +26,7 @@ import (
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 	"github.com/milindmadhukar/STMPDBot/scripts/internal/script"
 	"github.com/milindmadhukar/STMPDBot/utils"
+	"github.com/milindmadhukar/STMPDBot/utils/catalogue"
 )
 
 // instrumentalMarkers appear in a mix name or title when a track has no vocal to
@@ -101,48 +102,31 @@ func main() {
 		slog.Int("flagged_instrumental", instrumental))
 }
 
+// candidateOf reduces a row to what decides whether it is the one a listener means.
+func candidateOf(r db.GetSongsForParentLinkingRow) catalogue.Candidate {
+	return catalogue.Candidate{
+		ID:             r.ID,
+		IsCollection:   r.IsCollection,
+		NamesRendition: storedVariant(r) != "",
+		HasSlug:        r.StmpdSlug.Valid,
+		HasLyrics:      r.Lyrics.Valid,
+		HasLinks:       hasLinks(r),
+		ArtistCount:    len(utils.SplitArtists(r.Artists)),
+		ReleaseDate:    r.ReleaseDate.String,
+	}
+}
+
 // chooseParent picks the canonical row for a group of same-titled songs.
 //
-// The best parent is the one a user means when they name the song: no rendition of
-// its own, the fewest artists (a remix adds the remixer), streaming links, and the
-// earliest release. Ties break on id so the choice is stable across runs.
+// The ordering lives in catalogue.BetterCanonical, shared with the dedupe pass. It used
+// to live here, in a second copy that ranked "names no rendition" and "fewest artists"
+// above having any streaming links at all -- so a beatport "Original Mix" with no links
+// beat the STMPD "Radio Edit" that had YouTube, Spotify and the lyrics, and every
+// listener asking for that song got a card with no buttons on it.
 func chooseParent(rows []db.GetSongsForParentLinkingRow, group []int) int {
 	candidates := append([]int(nil), group...)
 	sort.SliceStable(candidates, func(a, b int) bool {
-		ra, rb := rows[candidates[a]], rows[candidates[b]]
-
-		// A collection is a release, not a song, so it must never become the entry a
-		// song's remixes hang off. "Catharina (Remixes)" is a child of "Catharina",
-		// not its parent.
-		if ra.IsCollection != rb.IsCollection {
-			return !ra.IsCollection
-		}
-
-		va := storedVariant(ra) != ""
-		vb := storedVariant(rb) != ""
-		if va != vb {
-			return !va
-		}
-
-		na, nb := len(utils.SplitArtists(ra.Artists)), len(utils.SplitArtists(rb.Artists))
-		if na != nb {
-			return na < nb
-		}
-
-		la, lb := hasLinks(ra), hasLinks(rb)
-		if la != lb {
-			return la
-		}
-
-		// A known date beats an absent one; an unreleased row should not become the
-		// canonical entry for a song that has actually come out.
-		if ra.ReleaseDate.Valid != rb.ReleaseDate.Valid {
-			return ra.ReleaseDate.Valid
-		}
-		if ra.ReleaseDate.String != rb.ReleaseDate.String {
-			return ra.ReleaseDate.String < rb.ReleaseDate.String
-		}
-		return ra.ID < rb.ID
+		return catalogue.BetterCanonical(candidateOf(rows[candidates[a]]), candidateOf(rows[candidates[b]]))
 	})
 
 	best := candidates[0]
@@ -160,10 +144,25 @@ func chooseParent(rows []db.GetSongsForParentLinkingRow, group []int) int {
 	return best
 }
 
-// isChildOf reports whether child is a rendition of parent: it must name a rendition,
-// and its credits must contain the parent's.
+// isChildOf reports whether child belongs under parent.
+//
+// The credits must contain the parent's -- clustering has already established that the
+// two share a title, and containment is what makes the child a rendition of this song
+// rather than a different song by another act with the same name.
+//
+// Naming a rendition is normally required as well: a row that names none is the song
+// itself, not a version of it. That test is a proxy, though, and it only holds while the
+// elected parent is the plain row. Once provenance elects a rendition as canonical --
+// because it is the row carrying the label's slug, the lyrics and the links, or because
+// the cluster has no plain original at all -- a plain-named sibling is still the same
+// song and still belongs underneath.
+//
+// Without this the two rows for "Break Through The Silence" ended up as two canonical
+// rows rather than one: the STMPD "Radio Edit" was elected, and the beatport
+// "Original Mix" failed the rendition test, so it was unfiled instead of re-filed and
+// the song appeared twice in autocomplete.
 func isChildOf(parent, child db.GetSongsForParentLinkingRow) bool {
-	if storedVariant(child) == "" {
+	if storedVariant(child) == "" && storedVariant(parent) == "" {
 		return false
 	}
 	return utils.ArtistsSubsume(child.Artists, parent.Artists)

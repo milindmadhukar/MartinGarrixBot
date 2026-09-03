@@ -39,7 +39,7 @@ func (q *Queries) DeleteAnnouncement(ctx context.Context, arg DeleteAnnouncement
 
 const getAnnouncementsToRefresh = `-- name: GetAnnouncementsToRefresh :many
 SELECT a.song_id, a.guild_id, a.channel_id, a.message_id, a.buttons_key, a.edit_count,
-       s.id, s.name, s.artists, s.thumbnail_url, s.spotify_url, s.apple_music_url, s.youtube_url, s.lyrics, s.is_unreleased, s.beatport_id, s.mix_name, s.release_date, s.release_name, s.genre, s.sub_genre, s.bpm, s.musical_key, s.length_ms, s.beatport_updated, s.source, s.first_seen_at, s.announced_at, s.stmpd_synced_at, s.deezer_url, s.tidal_url, s.amazon_music_url, s.youtube_music_url, s.beatport_url, s.beatport_release_id, s.stmpd_slug, s.match_key, s.base_key, s.parent_song_id, s.is_instrumental, s.is_collection, s.beatport_slug, s.normalized_name, s.lrclib_id, s.lrclib_checked_at, s.lrclib_misses
+       s.id, s.name, s.artists, s.thumbnail_url, s.spotify_url, s.apple_music_url, s.youtube_url, s.lyrics, s.is_unreleased, s.beatport_id, s.mix_name, s.release_date, s.release_name, s.genre, s.sub_genre, s.bpm, s.musical_key, s.length_ms, s.beatport_updated, s.source, s.first_seen_at, s.announced_at, s.stmpd_synced_at, s.deezer_url, s.tidal_url, s.amazon_music_url, s.youtube_music_url, s.beatport_url, s.beatport_release_id, s.stmpd_slug, s.match_key, s.base_key, s.parent_song_id, s.is_instrumental, s.is_collection, s.beatport_slug, s.normalized_name, s.lrclib_id, s.lrclib_checked_at, s.lrclib_misses, s.locked_fields, s.search_text
 FROM song_announcements a
 JOIN songs s ON s.id = a.song_id
 WHERE a.failed_at IS NULL
@@ -127,6 +127,8 @@ func (q *Queries) GetAnnouncementsToRefresh(ctx context.Context, lim int32) ([]G
 			&i.Song.LrclibID,
 			&i.Song.LrclibCheckedAt,
 			&i.Song.LrclibMisses,
+			&i.Song.LockedFields,
+			&i.Song.SearchText,
 		); err != nil {
 			return nil, err
 		}

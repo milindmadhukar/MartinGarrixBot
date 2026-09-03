@@ -28,6 +28,7 @@ import (
 
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
 	"github.com/milindmadhukar/STMPDBot/scripts/internal/script"
+	"github.com/milindmadhukar/STMPDBot/utils/catalogue"
 )
 
 // distinctSlugs counts how many different STMPD releases a group claims to be.
@@ -185,36 +186,30 @@ func pickWinner(group []db.GetDuplicateMatchKeyRowsRow) db.GetDuplicateMatchKeyR
 	return best
 }
 
+// better defers to catalogue.BetterCanonical so that the row this pass keeps and the
+// row link-remix-parents elects as canonical are chosen by one rule. They were two
+// rules for months, and the copy in link-remix-parents had drifted into ranking a
+// row's shape above whether it had any streaming links at all.
+//
+// Rows here already share a match key, so they agree on title, rendition and artist
+// set; the fields that differentiate them are exactly the provenance ones.
 func better(a, b db.GetDuplicateMatchKeyRowsRow) bool {
-	if s := boolCmp(a.StmpdSlug.Valid, b.StmpdSlug.Valid); s != 0 {
-		return s > 0
-	}
-	if s := boolCmp(a.Lyrics.Valid, b.Lyrics.Valid); s != 0 {
-		return s > 0
-	}
-	if s := boolCmp(hasLinks(a), hasLinks(b)); s != 0 {
-		return s > 0
-	}
-	// A known date beats an absent one. Without this a row with no date sorts as the
-	// earliest of all and wins the "earliest release" rule below, so the merged row
-	// would keep the absence and throw away a date we actually know.
-	if s := boolCmp(hasDate(a.ReleaseDate), hasDate(b.ReleaseDate)); s != 0 {
-		return s > 0
-	}
-	if a.ReleaseDate.String != b.ReleaseDate.String {
-		return a.ReleaseDate.String < b.ReleaseDate.String
-	}
-	return a.ID < b.ID
+	return catalogue.BetterCanonical(candidateOf(a), candidateOf(b))
 }
 
-func boolCmp(a, b bool) int {
-	switch {
-	case a && !b:
-		return 1
-	case !a && b:
-		return -1
-	default:
-		return 0
+func candidateOf(r db.GetDuplicateMatchKeyRowsRow) catalogue.Candidate {
+	// A 1970 placeholder is an absence written down, not a date; passing it through
+	// would let it win the "earliest release" rule.
+	date := r.ReleaseDate.String
+	if !hasDate(r.ReleaseDate) {
+		date = ""
+	}
+	return catalogue.Candidate{
+		ID:          r.ID,
+		HasSlug:     r.StmpdSlug.Valid,
+		HasLyrics:   r.Lyrics.Valid,
+		HasLinks:    hasLinks(r),
+		ReleaseDate: date,
 	}
 }
 

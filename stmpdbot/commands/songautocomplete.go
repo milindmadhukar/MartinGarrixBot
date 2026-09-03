@@ -50,9 +50,11 @@ func songChoicesFrom[T any](rows []T, choice func(T) utils.SongChoice) []utils.S
 	return choices
 }
 
-// searchPattern wraps what the member typed for a LIKE. Kept here so both commands
-// agree on it -- a difference in the wildcards would make one of them quietly worse
-// at finding things than the other.
-func searchPattern(input string) string {
-	return "%" + input + "%"
-}
+// What the member typed is folded into LIKE terms by utils.SearchTerms, which both
+// commands call directly. It lives in utils rather than here because the dashboard's
+// catalogue search has to agree with them too -- a difference in the folding would make
+// one of the three quietly worse at finding things than the others.
+//
+// It replaced a local "%"+input+"%": that matched the whole phrase contiguously, so
+// "matisse sadko dont tell me" found nothing for a row credited to "Matisse & Sadko,
+// Aspyer, Matluck", and it passed a member's % and _ straight through as wildcards.

@@ -296,16 +296,17 @@ func GuessMatchesSong(song db.Song, guess string) bool {
 // test on the subtitle of "It's Alright (Not)" hides every line containing "nothing"
 // or "cannot", which is most of a song.
 func TitleAppearsIn(line, title string) bool {
-	t := normalizeWords(title)
+	t := NormalizeWords(title)
 	if t == "" {
 		return false
 	}
-	return containsWord(normalizeWords(line), t)
+	return containsWord(NormalizeWords(line), t)
 }
 
-// normalizeWords is NormalizeToken with the word breaks kept, so that a title can be
-// looked for inside a sentence.
-func normalizeWords(s string) string {
+// NormalizeWords is NormalizeToken with the word breaks kept, so that a title can be
+// looked for inside a sentence, and so that a whole credit string folds into terms a
+// search can match one at a time. Exported for utils/search.go.
+func NormalizeWords(s string) string {
 	var b strings.Builder
 	for _, word := range strings.Fields(s) {
 		if n := NormalizeToken(word); n != "" {

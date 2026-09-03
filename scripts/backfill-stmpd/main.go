@@ -288,9 +288,10 @@ func insertRelease(ctx context.Context, env *script.Env, index *utils.SongIndex,
 		script.Fatal("failed to stamp inserted row as announced", err)
 	}
 	if _, err := env.Queries.SetSongKeys(ctx, db.SetSongKeysParams{
-		ID:       song.ID,
-		MatchKey: utils.Text(utils.MatchKey(song.Name, "", song.MixName.String, song.Artists)),
-		BaseKey:  utils.Text(utils.BaseKey(song.Name, song.Artists)),
+		ID:         song.ID,
+		MatchKey:   utils.Text(utils.MatchKey(song.Name, "", song.MixName.String, song.Artists)),
+		BaseKey:    utils.Text(utils.BaseKey(song.Name, song.Artists)),
+		SearchText: utils.Text(utils.SearchText(song.Artists, song.Name, song.MixName.String, song.ReleaseName.String)),
 	}); err != nil {
 		script.Fatal("failed to key inserted row", err)
 	}
