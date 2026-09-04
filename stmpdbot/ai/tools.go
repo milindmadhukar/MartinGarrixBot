@@ -16,11 +16,11 @@ func Tools() []Tool {
 	return []Tool{
 		{Type: "function", Function: ToolFunction{
 			Name:        "search_songs",
-			Description: "Search the Martin Garrix / STMPD RCRDS song catalogue by title and/or artist. Returns up to 20 matches, each with a song_id to pass to get_song_details.",
+			Description: "Search the Martin Garrix / STMPD RCRDS song catalogue by title and/or artist. query must be ONLY artist and/or title words -- descriptive words like \"unreleased\", \"best\" or \"favourite\" will never match and return nothing. Each result already carries is_unreleased and release_date, so filter/pick from the results yourself rather than searching for release status. Call get_song_details on a song_id for lyrics or links. If nothing you're looking for is in the results, say so -- never invent a track name that isn't in the catalogue.",
 			Parameters: json.RawMessage(`{
 				"type": "object",
 				"properties": {
-					"query": {"type": "string", "description": "title and/or artist words to search for"}
+					"query": {"type": "string", "description": "artist and/or title words only, e.g. \"AREA21\" or \"garrix animals\""}
 				},
 				"required": ["query"]
 			}`),
@@ -67,7 +67,7 @@ func Dispatch(ctx context.Context, queries *db.Queries, guildID int64, name, arg
 		if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 			return "", fmt.Errorf("search_songs: bad arguments: %w", err)
 		}
-		rows, err := queries.GetSongsLike(ctx, utils.SearchTerms(args.Query))
+		rows, err := queries.SearchSongsForAgent(ctx, utils.SearchTerms(args.Query))
 		if err != nil {
 			return "", err
 		}

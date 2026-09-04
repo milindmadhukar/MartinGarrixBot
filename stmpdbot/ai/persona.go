@@ -2,6 +2,13 @@ package ai
 
 import _ "embed"
 
+// SOUL.md is the fixed identity/values/style contract: grounding rules (use
+// the tools, never invent a fact), anti-sycophancy, and the em-dash ban.
+// Hand-written, not data-derived.
+//
+//go:embed SOUL.md
+var soul string
+
 // persona.md is the static "voice guide" distilled offline from a random
 // sample of this server's own message history by
 // scripts/analyze-fandom-voice. It is folded into the system prompt once at
@@ -10,3 +17,9 @@ import _ "embed"
 //
 //go:embed persona.md
 var persona string
+
+// SystemPrompt is the first message of every conversation: identity and
+// grounding rules, then the sampled voice guide.
+func SystemPrompt() string {
+	return soul + "\n\n---\n\n" + persona
+}

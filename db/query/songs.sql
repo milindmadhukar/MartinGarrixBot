@@ -10,6 +10,22 @@ SELECT * FROM songs WHERE id = $1;
 -- name: GetSongByBeatportID :one
 SELECT * FROM songs WHERE beatport_id = $1;
 
+-- name: SearchSongsForAgent :many
+-- Backs the AI persona feature's "search_songs" tool (stmpdbot/ai). Same term
+-- matching as GetSongsLike below, but also returns is_unreleased and genre so
+-- the model can answer "favourite unreleased AREA21 track"-shaped questions
+-- from the rows themselves instead of typing "unreleased" into the search
+-- terms (which would never match search_text and return nothing) or, worse,
+-- inventing a track name that was never in the catalogue.
+SELECT id, name, artists, mix_name, release_date, is_unreleased, genre
+FROM songs
+WHERE NOT is_collection
+  AND COALESCE(search_text,
+               LOWER(artists || ' ' || name || ' ' || COALESCE(mix_name, '')))
+        LIKE ALL ($1::text[])
+ORDER BY (parent_song_id IS NOT NULL), release_date DESC
+LIMIT 20;
+
 -- name: GetSongsLike :many
 -- Renditions are listed, not hidden. A remix is its own recording with its own links,
 -- and excluding it made those links unreachable through the bot at all. What made the

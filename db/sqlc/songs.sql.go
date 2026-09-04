@@ -2166,6 +2166,61 @@ func (q *Queries) RepointChildren(ctx context.Context, arg RepointChildrenParams
 	return result.RowsAffected(), nil
 }
 
+const searchSongsForAgent = `-- name: SearchSongsForAgent :many
+SELECT id, name, artists, mix_name, release_date, is_unreleased, genre
+FROM songs
+WHERE NOT is_collection
+  AND COALESCE(search_text,
+               LOWER(artists || ' ' || name || ' ' || COALESCE(mix_name, '')))
+        LIKE ALL ($1::text[])
+ORDER BY (parent_song_id IS NOT NULL), release_date DESC
+LIMIT 20
+`
+
+type SearchSongsForAgentRow struct {
+	ID           int64       `json:"id"`
+	Name         string      `json:"name"`
+	Artists      string      `json:"artists"`
+	MixName      pgtype.Text `json:"mixName"`
+	ReleaseDate  pgtype.Text `json:"releaseDate"`
+	IsUnreleased bool        `json:"isUnreleased"`
+	Genre        pgtype.Text `json:"genre"`
+}
+
+// Backs the AI persona feature's "search_songs" tool (stmpdbot/ai). Same term
+// matching as GetSongsLike below, but also returns is_unreleased and genre so
+// the model can answer "favourite unreleased AREA21 track"-shaped questions
+// from the rows themselves instead of typing "unreleased" into the search
+// terms (which would never match search_text and return nothing) or, worse,
+// inventing a track name that was never in the catalogue.
+func (q *Queries) SearchSongsForAgent(ctx context.Context, dollar_1 []string) ([]SearchSongsForAgentRow, error) {
+	rows, err := q.db.Query(ctx, searchSongsForAgent, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchSongsForAgentRow
+	for rows.Next() {
+		var i SearchSongsForAgentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Artists,
+			&i.MixName,
+			&i.ReleaseDate,
+			&i.IsUnreleased,
+			&i.Genre,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setBeatportSlug = `-- name: SetBeatportSlug :execrows
 UPDATE songs SET beatport_slug = $2
 WHERE id = $1 AND beatport_slug IS DISTINCT FROM $2
