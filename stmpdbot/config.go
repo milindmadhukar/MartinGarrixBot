@@ -37,6 +37,35 @@ type Config struct {
 	// Storage is read by both binaries: the bot renders rank cards from it,
 	// the dashboard serves thumbnails and writes new uploads into it.
 	Storage StorageConfig `toml:"storage"`
+	// LLM is the experimental AI persona feature. See SetupLLM.
+	LLM LLMConfig `toml:"llm"`
+}
+
+// LLMConfig controls the experimental AI persona feature (mention/reply-to-bot
+// triggers an LLM response). It is deliberately kept to one small section so
+// the whole feature can be removed by deleting this struct, the stmpdbot/ai
+// package and its two call sites in main.go -- nothing else in the bot reads
+// from it.
+type LLMConfig struct {
+	// Enabled is an explicit pause switch, independent of whether ApiKey is
+	// set -- so the feature can be turned off instantly without touching the
+	// key. SetupLLM also leaves the client nil when ApiKey or BaseURL is
+	// empty, mirroring SetupBeatport.
+	Enabled bool `toml:"enabled"`
+	// BaseURL is the OpenAI-compatible chat completions endpoint, e.g.
+	// "https://cliproxy.milind.dev/v1/".
+	BaseURL string `toml:"base_url"`
+	APIKey  string `toml:"api_key"`
+	Model   string `toml:"model"`
+	// MaxContextMessages bounds how far up the Discord reply chain a
+	// triggered response walks for context.
+	MaxContextMessages int `toml:"max_context_messages"`
+	// MaxTokens caps the length of every completion, including the ones
+	// spent on tool-calling round-trips.
+	MaxTokens int `toml:"max_tokens"`
+	// CooldownSeconds is the minimum gap between two triggered responses to
+	// the same user, enforced in memory.
+	CooldownSeconds int `toml:"cooldown_seconds"`
 }
 
 type StorageConfig struct {

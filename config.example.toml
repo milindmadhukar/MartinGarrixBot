@@ -109,6 +109,23 @@ bot_api_secret = ""
 # the bot is already a member of.
 super_admin_ids = []
 
+[llm]
+# Experimental AI persona feature: replies when the bot is @mentioned or one
+# of its messages is replied to. See stmpdbot/ai for what it does and how to
+# remove it entirely. Costs real API money per reply -- leave enabled = false
+# unless you mean to run it.
+enabled = false
+# an OpenAI-compatible chat completions endpoint, e.g. a personal LLM proxy
+base_url = ""
+api_key = ""
+model = ""
+# how many hops up the Discord reply chain to walk for context
+max_context_messages = 6
+# cap on completion length, including tool-calling round-trips
+max_tokens = 4096
+# minimum gap between two triggered responses to the same user
+cooldown_seconds = 15
+
 [storage]
 # Where rank card background images live. Read by both the bot and the
 # dashboard. Empty defaults to "assets/backgrounds" -- the images baked into

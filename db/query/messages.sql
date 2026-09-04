@@ -65,3 +65,23 @@ user_updates AS (
 SELECT
     COALESCE((SELECT old_xp FROM prev), 0)::int         AS old_xp,
     COALESCE((SELECT new_xp FROM user_updates), 0)::int AS new_xp;
+
+-- name: SampleMessagesByContent :many
+-- Backs the AI persona feature's "sample_messages" tool (stmpdbot/ai). Content
+-- only, deliberately: author_id is never selected, because a sampled snippet
+-- may be echoed back into a public channel by the model and must never be
+-- presentable as a specific member's words.
+SELECT content FROM messages
+WHERE guild_id = sqlc.arg(guild_id)
+  AND content ILIKE '%' || sqlc.arg(term)::text || '%'
+ORDER BY random()
+LIMIT sqlc.arg(row_limit);
+
+-- name: GetRandomMessageSample :many
+-- Feeds the one-off scripts/analyze-fandom-voice pass, which distills a large
+-- random sample into the static style guide at stmpdbot/ai/persona.md. Not
+-- read by the running bot.
+SELECT content FROM messages
+WHERE guild_id = sqlc.arg(guild_id)
+ORDER BY random()
+LIMIT sqlc.arg(row_limit);

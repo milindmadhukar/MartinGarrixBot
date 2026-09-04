@@ -11,6 +11,41 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getRandomMessageSample = `-- name: GetRandomMessageSample :many
+SELECT content FROM messages
+WHERE guild_id = $1
+ORDER BY random()
+LIMIT $2
+`
+
+type GetRandomMessageSampleParams struct {
+	GuildID  int64 `json:"guildId"`
+	RowLimit int32 `json:"rowLimit"`
+}
+
+// Feeds the one-off scripts/analyze-fandom-voice pass, which distills a large
+// random sample into the static style guide at stmpdbot/ai/persona.md. Not
+// read by the running bot.
+func (q *Queries) GetRandomMessageSample(ctx context.Context, arg GetRandomMessageSampleParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, getRandomMessageSample, arg.GuildID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var content string
+		if err := rows.Scan(&content); err != nil {
+			return nil, err
+		}
+		items = append(items, content)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const messageSent = `-- name: MessageSent :one
 WITH cfg AS (
     SELECT COALESCE(g.xp_multiplier, 1.0) AS mult
@@ -108,4 +143,42 @@ func (q *Queries) MessageSent(ctx context.Context, arg MessageSentParams) (Messa
 	var i MessageSentRow
 	err := row.Scan(&i.OldXp, &i.NewXp)
 	return i, err
+}
+
+const sampleMessagesByContent = `-- name: SampleMessagesByContent :many
+SELECT content FROM messages
+WHERE guild_id = $1
+  AND content ILIKE '%' || $2::text || '%'
+ORDER BY random()
+LIMIT $3
+`
+
+type SampleMessagesByContentParams struct {
+	GuildID  int64  `json:"guildId"`
+	Term     string `json:"term"`
+	RowLimit int32  `json:"rowLimit"`
+}
+
+// Backs the AI persona feature's "sample_messages" tool (stmpdbot/ai). Content
+// only, deliberately: author_id is never selected, because a sampled snippet
+// may be echoed back into a public channel by the model and must never be
+// presentable as a specific member's words.
+func (q *Queries) SampleMessagesByContent(ctx context.Context, arg SampleMessagesByContentParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, sampleMessagesByContent, arg.GuildID, arg.Term, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var content string
+		if err := rows.Scan(&content); err != nil {
+			return nil, err
+		}
+		items = append(items, content)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

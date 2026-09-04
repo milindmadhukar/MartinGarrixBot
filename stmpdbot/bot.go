@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	pgxStdlib "github.com/jackc/pgx/v5/stdlib"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
+	"github.com/milindmadhukar/STMPDBot/stmpdbot/ai"
 	"github.com/milindmadhukar/STMPDBot/utils"
 	"google.golang.org/api/youtube/v3"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -51,6 +52,9 @@ type STMPDBot struct {
 	RedditToken    utils.RedditToken
 	RadioManager   *utils.RadioManager
 	BeatportClient *utils.BeatportClient
+	// AIClient is nil unless the experimental AI persona feature is
+	// configured and enabled -- see SetupLLM and stmpdbot/ai.
+	AIClient *ai.Client
 
 	// resolveCache memoises user lookups made by the internal API, so paging
 	// through a log does not re-request the same moderators on every page.
@@ -248,6 +252,30 @@ func (b *STMPDBot) SetupBeatport() error {
 		slog.String("label_id", config.LabelID),
 		slog.Int("artist_count", len(config.ArtistIDs)),
 		slog.Int("max_tracks", maxTracks))
+	return nil
+}
+
+// SetupLLM initializes the experimental AI persona client. It follows
+// SetupBeatport's shape on purpose: an unconfigured or disabled feature
+// leaves b.AIClient nil rather than erroring, and every call site guards on
+// that nil rather than on a separate flag.
+func (b *STMPDBot) SetupLLM() error {
+	if !b.Cfg.LLM.Enabled {
+		slog.Warn("AI persona feature disabled (llm.enabled = false)")
+		return nil
+	}
+	if b.Cfg.LLM.BaseURL == "" || b.Cfg.LLM.APIKey == "" {
+		slog.Warn("AI persona feature not configured, mention/reply triggers will be disabled")
+		return nil
+	}
+
+	maxTokens := b.Cfg.LLM.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+
+	b.AIClient = ai.NewClient(b.Cfg.LLM.BaseURL, b.Cfg.LLM.APIKey, b.Cfg.LLM.Model, maxTokens)
+	slog.Info("AI persona client initialized", slog.String("model", b.Cfg.LLM.Model))
 	return nil
 }
 

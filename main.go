@@ -117,6 +117,10 @@ func main() {
 		listeners.VoiceStateUpdateListener(b),
 		listeners.VoiceServerUpdateListener(b),
 		listeners.MessageCreateListener(b),
+		// Experimental: answers a mention or a reply to the bot with an LLM
+		// response. Stays a no-op listener until b.SetupLLM() below sets
+		// b.AIClient -- see stmpdbot/ai for how to remove this entirely.
+		listeners.AIListener(b),
 		listeners.GuildJoinListener(b),
 		listeners.GuildMemberJoinListener(b),
 		listeners.GuildMemberLeaveListener(b),
@@ -144,6 +148,12 @@ func main() {
 	// Setup Beatport client
 	if err = b.SetupBeatport(); err != nil {
 		slog.Warn("Failed to setup Beatport client - beatport features will be disabled", slog.Any("err", err))
+	}
+
+	// Experimental AI persona feature. See the stmpdbot/ai package doc
+	// comment for how to remove it entirely once the trial is over.
+	if err = b.SetupLLM(); err != nil {
+		slog.Warn("Failed to setup AI persona client - mention/reply triggers will be disabled", slog.Any("err", err))
 	}
 
 	// Setup Lavalink (non-blocking, warnings only)
