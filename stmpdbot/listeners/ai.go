@@ -3,6 +3,8 @@ package listeners
 import (
 	"context"
 	"log/slog"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,40 +38,56 @@ func AIListener(b *stmpdbot.STMPDBot) bot.EventListener {
 		if e.Message.MentionEveryone {
 			return
 		}
-		if !triggered(b, e.Message) {
+
+		isReply, ok := triggered(b, e.Message)
+		if !ok {
 			return
 		}
 
-		cooldown := time.Duration(b.Cfg.LLM.CooldownSeconds) * time.Second
-		if cooldown <= 0 {
-			cooldown = 15 * time.Second
-		}
-		if !cooldowns.allow(e.Message.Author.ID, cooldown) {
-			return
+		// A reply to the bot's own message is a conversation someone is
+		// already in and actively waiting on -- cooldown-blocking it silently
+		// dropped a message a user was staring at, which is worse than the
+		// spam the cooldown exists to prevent. Only a fresh, unsolicited
+		// mention is rate-limited.
+		if !isReply {
+			cooldown := time.Duration(b.Cfg.LLM.CooldownSeconds) * time.Second
+			if cooldown <= 0 {
+				cooldown = 15 * time.Second
+			}
+			if !cooldowns.allow(e.Message.Author.ID, cooldown) {
+				slog.Debug("ai: cooldown active, skipping mention",
+					slog.String("user_id", e.Message.Author.ID.String()))
+				return
+			}
 		}
 
-		go respond(b, e)
+		go respond(b, e, isReply)
 	})
 }
 
 // triggered reports whether message either @mentions the bot or replies to
-// one of the bot's own messages.
-func triggered(b *stmpdbot.STMPDBot, message discord.Message) bool {
+// one of the bot's own messages, and which of the two it was.
+func triggered(b *stmpdbot.STMPDBot, message discord.Message) (isReply, ok bool) {
 	selfID := b.Client.ID()
+
+	if message.ReferencedMessage != nil && message.ReferencedMessage.Author.ID == selfID {
+		return true, true
+	}
 
 	for _, user := range message.Mentions {
 		if user.ID == selfID {
-			return true
+			return false, true
 		}
 	}
 
-	return message.ReferencedMessage != nil && message.ReferencedMessage.Author.ID == selfID
+	return false, false
 }
 
 // respond runs off the gateway goroutine: an LLM round-trip (plus its own
 // tool-calling round-trips) can easily take longer than disgo's event
 // dispatch should be blocked for.
-func respond(b *stmpdbot.STMPDBot, e *events.MessageCreate) {
+func respond(b *stmpdbot.STMPDBot, e *events.MessageCreate, isReply bool) {
+	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -81,14 +99,21 @@ func respond(b *stmpdbot.STMPDBot, e *events.MessageCreate) {
 
 	content, err := b.AIClient.Respond(ctx, b.Queries, int64(*e.GuildID), history)
 	if err != nil {
-		slog.Error("ai: failed to generate a response", slog.Any("err", err))
+		slog.Error("ai: failed to generate a response",
+			slog.String("user_id", e.Message.Author.ID.String()),
+			slog.Bool("is_reply", isReply), slog.Any("err", err))
 		return
 	}
 	if content == "" {
+		slog.Warn("ai: model returned an empty reply",
+			slog.String("user_id", e.Message.Author.ID.String()), slog.Bool("is_reply", isReply))
 		return
 	}
 
 	utils.ReplyToMessage(b.Client, e.ChannelID, e.Message, content)
+	slog.Info("ai: replied",
+		slog.String("user_id", e.Message.Author.ID.String()),
+		slog.Bool("is_reply", isReply), slog.Duration("took", time.Since(start)))
 }
 
 // buildHistory walks the Discord reply chain backwards from the triggering
@@ -132,7 +157,8 @@ func buildHistory(ctx context.Context, b *stmpdbot.STMPDBot, e *events.MessageCr
 		if refMsg.Author.ID == selfID {
 			role = "assistant"
 		}
-		chain = append(chain, turn{role: role, content: refMsg.Content})
+		content := resolveMentions(b, *e.GuildID, refMsg.Content, refMsg.Mentions)
+		chain = append(chain, turn{role: role, content: content})
 		current = *refMsg
 	}
 
@@ -141,8 +167,50 @@ func buildHistory(ctx context.Context, b *stmpdbot.STMPDBot, e *events.MessageCr
 	for i := len(chain) - 1; i >= 0; i-- {
 		messages = append(messages, ai.Message{Role: chain[i].role, Content: chain[i].content})
 	}
-	messages = append(messages, ai.Message{Role: "user", Content: e.Message.Content})
+	messages = append(messages, ai.Message{
+		Role:    "user",
+		Content: resolveMentions(b, *e.GuildID, e.Message.Content, e.Message.Mentions),
+	})
 	return messages
+}
+
+var mentionPattern = regexp.MustCompile(`<@!?(\d+)>`)
+
+// resolveMentions replaces Discord's raw <@id> mention syntax with a readable
+// display name, so the model sees "what do you think about Sourav?" instead
+// of an opaque snowflake it has no way to identify. Prefers the guild
+// nickname (from cache) over the global display name over the bare username,
+// same precedence Discord's own client uses to show a mention.
+func resolveMentions(b *stmpdbot.STMPDBot, guildID snowflake.ID, content string, mentions []discord.User) string {
+	if len(mentions) == 0 || !strings.Contains(content, "<@") {
+		return content
+	}
+
+	names := make(map[snowflake.ID]string, len(mentions))
+	for _, u := range mentions {
+		names[u.ID] = displayName(b, guildID, u)
+	}
+
+	return mentionPattern.ReplaceAllStringFunc(content, func(token string) string {
+		id, err := snowflake.Parse(mentionPattern.FindStringSubmatch(token)[1])
+		if err != nil {
+			return token
+		}
+		if name, ok := names[id]; ok {
+			return "@" + name
+		}
+		return token
+	})
+}
+
+func displayName(b *stmpdbot.STMPDBot, guildID snowflake.ID, u discord.User) string {
+	if member, ok := b.Client.Caches.Member(guildID, u.ID); ok && member.Nick != nil && *member.Nick != "" {
+		return *member.Nick
+	}
+	if u.GlobalName != nil && *u.GlobalName != "" {
+		return *u.GlobalName
+	}
+	return u.Username
 }
 
 // cooldowns is a simple per-user in-memory rate limit, kept out of the
