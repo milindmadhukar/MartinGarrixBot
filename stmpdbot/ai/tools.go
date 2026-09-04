@@ -15,7 +15,7 @@ import (
 // Tools returns the schema handed to the model on every request. Keep this in
 // sync with the case statements in Dispatch.
 func Tools() []Tool {
-	return []Tool{
+	tools := []Tool{
 		{Type: "function", Function: ToolFunction{
 			Name:        "search_songs",
 			Description: "Search the Martin Garrix / STMPD RCRDS song catalogue by title and/or artist. query must be ONLY artist and/or title words -- descriptive words like \"unreleased\", \"best\" or \"favourite\" will never match and return nothing. Each result already carries is_unreleased and release_date, so filter/pick from the results yourself rather than searching for release status. Call get_song_details on a song_id for lyrics or links. If nothing you're looking for is in the results, say so -- never invent a track name that isn't in the catalogue.",
@@ -67,12 +67,17 @@ func Tools() []Tool {
 			}`),
 		}},
 	}
+	tools = append(tools, memoryTools()...)
+	return tools
 }
 
-// Dispatch executes one tool call against the given guild's data and returns
-// a JSON string suitable to send back as a role "tool" message.
-func Dispatch(ctx context.Context, queries *db.Queries, guildID int64, name, argsJSON string) (string, error) {
+// Dispatch executes one tool call against the given guild's (and, for the
+// memory tools, the given user's) data and returns a JSON string suitable to
+// send back as a role "tool" message.
+func Dispatch(ctx context.Context, queries *db.Queries, guildID, userID int64, name, argsJSON string) (string, error) {
 	switch name {
+	case "remember", "forget":
+		return dispatchMemoryTool(ctx, queries, guildID, userID, name, argsJSON)
 	case "search_songs":
 		var args struct {
 			Query string `json:"query"`

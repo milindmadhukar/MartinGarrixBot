@@ -14,22 +14,23 @@ import (
 	"github.com/disgoorg/disgo/rest"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/milindmadhukar/STMPDBot/stmpdbot"
-	"github.com/milindmadhukar/STMPDBot/stmpdbot/ai"
 	"github.com/milindmadhukar/STMPDBot/utils"
 )
 
-// AIListener answers a mention or a reply to one of the bot's own messages
-// with an LLM-generated response, grounded on the song catalogue and this
-// server's own message history via stmpdbot/ai's tools.
+// AIListener answers a mention or a reply to one of the bot's own messages by
+// forwarding the conversation to the standalone AI persona service
+// (cmd/agent), grounded on the song catalogue, tour dates and this server's
+// own message history via that service's tools.
 //
-// This is the experimental AI persona feature's only entry point into the
-// rest of the bot: deleting this file, the stmpdbot/ai package, LLMConfig
-// and the b.SetupLLM()/AIListener(b) lines in main.go removes it completely.
+// This is the AI persona feature's only entry point into the rest of the
+// bot: deleting this file, LLMConfig, and the b.SetupLLM()/AIListener(b)
+// lines in main.go removes the trigger completely. The agent service itself
+// (cmd/agent) is a separate deployable unit.
 func AIListener(b *stmpdbot.STMPDBot) bot.EventListener {
 	cooldowns := newCooldowns()
 
 	return bot.NewListenerFunc(func(e *events.MessageCreate) {
-		if b.AIClient == nil {
+		if b.AgentClient == nil {
 			return
 		}
 		if e.Message.Author.Bot || e.Message.Author.System || e.GuildID == nil {
@@ -95,9 +96,9 @@ func respond(b *stmpdbot.STMPDBot, e *events.MessageCreate, isReply bool) {
 		slog.Debug("ai: failed to send typing indicator", slog.Any("err", err))
 	}
 
-	history := buildHistory(ctx, b, e)
+	conversation := buildConversation(ctx, b, e)
 
-	content, err := b.AIClient.Respond(ctx, b.Queries, int64(*e.GuildID), history)
+	content, err := b.AgentClient.Respond(ctx, int64(*e.GuildID), int64(e.Message.Author.ID), conversation)
 	if err != nil {
 		slog.Error("ai: failed to generate a response",
 			slog.String("user_id", e.Message.Author.ID.String()),
@@ -116,12 +117,13 @@ func respond(b *stmpdbot.STMPDBot, e *events.MessageCreate, isReply bool) {
 		slog.Bool("is_reply", isReply), slog.Duration("took", time.Since(start)))
 }
 
-// buildHistory walks the Discord reply chain backwards from the triggering
-// message, turning it into a conversation ai.Client.Respond can answer.
-// Stateless on purpose: no conversation is ever stored -- it is
-// reconstructed from Discord's own reply references every time the bot is
-// pinged.
-func buildHistory(ctx context.Context, b *stmpdbot.STMPDBot, e *events.MessageCreate) []ai.Message {
+// buildConversation walks the Discord reply chain backwards from the
+// triggering message, turning it into the conversation sent to the agent
+// service -- no system prompt here, the agent service owns its own identity,
+// persona and memory and assembles that itself. Nothing about a conversation
+// is ever stored on the bot's side -- it is reconstructed from Discord's own
+// reply references every time the bot is pinged.
+func buildConversation(ctx context.Context, b *stmpdbot.STMPDBot, e *events.MessageCreate) []utils.AgentMessage {
 	maxHops := b.Cfg.LLM.MaxContextMessages
 	if maxHops <= 0 {
 		maxHops = 6
@@ -162,12 +164,11 @@ func buildHistory(ctx context.Context, b *stmpdbot.STMPDBot, e *events.MessageCr
 		current = *refMsg
 	}
 
-	messages := make([]ai.Message, 0, len(chain)+2)
-	messages = append(messages, ai.Message{Role: "system", Content: ai.SystemPrompt()})
+	messages := make([]utils.AgentMessage, 0, len(chain)+1)
 	for i := len(chain) - 1; i >= 0; i-- {
-		messages = append(messages, ai.Message{Role: chain[i].role, Content: chain[i].content})
+		messages = append(messages, utils.AgentMessage{Role: chain[i].role, Content: chain[i].content})
 	}
-	messages = append(messages, ai.Message{
+	messages = append(messages, utils.AgentMessage{
 		Role:    "user",
 		Content: resolveMentions(ctx, b, *e.GuildID, e.Message.Content, e.Message.Mentions),
 	})

@@ -24,7 +24,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	pgxStdlib "github.com/jackc/pgx/v5/stdlib"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
-	"github.com/milindmadhukar/STMPDBot/stmpdbot/ai"
 	"github.com/milindmadhukar/STMPDBot/utils"
 	"google.golang.org/api/youtube/v3"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -52,9 +51,10 @@ type STMPDBot struct {
 	RedditToken    utils.RedditToken
 	RadioManager   *utils.RadioManager
 	BeatportClient *utils.BeatportClient
-	// AIClient is nil unless the experimental AI persona feature is
-	// configured and enabled -- see SetupLLM and stmpdbot/ai.
-	AIClient *ai.Client
+	// AgentClient is nil unless the AI persona feature is configured and
+	// enabled -- see SetupLLM. It talks to the standalone agent service
+	// (cmd/agent) over HTTP; the bot never holds an LLM API key itself.
+	AgentClient *utils.AgentClient
 
 	// resolveCache memoises user lookups made by the internal API, so paging
 	// through a log does not re-request the same moderators on every page.
@@ -255,27 +255,23 @@ func (b *STMPDBot) SetupBeatport() error {
 	return nil
 }
 
-// SetupLLM initializes the experimental AI persona client. It follows
-// SetupBeatport's shape on purpose: an unconfigured or disabled feature
-// leaves b.AIClient nil rather than erroring, and every call site guards on
-// that nil rather than on a separate flag.
+// SetupLLM points the bot at the standalone AI persona service (cmd/agent).
+// It follows SetupBeatport's shape on purpose: an unconfigured or disabled
+// feature leaves b.AgentClient nil rather than erroring, and every call site
+// guards on that nil rather than on a separate flag. The bot itself never
+// holds an LLM API key -- that lives only in the agent service's own config.
 func (b *STMPDBot) SetupLLM() error {
 	if !b.Cfg.LLM.Enabled {
 		slog.Warn("AI persona feature disabled (llm.enabled = false)")
 		return nil
 	}
-	if b.Cfg.LLM.BaseURL == "" || b.Cfg.LLM.APIKey == "" {
+	if b.Cfg.LLM.AgentURL == "" || b.Cfg.LLM.AgentSecret == "" {
 		slog.Warn("AI persona feature not configured, mention/reply triggers will be disabled")
 		return nil
 	}
 
-	maxTokens := b.Cfg.LLM.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = 4096
-	}
-
-	b.AIClient = ai.NewClient(b.Cfg.LLM.BaseURL, b.Cfg.LLM.APIKey, b.Cfg.LLM.Model, maxTokens)
-	slog.Info("AI persona client initialized", slog.String("model", b.Cfg.LLM.Model))
+	b.AgentClient = utils.NewAgentClient(b.Cfg.LLM.AgentURL, b.Cfg.LLM.AgentSecret)
+	slog.Info("AI persona agent client initialized", slog.String("agent_url", b.Cfg.LLM.AgentURL))
 	return nil
 }
 

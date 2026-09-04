@@ -67,6 +67,30 @@ services:
       # reachable on the stmpdbot network only and must never be published.
       - 8082
 
+  agent:
+    image: ghcr.io/milindmadhukar/stmpdbot-agent:main
+    container_name: stmpdbot-agent
+    labels:
+      # Same rolling-tag digest watch as bot/dashboard, so a push to main
+      # redeploys this on its own -- the entire point of splitting it out.
+      - "wud.watch.digest=true"
+    volumes:
+      # The same file the bot reads. The database credentials and the
+      # [llm]/[agent] shared secret therefore exist exactly once; this
+      # refuses to start if its copy of the secret is empty.
+      - ./config.docker.toml:/var/lib/config.toml
+    command: -config=/var/lib/config.toml
+    environment:
+      - TZ=Asia/Kolkata
+    restart: unless-stopped
+    networks:
+      - stmpdbot       # reached by the bot's internal HTTP call
+      - db             # reaches postgres
+    # No `ports:` on purpose -- reachable only from the bot, over the
+    # internal stmpdbot network, same as the bot's own internal API.
+    expose:
+      - 8083
+
   dashboard:
     image: ghcr.io/milindmadhukar/stmpdbot-dashboard:main
     container_name: stmpdbot-dashboard

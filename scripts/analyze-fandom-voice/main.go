@@ -58,11 +58,11 @@ func main() {
 		return
 	}
 
-	if !env.Config.LLM.Enabled || env.Config.LLM.APIKey == "" {
-		script.Fatal("llm.enabled/llm.api_key are not set in the given config -- pass -no-llm to skip synthesis", nil)
+	if !env.Config.LLM.Enabled || env.Config.Agent.APIKey == "" {
+		script.Fatal("llm.enabled/agent.api_key are not set in the given config -- pass -no-llm to skip synthesis", nil)
 	}
 
-	client := ai.NewClient(env.Config.LLM.BaseURL, env.Config.LLM.APIKey, env.Config.LLM.Model, 1500)
+	client := ai.NewClient(env.Config.Agent.BaseURL, env.Config.Agent.APIKey, env.Config.Agent.Model, 1500)
 	guide, err := synthesize(ctx, client, rows, stats)
 	if err != nil {
 		script.Fatal("failed to synthesize the voice guide", err)

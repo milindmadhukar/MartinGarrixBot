@@ -1,12 +1,14 @@
-// Package ai is the experimental AI persona feature: a chat-completions client,
-// a small set of tools backed by the catalogue and message tables, and the
-// agent loop that ties them together.
+// Package ai is the AI persona feature's core: a chat-completions client, the
+// tools it can call (catalogue, tour dates, message sampling, memory), and
+// the agent loop that ties them together. It is imported only by cmd/agent
+// -- the standalone service that is the feature's only home for the LLM API
+// key and the tool-calling loop, kept out of the bot's own process so a
+// prompt/tool/memory change redeploys independently of the bot.
 //
-// This package is intentionally the only place the feature's code lives.
-// Removing the feature is: delete this directory, delete LLMConfig from
-// stmpdbot/config.go, and delete its two call sites in main.go
-// (b.SetupLLM() and listeners.AIListener(b)). Nothing else in the bot
-// imports it.
+// Removing the feature entirely: delete this package, cmd/agent, the
+// stmpdbot/listeners/ai.go trigger, LLMConfig/AgentConfig from
+// stmpdbot/config.go, the agent Docker/compose service, and the
+// b.SetupLLM()/AIListener(b) call sites in main.go.
 package ai
 
 import (

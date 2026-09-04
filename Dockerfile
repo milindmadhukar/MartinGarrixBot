@@ -22,7 +22,9 @@ RUN export GOOS=$(echo ${TARGETPLATFORM} | cut -d'/' -f1) \
     && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
        go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o bot . \
     && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
-       go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o stmpddashboard ./cmd/dashboard
+       go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o stmpddashboard ./cmd/dashboard \
+    && CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
+       go build -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o stmpdagent ./cmd/agent
 
 # --- dashboard image -------------------------------------------------------
 # Deliberately before the bot stage: buildx defaults to the LAST stage, so
@@ -48,6 +50,30 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://127.0.0.1:8080/healthz || exit 1
 
 ENTRYPOINT ["/app/dashboard"]
+
+CMD ["-config", "/var/lib/config.toml"]
+
+# --- agent image -------------------------------------------------------------
+# The standalone AI persona service (cmd/agent). Deliberately its own image
+# rather than a mode of the bot binary: it is the only container that ever
+# holds the LLM API key, and it is the only one that needs to redeploy when a
+# prompt, tool or memory change ships.
+FROM --platform=$TARGETPLATFORM alpine AS agent
+
+RUN apk add --no-cache tzdata
+
+WORKDIR /app
+
+# SOUL.md and persona.md are go:embed-ed into the binary at build time, so
+# nothing else needs to be copied in here.
+COPY --from=build /build/stmpdagent /app/agent
+
+EXPOSE 8083
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://127.0.0.1:8083/health || exit 1
+
+ENTRYPOINT ["/app/agent"]
 
 CMD ["-config", "/var/lib/config.toml"]
 

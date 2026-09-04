@@ -8,6 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AgentMemory struct {
+	ID        int64              `json:"id"`
+	Scope     string             `json:"scope"`
+	ScopeID   int64              `json:"scopeId"`
+	GuildID   int64              `json:"guildId"`
+	Content   string             `json:"content"`
+	CreatedAt pgtype.Timestamptz `json:"createdAt"`
+}
+
 type AnniversaryPost struct {
 	GuildID   int64              `json:"guildId"`
 	LocalDate pgtype.Date        `json:"localDate"`

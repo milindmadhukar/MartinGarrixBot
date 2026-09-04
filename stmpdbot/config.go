@@ -37,35 +37,59 @@ type Config struct {
 	// Storage is read by both binaries: the bot renders rank cards from it,
 	// the dashboard serves thumbnails and writes new uploads into it.
 	Storage StorageConfig `toml:"storage"`
-	// LLM is the experimental AI persona feature. See SetupLLM.
+	// LLM is read by the bot: whether/how to forward a triggered mention or
+	// reply to the standalone agent service. See SetupLLM.
 	LLM LLMConfig `toml:"llm"`
+	// Agent is read only by cmd/agent -- the standalone AI persona service.
+	// It lives in the same file as everything else here for the same reason
+	// Dashboard does: one config format, one LoadConfig, each process
+	// ignores the sections it doesn't own.
+	Agent AgentConfig `toml:"agent"`
 }
 
-// LLMConfig controls the experimental AI persona feature (mention/reply-to-bot
-// triggers an LLM response). It is deliberately kept to one small section so
-// the whole feature can be removed by deleting this struct, the stmpdbot/ai
-// package and its two call sites in main.go -- nothing else in the bot reads
-// from it.
+// LLMConfig controls the bot's side of the AI persona feature: whether the
+// trigger listener is active, and how to reach the standalone agent service
+// that actually talks to the LLM. It is deliberately kept to one small
+// section so the trigger can be removed by deleting this struct, the two
+// call sites in main.go, and stmpdbot/listeners/ai.go.
 type LLMConfig struct {
-	// Enabled is an explicit pause switch, independent of whether ApiKey is
-	// set -- so the feature can be turned off instantly without touching the
-	// key. SetupLLM also leaves the client nil when ApiKey or BaseURL is
-	// empty, mirroring SetupBeatport.
+	// Enabled is an explicit pause switch, independent of whether AgentURL is
+	// set -- so the feature can be turned off instantly without touching
+	// anything else. SetupLLM also leaves the client nil when AgentURL or
+	// AgentSecret is empty, mirroring SetupBeatport.
 	Enabled bool `toml:"enabled"`
+	// AgentURL points at cmd/agent's Address, e.g. "http://agent:8083".
+	AgentURL string `toml:"agent_url"`
+	// AgentSecret must equal Agent.Secret below.
+	AgentSecret string `toml:"agent_secret"`
+	// MaxContextMessages bounds how far up the Discord reply chain a
+	// triggered response walks for context.
+	MaxContextMessages int `toml:"max_context_messages"`
+	// CooldownSeconds is the minimum gap between two triggered responses to
+	// the same user, enforced in memory.
+	CooldownSeconds int `toml:"cooldown_seconds"`
+}
+
+// AgentConfig controls cmd/agent, the standalone process that actually holds
+// the LLM API key and runs the tool-calling loop. Kept out of the bot's own
+// container entirely -- the bot only ever talks to it over HTTP via
+// LLM.AgentURL/AgentSecret above.
+type AgentConfig struct {
+	// Address defaults to ":8083" when empty. Container-internal only; it
+	// must never be published to the host, same as Internal.Address.
+	Address string `toml:"address"`
+	// Secret is presented by the bot in the X-Internal-Token header. The
+	// server refuses to start when it is empty rather than running an
+	// unauthenticated endpoint that spends real API money per request.
+	Secret string `toml:"secret"`
 	// BaseURL is the OpenAI-compatible chat completions endpoint, e.g.
 	// "https://cliproxy.milind.dev/v1/".
 	BaseURL string `toml:"base_url"`
 	APIKey  string `toml:"api_key"`
 	Model   string `toml:"model"`
-	// MaxContextMessages bounds how far up the Discord reply chain a
-	// triggered response walks for context.
-	MaxContextMessages int `toml:"max_context_messages"`
 	// MaxTokens caps the length of every completion, including the ones
 	// spent on tool-calling round-trips.
 	MaxTokens int `toml:"max_tokens"`
-	// CooldownSeconds is the minimum gap between two triggered responses to
-	// the same user, enforced in memory.
-	CooldownSeconds int `toml:"cooldown_seconds"`
 }
 
 type StorageConfig struct {

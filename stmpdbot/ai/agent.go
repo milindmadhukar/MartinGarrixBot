@@ -12,13 +12,19 @@ import (
 // maxToolRounds bounds how many tool round-trips one triggered response can
 // spend before it is forced to answer in text. Each round is one completion
 // call, so this is also a hard cap on the cost of a single Discord ping.
-const maxToolRounds = 3
+//
+// Raised from 3 once the agent moved into its own process (cmd/agent): a
+// deep tool chain here no longer risks starving the bot's gateway dispatch
+// or its 60s per-message context, since this now runs in an isolated HTTP
+// handler with nothing else waiting on it.
+const maxToolRounds = 8
 
 // Respond runs the tool-calling loop and returns the assistant's final text
 // reply. history must already open with a system message -- normally
-// SystemPrompt() -- followed by the reconstructed conversation and the
-// triggering message.
-func (c *Client) Respond(ctx context.Context, queries *db.Queries, guildID int64, history []Message) (string, error) {
+// SystemPrompt() plus LoadMemoryContext's output -- followed by the
+// reconstructed conversation and the triggering message. userID is who
+// triggered this conversation; it scopes the remember/forget tools.
+func (c *Client) Respond(ctx context.Context, queries *db.Queries, guildID, userID int64, history []Message) (string, error) {
 	messages := append([]Message(nil), history...)
 
 	for round := 0; round <= maxToolRounds; round++ {
@@ -40,7 +46,7 @@ func (c *Client) Respond(ctx context.Context, queries *db.Queries, guildID int64
 
 		messages = append(messages, reply)
 		for _, call := range reply.ToolCalls {
-			result, err := Dispatch(ctx, queries, guildID, call.Function.Name, call.Function.Arguments)
+			result, err := Dispatch(ctx, queries, guildID, userID, call.Function.Name, call.Function.Arguments)
 			if err != nil {
 				slog.Warn("ai: tool call failed",
 					slog.String("tool", call.Function.Name), slog.Any("err", err))

@@ -29,6 +29,8 @@ jobs:
             suffix: ""
           - target: dashboard
             suffix: "-dashboard"
+          - target: agent
+            suffix: "-agent"
     permissions:
       contents: read
       packages: write
