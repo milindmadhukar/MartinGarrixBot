@@ -129,3 +129,53 @@ func (q *Queries) InsertTourShow(ctx context.Context, arg InsertTourShowParams) 
 	)
 	return i, err
 }
+
+const searchTourShowsForAgent = `-- name: SearchTourShowsForAgent :many
+SELECT show_name, city, country, venue, show_date, ticket_url
+FROM tour_shows
+WHERE $1::text IS NULL
+   OR city ILIKE '%' || $1::text || '%'
+   OR country ILIKE '%' || $1::text || '%'
+ORDER BY show_date ASC
+`
+
+type SearchTourShowsForAgentRow struct {
+	ShowName  string      `json:"showName"`
+	City      string      `json:"city"`
+	Country   string      `json:"country"`
+	Venue     string      `json:"venue"`
+	ShowDate  pgtype.Date `json:"showDate"`
+	TicketUrl pgtype.Text `json:"ticketUrl"`
+}
+
+// Backs the AI persona feature's "search_tour_shows" tool (stmpdbot/ai).
+// location is optional and matches city or country; the table is small
+// enough (~80 rows) that upcoming/past is filtered in Go rather than here,
+// so one query serves both "when's he playing near me" and "did he already
+// play X".
+func (q *Queries) SearchTourShowsForAgent(ctx context.Context, location pgtype.Text) ([]SearchTourShowsForAgentRow, error) {
+	rows, err := q.db.Query(ctx, searchTourShowsForAgent, location)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchTourShowsForAgentRow
+	for rows.Next() {
+		var i SearchTourShowsForAgentRow
+		if err := rows.Scan(
+			&i.ShowName,
+			&i.City,
+			&i.Country,
+			&i.Venue,
+			&i.ShowDate,
+			&i.TicketUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/milindmadhukar/STMPDBot/db/sqlc"
@@ -51,6 +53,17 @@ func Tools() []Tool {
 					"limit": {"type": "integer", "description": "how many snippets to return, at most 15"}
 				},
 				"required": ["topic"]
+			}`),
+		}},
+		{Type: "function", Function: ToolFunction{
+			Name:        "search_tour_shows",
+			Description: "Search Martin Garrix's tour dates: upcoming shows, or shows that already happened. Never guess a date, city or venue -- always call this instead.",
+			Parameters: json.RawMessage(`{
+				"type": "object",
+				"properties": {
+					"location": {"type": "string", "description": "a city or country to filter by, e.g. \"Amsterdam\" or \"Brazil\". Omit for all locations."},
+					"when": {"type": "string", "enum": ["upcoming", "past", "any"], "description": "defaults to \"upcoming\" if omitted"}
+				}
 			}`),
 		}},
 	}
@@ -131,6 +144,26 @@ func Dispatch(ctx context.Context, queries *db.Queries, guildID int64, name, arg
 		}
 		return marshal(rows)
 
+	case "search_tour_shows":
+		var args struct {
+			Location string `json:"location"`
+			When     string `json:"when"`
+		}
+		if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+			return "", fmt.Errorf("search_tour_shows: bad arguments: %w", err)
+		}
+
+		location := pgtype.Text{}
+		if args.Location != "" {
+			location = pgtype.Text{String: args.Location, Valid: true}
+		}
+
+		rows, err := queries.SearchTourShowsForAgent(ctx, location)
+		if err != nil {
+			return "", err
+		}
+		return marshal(filterTourShows(rows, args.When))
+
 	default:
 		return "", fmt.Errorf("ai: unknown tool %q", name)
 	}
@@ -152,6 +185,52 @@ type songDetails struct {
 	AppleMusicURL string `json:"apple_music_url,omitempty"`
 	YoutubeURL    string `json:"youtube_url,omitempty"`
 	BeatportURL   string `json:"beatport_url,omitempty"`
+}
+
+type tourShow struct {
+	ShowName  string `json:"show_name"`
+	City      string `json:"city"`
+	Country   string `json:"country"`
+	Venue     string `json:"venue"`
+	Date      string `json:"date"`
+	TicketURL string `json:"ticket_url,omitempty"`
+}
+
+// filterTourShows splits SearchTourShowsForAgent's date-ascending rows into
+// upcoming/past relative to now, and caps the result -- the table currently
+// holds around 80 rows total, small enough to filter in Go rather than SQL.
+func filterTourShows(rows []db.SearchTourShowsForAgentRow, when string) []tourShow {
+	if when == "" {
+		when = "upcoming"
+	}
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+
+	var out []tourShow
+	for _, r := range rows {
+		if !r.ShowDate.Valid {
+			continue
+		}
+		isPast := r.ShowDate.Time.Before(today)
+		if (when == "upcoming" && isPast) || (when == "past" && !isPast) {
+			continue
+		}
+		out = append(out, tourShow{
+			ShowName:  r.ShowName,
+			City:      r.City,
+			Country:   r.Country,
+			Venue:     r.Venue,
+			Date:      r.ShowDate.Time.Format("2006-01-02"),
+			TicketURL: text(r.TicketUrl),
+		})
+	}
+
+	if when == "past" {
+		sort.Slice(out, func(i, j int) bool { return out[i].Date > out[j].Date })
+	}
+	if len(out) > 15 {
+		out = out[:15]
+	}
+	return out
 }
 
 func text(t pgtype.Text) string {
