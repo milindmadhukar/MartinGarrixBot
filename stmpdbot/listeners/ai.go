@@ -157,7 +157,7 @@ func buildHistory(ctx context.Context, b *stmpdbot.STMPDBot, e *events.MessageCr
 		if refMsg.Author.ID == selfID {
 			role = "assistant"
 		}
-		content := resolveMentions(b, *e.GuildID, refMsg.Content, refMsg.Mentions)
+		content := resolveMentions(ctx, b, *e.GuildID, refMsg.Content, refMsg.Mentions)
 		chain = append(chain, turn{role: role, content: content})
 		current = *refMsg
 	}
@@ -169,7 +169,7 @@ func buildHistory(ctx context.Context, b *stmpdbot.STMPDBot, e *events.MessageCr
 	}
 	messages = append(messages, ai.Message{
 		Role:    "user",
-		Content: resolveMentions(b, *e.GuildID, e.Message.Content, e.Message.Mentions),
+		Content: resolveMentions(ctx, b, *e.GuildID, e.Message.Content, e.Message.Mentions),
 	})
 	return messages
 }
@@ -179,16 +179,16 @@ var mentionPattern = regexp.MustCompile(`<@!?(\d+)>`)
 // resolveMentions replaces Discord's raw <@id> mention syntax with a readable
 // display name, so the model sees "what do you think about Sourav?" instead
 // of an opaque snowflake it has no way to identify. Prefers the guild
-// nickname (from cache) over the global display name over the bare username,
-// same precedence Discord's own client uses to show a mention.
-func resolveMentions(b *stmpdbot.STMPDBot, guildID snowflake.ID, content string, mentions []discord.User) string {
+// nickname over the global display name over the bare username, same
+// precedence Discord's own client uses to show a mention.
+func resolveMentions(ctx context.Context, b *stmpdbot.STMPDBot, guildID snowflake.ID, content string, mentions []discord.User) string {
 	if len(mentions) == 0 || !strings.Contains(content, "<@") {
 		return content
 	}
 
 	names := make(map[snowflake.ID]string, len(mentions))
 	for _, u := range mentions {
-		names[u.ID] = displayName(b, guildID, u)
+		names[u.ID] = displayName(ctx, b, guildID, u)
 	}
 
 	return mentionPattern.ReplaceAllStringFunc(content, func(token string) string {
@@ -203,9 +203,20 @@ func resolveMentions(b *stmpdbot.STMPDBot, guildID snowflake.ID, content string,
 	})
 }
 
-func displayName(b *stmpdbot.STMPDBot, guildID snowflake.ID, u discord.User) string {
-	if member, ok := b.Client.Caches.Member(guildID, u.ID); ok && member.Nick != nil && *member.Nick != "" {
-		return *member.Nick
+// displayName tries the member cache first, which only holds members disgo
+// has actually seen a gateway event for -- join, update, voice state,
+// presence. A message mentioning someone who is otherwise quiet (the exact
+// "Sourav (WEIGHTLESS Ambassador)" case) is a routine cache miss, not an
+// edge case, so a REST lookup is the fallback rather than an afterthought.
+func displayName(ctx context.Context, b *stmpdbot.STMPDBot, guildID snowflake.ID, u discord.User) string {
+	if member, ok := b.Client.Caches.Member(guildID, u.ID); ok {
+		if member.Nick != nil && *member.Nick != "" {
+			return *member.Nick
+		}
+	} else if member, err := b.Client.Rest.GetMember(guildID, u.ID, rest.WithCtx(ctx)); err == nil {
+		if member.Nick != nil && *member.Nick != "" {
+			return *member.Nick
+		}
 	}
 	if u.GlobalName != nil && *u.GlobalName != "" {
 		return *u.GlobalName
